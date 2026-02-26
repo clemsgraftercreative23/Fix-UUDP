@@ -33,6 +33,23 @@
         overflow-y: auto;
         max-height: 90vh; 
     }
+
+    /* Table cell padding for better separation */
+    .table-bordered td {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    @media (max-width: 768px) {
+        select[name="payment_type[]"] {
+            min-width: 100px;
+            margin-right: 8px;
+        }
+        .amount-input {
+            min-width: 100px;
+            margin-left: 8px;
+        }
+    }
 </style>
 
 <div class="page-content" id="app">   
@@ -434,7 +451,7 @@
                                 <input type="text" class="form-control" name="type[]" required value="{{$detail['0']->type}}">
                               </td>
                                <td>
-                                    <select class="form-control" name="payment_type[]" style="width:130%">
+                                    <select class="form-control" name="payment_type[]" style="width:100%">
                                         <option value="">Select...</option>
                                         <option value="BDC" @if($detail['0']->payment_type=='BDC') selected @endif>BDC</option>
                                         <option value="Cash" @if($detail['0']->payment_type=='Cash') selected @endif>Cash</option>
@@ -497,7 +514,7 @@
                                     <input type="text" class="form-control" name="type[]" required value="{{$row->type}}">
                                   </td>
                                   <td>
-                                        <select class="form-control" name="payment_type[]" style="width:130%">
+                                        <select class="form-control" name="payment_type[]" style="width:100%">
                                             <option value="">Select...</option>
                                             <option value="BDC" @if($row->payment_type=='BDC') selected @endif>BDC</option>
                                             <option value="Cash" @if($row->payment_type=='Cash') selected @endif>Cash</option>
@@ -675,9 +692,9 @@
               500
             );
             if($('body').find('.fieldGroup').length < maxGroup){
-             
-              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+count+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
-              
+
+              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select class="form-control" name="payment_type[]" style="width:100%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+count+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
+
               $('body').find('.fieldGroup:last').after(fieldHTML);
               
               $("body").on("click",".remove-item",function(){ 
