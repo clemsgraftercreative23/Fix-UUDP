@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>MaxFin | Cash Advance App</title>
+    <meta name="description" content="MaxFin adalah aplikasi berbasis web yang berfungsi untuk pencatatan pengajuan {cash advance} & reimbursement terhadap perusahaan">
+    <meta name="keywords" content="Cash Advance App, uudp, MaxFin" />
+    <link rel="icon" type="image/png" href="assets/img/favicon.png" sizes="32x32">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/img/icon/192x192.png">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="manifest" href="__manifest.json">
+</head>
+
+<body>
+
+    <!-- loader -->
+    <div id="loader">
+        <img src="assets/img/loading-icon.png" alt="icon" class="loading-icon">
+    </div>
+    <!-- * loader -->
+
+    <!-- App Header -->
+    <div class="appHeader bg-primary text-light">
+        <div class="left">
+            <a href="#" class="headerButton" data-bs-toggle="modal" data-bs-target="#sidebarPanel">
+                <ion-icon name="menu-outline"></ion-icon>
+            </a>
+        </div>
+        <div class="pageTitle">
+            <img src="assets/img/logo.png" alt="logo" class="logo">
+        </div>
+        <div class="right">
+            <a href="app-notifications.html" class="headerButton">
+                <ion-icon class="icon" name="notifications-outline"></ion-icon>
+                <span class="badge badge-danger">4</span>
+            </a>
+            <a href="app-settings.html" class="headerButton">
+                <img src="assets/img/sample/avatar/avatar1.jpg" alt="image" class="imaged w32">
+                <span class="badge badge-danger">6</span>
+            </a>
+        </div>
+    </div>
+    <!-- * App Header -->
+
+
+    <!-- App Capsule -->
+    <div id="appCapsule">
+
+        <!-- Wallet Card -->
+        <div class="section wallet-card-section pt-1">
+            <div class="wallet-card">
+                <!-- Balance -->
+                <div class="balance">
+                    <div class="left">
+                        <span class="title">Total Transaksi</span>
+                        <h1 class="total">IDR 567,562,000</h1>
+                    </div>
+                    <div class="right">
+                        <a href="#" class="button" data-bs-toggle="modal" data-bs-target="#depositActionSheet">
+                            <ion-icon name="add-outline"></ion-icon>
+                        </a>
+                    </div>
+                </div>
+                <!-- * Balance -->
+                
+            </div>
+        </div>
+        <!-- Wallet Card -->
+
+        <!-- Deposit Action Sheet -->
+        <div class="modal fade action-sheet" id="depositActionSheet" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Buat Transaksi</h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="action-sheet-content">
+                            <form>
+                                <div class="form-group basic">
+                                    <div class="input-wrapper">
+                                        <label class="label" for="account1">Pilih</label>
+                                        <select class="form-control custom-select" id="account1">
+                                            <option value="0">Pilih Transaksi</option>
+                                            <option value="1">Pengajuan Dana</option>
+                                            <option value="2">Reimbursement</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <label class="label">Jumlah Pengajuan</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text" id="basic-addona1">IDR</span>
+                                        <input type="text" class="form-control" placeholder="Masukan jumlah pengajuan"
+                                            value="0">
+                                    </div>
+                                </div>
+
+
+                                <div class="form-group basic">
+                                    <button type="button" class="btn btn-primary btn-block btn-lg"
+                                        data-bs-dismiss="modal">Lanjutkan</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- * Deposit Action Sheet -->
+
+        <!-- Withdraw Action Sheet -->
+        <div class="modal fade action-sheet" id="withdrawActionSheet" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Withdraw Money</h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="action-sheet-content">
+                            <form>
+                                <div class="form-group basic">
+                                    <div class="input-wrapper">
+                                        <label class="label" for="account2d">From</label>
+                                        <select class="form-control custom-select" id="account2d">
+                                            <option value="0">Savings (*** 5019)</option>
+                                            <option value="1">Investment (*** 6212)</option>
+                                            <option value="2">Mortgage (*** 5021)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <div class="input-wrapper">
+                                        <label class="label" for="text11d">To</label>
+                                        <input type="email" class="form-control" id="text11d" placeholder="Enter IBAN">
+                                        <i class="clear-input">
+                                            <ion-icon name="close-circle"></ion-icon>
+                                        </i>
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <label class="label">Enter Amount</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text" id="basic-addonb1">IDR</span>
+                                        <input type="text" class="form-control" placeholder="Enter an amount"
+                                            value="100">
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <button type="button" class="btn btn-primary btn-block btn-lg"
+                                        data-bs-dismiss="modal">Withdraw</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- * Withdraw Action Sheet -->
+
+        <!-- Send Action Sheet -->
+        <div class="modal fade action-sheet" id="sendActionSheet" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Send Money</h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="action-sheet-content">
+                            <form>
+                                <div class="form-group basic">
+                                    <div class="input-wrapper">
+                                        <label class="label" for="account2">From</label>
+                                        <select class="form-control custom-select" id="account2">
+                                            <option value="0">Savings (*** 5019)</option>
+                                            <option value="1">Investment (*** 6212)</option>
+                                            <option value="2">Mortgage (*** 5021)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <div class="input-wrapper">
+                                        <label class="label" for="text11">To</label>
+                                        <input type="email" class="form-control" id="text11"
+                                            placeholder="Enter bank ID">
+                                        <i class="clear-input">
+                                            <ion-icon name="close-circle"></ion-icon>
+                                        </i>
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <label class="label">Enter Amount</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text" id="basic-addon1">IDR</span>
+                                        <input type="text" class="form-control" placeholder="Enter an amount"
+                                            value="100">
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <button type="button" class="btn btn-primary btn-block btn-lg"
+                                        data-bs-dismiss="modal">Send</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- * Send Action Sheet -->
+
+        <!-- Exchange Action Sheet -->
+        <div class="modal fade action-sheet" id="exchangeActionSheet" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Exchange Money</h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="action-sheet-content">
+                            <form>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="form-group basic">
+                                            <div class="input-wrapper">
+                                                <label class="label" for="currency1">From</label>
+                                                <select class="form-control custom-select" id="currency1">
+                                                    <option value="1">EUR</option>
+                                                    <option value="2">USD</option>
+                                                    <option value="3">AUD</option>
+                                                    <option value="4">CAD</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-group basic">
+                                            <div class="input-wrapper">
+                                                <label class="label" for="currency2">To</label>
+                                                <select class="form-control custom-select" id="currency2">
+                                                    <option value="1">USD</option>
+                                                    <option value="1">EUR</option>
+                                                    <option value="2">AUD</option>
+                                                    <option value="3">CAD</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group basic">
+                                    <label class="label">Enter Amount</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text" id="basic-addon2">IDR</span>
+                                        <input type="text" class="form-control" placeholder="Enter an amount"
+                                            value="100">
+                                    </div>
+                                </div>
+
+
+
+                                <div class="form-group basic">
+                                    <button type="button" class="btn btn-primary btn-block btn-lg"
+                                        data-bs-dismiss="modal">Exchange</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- * Exchange Action Sheet -->
+
+        <!-- Stats -->
+        <div class="section">
+            <div class="row mt-2">
+                <div class="col-6">
+                    <div class="stat-box">
+                        <div class="title">Pengajuan</div>
+                        <div class="value text-success">IDR 552,950,093</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stat-box">
+                        <div class="title">Pencairan</div>
+                        <div class="value text-success">IDR 86,450,786</div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-6">
+                    <div class="stat-box">
+                        <div class="title">Pelaporan</div>
+                        <div class="value text-success">IDR 53,345,295</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stat-box">
+                        <div class="title">Reimbursement</div>
+                        <div class="value text-success">IDR 120,999,087</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- * Stats -->
+
+        <!-- Transactions -->
+        <div class="section mt-4">
+            <div class="section-heading">
+                <h2 class="title">Transaksi</h2>
+                <a href="app-transactions.html" class="link">Semua</a>
+            </div>
+            <div class="transactions">
+                <!-- item -->
+                <a href="app-transaction-detail.html" class="item">
+                    <div class="detail">
+                        <img src="assets/img/pengajuan.png" alt="img" class="image-block imaged w48">
+                        <div>
+                            <strong>Proyek Jalan Toll BEJA KAYU</strong>
+                            <p>Pengajuan</p>
+                        </div>
+                    </div>
+                    <div class="right">
+                        <div>
+                            <strong>IDR 45,098,090</strong>
+                            <p>CA300424-001</p>
+                        </div>
+                    </div>
+                </a>
+                <!-- * item -->
+                <!-- item -->
+                <a href="app-transaction-detail.html" class="item">
+                    <div class="detail">
+                        <img src="assets/img/reimbursement.png" alt="img" class="image-block imaged w48">
+                        <div>
+                            <strong>Bayar Hotel & Makan</strong>
+                            <p>Reimbursement</p>
+                        </div>
+                    </div>
+                    <div class="right">
+                        <div>
+                            <strong>IDR 45,098,090</strong>
+                            <p>RM300424-001</p>
+                        </div>
+                    </div>
+                </a>
+                <!-- * item -->
+                <!-- item -->
+                <a href="app-transaction-detail.html" class="item">
+                    <div class="detail">
+                        <img src="assets/img/pengajuan.png" alt="img" class="image-block imaged w48">
+                        <div>
+                            <strong>Proyek Jalan Toll CAPEK II</strong>
+                            <p>Pengajuan</p>
+                        </div>
+                    </div>
+                    <div class="right">
+                        <div>
+                            <strong>IDR 45,098,090</strong>
+                            <p>CA300424-002</p>
+                        </div>
+                    </div>
+                </a>
+                <!-- * item -->
+                <!-- item -->
+                <a href="app-transaction-detail.html" class="item">
+                    <div class="detail">
+                        <img src="assets/img/reimbursement.png" alt="img" class="image-block imaged w48">
+                        <div>
+                            <strong>Entertainment ke Jakarta</strong>
+                            <p>Reimbursement</p>
+                        </div>
+                    </div>
+                    <div class="right">
+                        <div>
+                            <strong>IDR 45,098,090</strong>
+                            <p>RM300424-002</p>
+                        </div>
+                    </div>
+                </a>
+                <!-- * item -->
+            </div>
+        </div>
+        <!-- * Transactions -->
+
+        <!-- my cards -->
+        <div class="section full mt-4">
+            <div class="section-heading padding">
+                <h2 class="title">Kartu Saya</h2>
+                <a href="#" class="link">Akan Segera Hadir!</a>
+            </div>
+
+            <!-- carousel single -->
+            <div class="carousel-single splide">
+                <div class="splide__track">
+                    <ul class="splide__list">
+
+                        <li class="splide__slide">
+                            <!-- card block -->
+                            <div class="card-block bg-primary">
+                                <div class="card-main">
+                                    <div class="card-button dropdown">
+                                        <button type="button" class="btn btn-link btn-icon" data-bs-toggle="dropdown">
+                                            <ion-icon name="ellipsis-horizontal"></ion-icon>
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-end">
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="pencil-outline"></ion-icon>Edit
+                                            </a>
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="close-outline"></ion-icon>Remove
+                                            </a>
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="arrow-up-circle-outline"></ion-icon>Upgrade
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="balance">
+                                        <span class="label">BALANCE</span>
+                                        <h1 class="title">IDR 1,234</h1>
+                                    </div>
+                                    <div class="in">
+                                        <div class="card-number">
+                                            <span class="label">Card Number</span>
+                                            •••• 9905
+                                        </div>
+                                        <div class="bottom">
+                                            <div class="card-expiry">
+                                                <span class="label">Expiry</span>
+                                                12 / 25
+                                            </div>
+                                            <div class="card-ccv">
+                                                <span class="label">CCV</span>
+                                                553
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- * card block -->
+                        </li>
+
+                        <li class="splide__slide">
+                            <!-- card block -->
+                            <div class="card-block bg-dark">
+                                <div class="card-main">
+                                    <div class="card-button dropdown">
+                                        <button type="button" class="btn btn-link btn-icon" data-bs-toggle="dropdown">
+                                            <ion-icon name="ellipsis-horizontal"></ion-icon>
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-end">
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="pencil-outline"></ion-icon>Edit
+                                            </a>
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="close-outline"></ion-icon>Remove
+                                            </a>
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="arrow-up-circle-outline"></ion-icon>Upgrade
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="balance">
+                                        <span class="label">BALANCE</span>
+                                        <h1 class="title">IDR 1,234</h1>
+                                    </div>
+                                    <div class="in">
+                                        <div class="card-number">
+                                            <span class="label">Card Number</span>
+                                            •••• 9905
+                                        </div>
+                                        <div class="bottom">
+                                            <div class="card-expiry">
+                                                <span class="label">Expiry</span>
+                                                12 / 25
+                                            </div>
+                                            <div class="card-ccv">
+                                                <span class="label">CCV</span>
+                                                553
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- * card block -->
+                        </li>
+
+                        <li class="splide__slide">
+                            <!-- card block -->
+                            <div class="card-block bg-secondary">
+                                <div class="card-main">
+                                    <div class="card-button dropdown">
+                                        <button type="button" class="btn btn-link btn-icon" data-bs-toggle="dropdown">
+                                            <ion-icon name="ellipsis-horizontal"></ion-icon>
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-end">
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="pencil-outline"></ion-icon>Edit
+                                            </a>
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="close-outline"></ion-icon>Remove
+                                            </a>
+                                            <a class="dropdown-item" href="#">
+                                                <ion-icon name="arrow-up-circle-outline"></ion-icon>Upgrade
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="balance">
+                                        <span class="label">BALANCE</span>
+                                        <h1 class="title">IDR 1,234</h1>
+                                    </div>
+                                    <div class="in">
+                                        <div class="card-number">
+                                            <span class="label">Card Number</span>
+                                            •••• 9905
+                                        </div>
+                                        <div class="bottom">
+                                            <div class="card-expiry">
+                                                <span class="label">Expiry</span>
+                                                12 / 25
+                                            </div>
+                                            <div class="card-ccv">
+                                                <span class="label">CCV</span>
+                                                553
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- * card block -->
+                        </li>
+
+                    </ul>
+                </div>
+            </div>
+            <!-- * carousel single -->
+
+        </div>
+        <!-- * my cards -->
+
+        <!-- Saving Goals -->
+        <div class="section mt-4">
+            <div class="section-heading">
+                <h2 class="title">Progress Pencairan</h2>
+                <a href="app-savings.html" class="link">Semua</a>
+            </div>
+            <div class="goals">
+                <!-- item -->
+                <div class="item">
+                    <div class="in">
+                        <div>
+                            <h4>Proyek PT INTI</h4>
+                            <p>CA300424-002</p>
+                        </div>
+                        <div class="price">IDR 49,900,000</div>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: 85%;" aria-valuenow="85"
+                            aria-valuemin="0" aria-valuemax="100">85%</div>
+                    </div>
+                </div>
+                <!-- * item -->
+                <!-- item -->
+                <div class="item">
+                    <div class="in">
+                        <div>
+                            <h4>Proyek Jembatan</h4>
+                            <p>CA300424-002</p>
+                        </div>
+                        <div class="price">IDR 1,000,000</div>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: 55%;" aria-valuenow="55"
+                            aria-valuemin="0" aria-valuemax="100">55%</div>
+                    </div>
+                </div>
+                <!-- * item -->
+                <!-- item -->
+                <div class="item">
+                    <div class="in">
+                        <div>
+                            <h4>Proyek Pembangunan Gedung</h4>
+                            <p>CA300424-002</p>
+                        </div>
+                        <div class="price">IDR 420,500</div>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: 15%;" aria-valuenow="15"
+                            aria-valuemin="0" aria-valuemax="100">15%</div>
+                    </div>
+                </div>
+                <!-- * item -->
+            </div>
+        </div>
+        <!-- * Saving Goals -->
+
+
+        <!-- News -->
+        <div class="section full mt-4 mb-3">
+            <div class="section-heading padding">
+                <h2 class="title">Informasi & Berita</h2>
+                <a href="app-blog.html" class="link">Semua</a>
+            </div>
+
+            <!-- carousel multiple -->
+            <div class="carousel-multiple splide">
+                <div class="splide__track">
+                    <ul class="splide__list">
+
+                        <li class="splide__slide">
+                            <a href="app-blog-post.html">
+                                <div class="blog-card">
+                                    <img src="assets/img/sample/photo/1.jpg" alt="image" class="imaged w-100">
+                                    <div class="text">
+                                        <h4 class="title">What will be the value of bitcoin in the next...</h4>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+
+                        <li class="splide__slide">
+                            <a href="app-blog-post.html">
+                                <div class="blog-card">
+                                    <img src="assets/img/sample/photo/2.jpg" alt="image" class="imaged w-100">
+                                    <div class="text">
+                                        <h4 class="title">Rules you need to know in business</h4>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+
+                        <li class="splide__slide">
+                            <a href="app-blog-post.html">
+                                <div class="blog-card">
+                                    <img src="assets/img/sample/photo/3.jpg" alt="image" class="imaged w-100">
+                                    <div class="text">
+                                        <h4 class="title">10 easy ways to save your money</h4>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+
+                        <li class="splide__slide">
+                            <a href="app-blog-post.html">
+                                <div class="blog-card">
+                                    <img src="assets/img/sample/photo/4.jpg" alt="image" class="imaged w-100">
+                                    <div class="text">
+                                        <h4 class="title">Follow the financial agenda with...</h4>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+
+                    </ul>
+                </div>
+            </div>
+            <!-- * carousel multiple -->
+
+        </div>
+        <!-- * News -->
+
+
+        <!-- app footer -->
+        <div class="appFooter">
+            <div class="footer-title">
+                Copyright © PT MaxFin 2024 | All Rights Reserved.
+            </div>
+            v1.0.5
+        </div>
+        <!-- * app footer -->
+
+    </div>
+    <!-- * App Capsule -->
+
+
+    <!-- App Bottom Menu -->
+    <div class="appBottomMenu">
+        <a href="index.html" class="item active">
+            <div class="col">
+                <ion-icon name="home-outline"></ion-icon>
+                <strong>Home</strong>
+            </div>
+        </a>
+        <a href="app-pages.html" class="item">
+            <div class="col">
+                <ion-icon name="document-text-outline"></ion-icon>
+                <strong>Pengajuan</strong>
+            </div>
+        </a>
+        <a href="app-components.html" class="item">
+            <div class="col">
+                <ion-icon name="wallet-outline"></ion-icon>
+                <strong>Pencairan</strong>
+            </div>
+        </a>
+        <a href="app-cards.html" class="item">
+            <div class="col">
+                <ion-icon name="document-attach-outline"></ion-icon>
+                <strong>Pelaporan</strong>
+            </div>
+        </a>
+        <a href="app-settings.html" class="item">
+            <div class="col">
+                <ion-icon name="receipt-outline"></ion-icon>
+                <strong>Reimbursement</strong>
+            </div>
+        </a>
+    </div>
+    <!-- * App Bottom Menu -->
+
+    <!-- App Sidebar -->
+    <div class="modal fade panelbox panelbox-left" id="sidebarPanel" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-body p-0">
+                    <!-- profile box -->
+                    <div class="profileBox pt-2 pb-2">
+                        <div class="image-wrapper">
+                            <img src="assets/img/sample/avatar/avatar1.jpg" alt="image" class="imaged  w36">
+                        </div>
+                        <div class="in">
+                            <strong>WILDAN J SAPUTRA</strong>
+                            <div class="text-muted">NIK-4029209</div>
+                        </div>
+                        <a href="#" class="btn btn-link btn-icon sidebar-close" data-bs-dismiss="modal">
+                            <ion-icon name="close-outline"></ion-icon>
+                        </a>
+                    </div>
+                    <!-- * profile box -->
+                    <!-- balance -->
+                    <div class="sidebar-balance">
+                        <div class="listview-title">Total Transaksi</div>
+                        <div class="in">
+                            <h1 class="amount">IDR 500,562,500</h1>
+                        </div>
+                    </div>
+                    <!-- * balance -->
+
+                    <!-- others -->
+                    <div class="listview-title mt-1">Others</div>
+                    <ul class="listview flush transparent no-line image-listview">
+                        <li>
+                            <a href="app-settings.html" class="item">
+                                <div class="icon-box bg-primary">
+                                    <ion-icon name="settings-outline"></ion-icon>
+                                </div>
+                                <div class="in">
+                                    Settings
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="component-messages.html" class="item">
+                                <div class="icon-box bg-primary">
+                                    <ion-icon name="chatbubble-outline"></ion-icon>
+                                </div>
+                                <div class="in">
+                                    Support
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="app-login.html" class="item">
+                                <div class="icon-box bg-primary">
+                                    <ion-icon name="log-out-outline"></ion-icon>
+                                </div>
+                                <div class="in">
+                                    Log out
+                                </div>
+                            </a>
+                        </li>
+
+
+                    </ul>
+                    <!-- * others -->
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- * App Sidebar -->
+
+
+    <!-- iOS Add to Home Action Sheet -->
+    <div class="modal inset fade action-sheet ios-add-to-home" id="ios-add-to-home-screen" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add to Home Screen</h5>
+                    <a href="#" class="close-button" data-bs-dismiss="modal">
+                        <ion-icon name="close"></ion-icon>
+                    </a>
+                </div>
+                <div class="modal-body">
+                    <div class="action-sheet-content text-center">
+                        <div class="mb-1"><img src="assets/img/icon/192x192.png" alt="image" class="imaged w64 mb-2">
+                        </div>
+                        <div>
+                            Install <strong>MAXFin</strong> on your iPhone's home screen.
+                        </div>
+                        <div>
+                            Tap <ion-icon name="share-outline"></ion-icon> and Add to homescreen.
+                        </div>
+                        <div class="mt-2">
+                            <button class="btn btn-primary btn-block" data-bs-dismiss="modal">CLOSE</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- * iOS Add to Home Action Sheet -->
+
+
+    <!-- Android Add to Home Action Sheet -->
+    <div class="modal inset fade action-sheet android-add-to-home" id="android-add-to-home-screen" tabindex="-1"
+        role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add to Home Screen</h5>
+                    <a href="#" class="close-button" data-bs-dismiss="modal">
+                        <ion-icon name="close"></ion-icon>
+                    </a>
+                </div>
+                <div class="modal-body">
+                    <div class="action-sheet-content text-center">
+                        <div class="mb-1">
+                            <img src="assets/img/icon/192x192.png" alt="image" class="imaged w64 mb-2">
+                        </div>
+                        <div>
+                            Install <strong>MAXFin</strong> on your Android's home screen.
+                        </div>
+                        <div>
+                            Tap <ion-icon name="ellipsis-vertical"></ion-icon> and Add to homescreen.
+                        </div>
+                        <div class="mt-2">
+                            <button class="btn btn-primary btn-block" data-bs-dismiss="modal">CLOSE</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- * Android Add to Home Action Sheet -->
+
+
+
+    <!-- ========= JS Files =========  -->
+    <!-- Bootstrap -->
+    <script src="assets/js/lib/bootstrap.bundle.min.js"></script>
+    <!-- Ionicons -->
+    <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+    <!-- Splide -->
+    <script src="assets/js/plugins/splide/splide.min.js"></script>
+    <!-- Base Js File -->
+    <script src="assets/js/base.js"></script>
+
+    <script>
+        // Add to Home with 2 seconds delay.
+        AddtoHome("2000", "once");
+    </script>
+
+</body>
+
+</html>

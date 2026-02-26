@@ -1,0 +1,66 @@
+/vendor/
+/node_modules/
+
+# Storage
+/storage/*
+!/storage/app
+!/storage/app/public
+!/storage/framework
+!/storage/logs
+
+# Laravel Storage
+/storage/*.key
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*
+
+# Public build output
+/public/build
+/public/hot
+/public/storage
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# PHPUnit
+.phpunit.result.cache
+
+# Logs
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE
+/.idea
+/.vscode
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+/coverage
+/tests/_output
+
+# Docker / Homestead (optional)
+docker-compose.override.yml
+Homestead.json
+Homestead.yaml
+
+# Resources
+resources_v.1.0/
+resources_v.1.1/
+
+# App
+app_v.1.0/
+app_v.1.1/
+
+# Bukti
+public/images/file_bukti/
+
+# Cache
+/.cache/
