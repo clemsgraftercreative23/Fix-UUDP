@@ -62,6 +62,7 @@
                     <th rowspan="2">Apply Date</th>
                     <th rowspan="2">Transaction Date</th>
                     <th colspan="4">Description</th>
+                    <th rowspan="2">Payment Type</th>
                     <th rowspan="2">Total</th>                
                     <th rowspan="2">Remark</th>
                 </tr>
@@ -97,6 +98,7 @@
                     <td>{{number_format($item->gasoline,0,'.','.')}}</td>
                     <td>{{number_format($item->parking,0,'.','.')}}</td>
                     <td>{{number_format($item->others,0,'.','.')}}</td>
+                    <td>{{$item->payment_type}}</td>
                     <td>{{number_format($item->total,0,'.','.')}}</td>
                     <td>{{$item->remark}}</td>
                 </tr>
@@ -107,6 +109,7 @@
                 <td>{{number_format($gasoline,0,'.','.')}}</td>
                 <td>{{number_format($parking,0,'.','.')}}</td>
                 <td>{{number_format($others,0,'.','.')}}</td>
+                <td></td>
                 <td>{{number_format($total,0,'.','.')}}</td>
                 <td></td>
             </tr>

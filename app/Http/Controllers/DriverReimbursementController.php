@@ -65,6 +65,16 @@ class DriverReimbursementController extends Controller
                 $data = $data->where('reimbursement.id_user', '=', $request->driver);
             }
 
+            if (isset($request->payment_type) && $request->payment_type != "" && $request->payment_type != "ALL") {
+                $paymentType = $request->payment_type;
+                $data = $data->whereExists(function ($query) use ($paymentType) {
+                    $query->select(DB::raw(1))
+                        ->from('reimbursement_driver')
+                        ->whereColumn('reimbursement_driver.reimbursement_id', 'reimbursement.id')
+                        ->where('reimbursement_driver.payment_type', $paymentType);
+                });
+            }
+
             if (auth()->user()->jabatan == 'karyawan') {
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
@@ -888,7 +898,7 @@ class DriverReimbursementController extends Controller
             
             $selected = $request->selected;
             $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id IN ($selected)"));
-            $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
+            $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
             $user = User::find($request->driver == 'null' || $request->driver == "" || $request->driver == null ? auth()->user()->id : $request->driver);
             $total_toll = DB::select( DB::raw("SELECT sum(toll) AS total FROM reimbursement_driver WHERE reimbursement_id IN ($selected)"))['0']->total;
             $total_parking = DB::select( DB::raw("SELECT sum(parking) AS total FROM reimbursement_driver WHERE reimbursement_id IN ($selected)"))['0']->total;
@@ -913,7 +923,7 @@ class DriverReimbursementController extends Controller
 
         } else {
 
-            $data = ReimbursementDriver::selectRaw('SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as total,date, reimbursement.remark, name, vehicleNo, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement, reimbursement.created_at')->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')->join('users', 'users.id', '=', 'reimbursement.id_user');
+            $data = ReimbursementDriver::selectRaw("SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as total, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, date, reimbursement.remark, name, vehicleNo, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement, reimbursement.created_at")->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')->join('users', 'users.id', '=', 'reimbursement.id_user');
             
             $id_user = $_GET['driver'];
             $head_dept = DB::select( DB::raw("SELECT nama_approval FROM users WHERE id = '$id_user'"))['0']->nama_approval;

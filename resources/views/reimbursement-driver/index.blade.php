@@ -92,6 +92,14 @@
                                 <option value="10">DRAFT</option>
                             </select>
                         </div>
+                        <div class="col-md-2 mb-3">
+                            <label for="payment_type">Payment Type</label>
+                            <select name="payment_type" class="form-control select2 payment-type" v-model="payment_type">
+                                <option value="ALL">ALL</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Fleet">Fleet</option>
+                            </select>
+                        </div>
                         <!-- @if (auth()->user()->jabatan != "karyawan")
                             <div class="col-md-3 mb-3">
                                 <label for="user_id">Employee</label>
@@ -2436,6 +2444,7 @@ $("body").on("click",".remove-item",function(){
         employees: [],
         status: null,
         user_id: null,
+                payment_type: 'ALL',
           reimburses: [
             {
               id: null,
@@ -2455,7 +2464,7 @@ $("body").on("click",".remove-item",function(){
         
         // this.loadData()
         $('#show-data').on('change', () => {
-          this.loadData(this.start, this.end, this.status, this.user_id);
+                    this.loadData(this.start, this.end, this.status, this.user_id, this.payment_type);
         });
         $(".number-format").change(function() {
           $(this).maskMoney({ thousands:'.', decimal:',', precision:0});
@@ -2474,14 +2483,14 @@ $("body").on("click",".remove-item",function(){
             });
         });
         self = this
-        self.loadData(self.start,self.end,self.status, self.user_id);
+                self.loadData(self.start,self.end,self.status, self.user_id, self.payment_type);
         $("input.daterange").on('apply.daterangepicker', function(ev, picker) {
           var startDate = picker.startDate.format('YYYY-MM-DD');
           var endDate = picker.endDate.format('YYYY-MM-DD');
           self.start = startDate
           self.end = endDate
           console.log("Selected date range: " + startDate + ' to ' + endDate);
-          self.loadData(startDate,endDate,self.status, self.user_id);
+                    self.loadData(startDate,endDate,self.status, self.user_id, self.payment_type);
         });
         this.initSelectForm()
        
@@ -2495,15 +2504,16 @@ $("body").on("click",".remove-item",function(){
         reset(){
           this.status = null
           this.user_id = null
+                    this.payment_type = 'ALL'
           var start = moment().startOf('month');
           var end = moment().endOf('month');
           this.start = start.format('YYYY-MM-DD');
           this.end = end.format('YYYY-MM-DD');
-          this.loadData(this.start,this.end,this.status, this.user_id);
+                    this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type);
 
         },
         search(){
-          this.loadData(this.start,this.end,this.status, this.user_id);
+                    this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type);
         },
 
         print(){
@@ -2534,7 +2544,7 @@ $("body").on("click",".remove-item",function(){
           
         },
           
-        loadData(start = null,end = null, status= null, driver= null) {
+                loadData(start = null,end = null, status= null, driver= null, payment_type = 'ALL') {
           try {
             $('#myTable').dataTable().fnDestroy();
             
@@ -2561,6 +2571,7 @@ $("body").on("click",".remove-item",function(){
                 last:end,
                 status:status,
                 driver:driver,
+                                payment_type:payment_type,
               }
             },
             columns: [
