@@ -124,10 +124,19 @@ class DriverReimbursementController extends Controller
                     $button .= number_format($data->nominal_pengajuan, 0, ',', '.');
                     return $button;
                 })
+                ->addColumn('payment_type', function ($data) {
+                    $types = DB::table('reimbursement_driver')
+                        ->where('reimbursement_id', $data->id)
+                        ->whereNotNull('payment_type')
+                        ->distinct()
+                        ->pluck('payment_type')
+                        ->toArray();
+                    return count($types) ? implode(', ', $types) : '-';
+                })
                 ->editColumn('no_reimbursement', function ($data) {
                     return "<a href='" . route('reimbursement-driver.show', $data->id) . "'>" . $data->no_reimbursement . "</a>";
                 })
-                ->rawColumns(['action', 'checkbox', 'nominal_pengajuan', 'no_reimbursement'])
+                ->rawColumns(['action', 'checkbox', 'nominal_pengajuan', 'payment_type', 'no_reimbursement'])
                 ->make(true);
         }
 
@@ -240,10 +249,19 @@ class DriverReimbursementController extends Controller
                     $button .= number_format($data->nominal_pengajuan, 0, ',', '.');
                     return $button;
                 })
+                ->addColumn('payment_type', function ($data) {
+                    $types = DB::table('reimbursement_driver')
+                        ->where('reimbursement_id', $data->id)
+                        ->whereNotNull('payment_type')
+                        ->distinct()
+                        ->pluck('payment_type')
+                        ->toArray();
+                    return count($types) ? implode(', ', $types) : '-';
+                })
                 ->editColumn('no_reimbursement', function ($data) {
                     return "<a href='" . route('reimbursement-driver.show', $data->id) . "'>" . $data->no_reimbursement . "</a>";
                 })
-                ->rawColumns(['action', 'checkbox', 'nominal_pengajuan', 'no_reimbursement'])
+                ->rawColumns(['action', 'checkbox', 'nominal_pengajuan', 'payment_type', 'no_reimbursement'])
                 ->make(true);
         }
 
@@ -925,8 +943,13 @@ class DriverReimbursementController extends Controller
 
             $data = ReimbursementDriver::selectRaw("SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as total, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, date, reimbursement.remark, name, vehicleNo, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement, reimbursement.created_at")->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')->join('users', 'users.id', '=', 'reimbursement.id_user');
             
-            $id_user = $_GET['driver'];
-            $head_dept = DB::select( DB::raw("SELECT nama_approval FROM users WHERE id = '$id_user'"))['0']->nama_approval;
+            $targetUserId = ($request->driver == 'null' || $request->driver == "" || $request->driver == null)
+                ? auth()->user()->id
+                : $request->driver;
+            $targetUser = User::find($targetUserId);
+            $head_dept = $targetUser && !empty($targetUser->nama_approval)
+                ? $targetUser->nama_approval
+                : '-';
             
 
             if (isset($request->start)) {
@@ -943,6 +966,10 @@ class DriverReimbursementController extends Controller
 
             if (isset($request->driver) && $request->driver != "" && $request->driver != "null") {
                 $data = $data->where('reimbursement.id_user', '=', $request->driver);
+            }
+
+            if (isset($request->payment_type) && $request->payment_type != "" && $request->payment_type != "ALL") {
+                $data = $data->where('reimbursement_driver.payment_type', $request->payment_type);
             }
 
             if (auth()->user()->jabatan == 'karyawan') {

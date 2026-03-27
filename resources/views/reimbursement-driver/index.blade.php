@@ -153,6 +153,7 @@
                               <th>Transaction Date</th>
                               <th>Inquiry By</th>
                               <th>Total Inquiry</th>
+                              <th>Payment Type</th>
                               <th>Status Inquiry</th>
                           </tr>
                       </thead>
@@ -2517,13 +2518,6 @@ $("body").on("click",".remove-item",function(){
         },
 
         print(){
-
-          var status = $('.status').val();
-          console.log(status);
-          if (status==null) {
-            alert('Status cannot be empty');
-            return false;
-          }
           
           // Ambil semua nilai checkbox yang diceklis
           var selectedValues = [];
@@ -2534,12 +2528,9 @@ $("body").on("click",".remove-item",function(){
           // Tampilkan hasil
           if(selectedValues.length > 0){
               var id = selectedValues.join(",");
-              window.open("{{url('/')}}/reimbursement-driver-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status, "_blank")
+              window.open("{{url('/')}}/reimbursement-driver-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type, "_blank")
           } else {
-              
-              // window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status, "_blank")
-              var user_id = "{{auth()->user()->id}}";
-              window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+user_id+"&status="+this.status, "_blank")
+              window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type, "_blank")
           }
           
         },
@@ -2599,6 +2590,10 @@ $("body").on("click",".remove-item",function(){
                       {
                         data: 'nominal_pengajuan',
                         name: 'nominal_pengajuan'
+                      },
+                      {
+                        data: 'payment_type',
+                        name: 'payment_type'
                       },
                       {
                         data: 'action',

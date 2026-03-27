@@ -55,11 +55,13 @@
                         </div>
                     </div>
                     <hr>
-                    @foreach($pencairan as $key)
-                    @endforeach
-                    <p><strong>Bahwa pengajuan tersebut sudah disetujui oleh Direktur Utama, dengan metode pencairan secara : <span style="color: #62d49e">@if($key->nominal==NULL) FULLPAYMENT @else TERMIN @endif</span>, dengan detail sebagai berikut :</strong></p>
+                    @php
+                      $firstPencairan = (isset($pencairan) && count($pencairan) > 0) ? $pencairan[0] : null;
+                    @endphp
+                    @if($firstPencairan)
+                    <p><strong>Bahwa pengajuan tersebut sudah disetujui oleh Direktur Utama, dengan metode pencairan secara : <span style="color: #62d49e">@if($firstPencairan->nominal==NULL) FULLPAYMENT @else TERMIN @endif</span>, dengan detail sebagai berikut :</strong></p>
                     <div class="respon table-responsive tbl-800">
-                    @if($key->nominal==NULL)
+                    @if($firstPencairan->nominal==NULL)
 
                      <table class="table table-bordered"  >
                           <thead>
@@ -79,17 +81,13 @@
                           <tbody>
                               <?php
                                   $no=1;$termin=1;
-                                  function rupiah($angka){
-                                      $hasil_rupiah = number_format($angka,0,',','.');
-                                      return $hasil_rupiah;
-                                  }
                               ?>
                               <td>1</td>
                               <td>{{$pengajuan['0']->nominal_pengajuan}}</td>
-                              <td>{{date('d-m-Y', strtotime($key->date))}}</td>
+                              <td>{{date('d-m-Y', strtotime($firstPencairan->date))}}</td>
                               <td>
                                 @if(Auth::user()->jabatan=='Finance')
-                                  <button type="button" name="edit" data-toggle="modal" data-target="#formModal" id="{{$key->id}}" class="edit btn btn-warning btn-xs"><i class="fas fa-upload"></i></button>
+                                  <button type="button" name="edit" data-toggle="modal" data-target="#formModal" id="{{$firstPencairan->id}}" class="edit btn btn-warning btn-xs"><i class="fas fa-upload"></i></button>
                                 @else
                                   Belum ditransfer
                                 @endif
@@ -175,6 +173,11 @@
                                
                     @endif
                     </div>
+                    @else
+                    <div class="alert alert-warning mb-0">
+                      Data termin pencairan belum tersedia untuk inquiry ini.
+                    </div>
+                    @endif
                 </form>
             </div>
         </div>
