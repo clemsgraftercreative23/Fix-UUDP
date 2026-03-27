@@ -199,6 +199,16 @@ class DriverReimbursementController extends Controller
                 $data = $data->where('reimbursement.id_user', '=', $request->driver);
             }
 
+            if (isset($request->payment_type) && $request->payment_type != "" && $request->payment_type != "ALL") {
+                $paymentType = $request->payment_type;
+                $data = $data->whereExists(function ($query) use ($paymentType) {
+                    $query->select(DB::raw(1))
+                        ->from('reimbursement_driver')
+                        ->whereColumn('reimbursement_driver.reimbursement_id', 'reimbursement.id')
+                        ->where('reimbursement_driver.payment_type', $paymentType);
+                });
+            }
+
             if (auth()->user()->jabatan == 'karyawan') {
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }

@@ -54,6 +54,14 @@
                                 <option value="0">PENDING</option>
                             </select>
                         </div>
+                        <div class="col-md-2 mb-3">
+                            <label for="payment_type">Payment Type</label>
+                            <select name="payment_type" class="form-control select2 payment-type" v-model="payment_type">
+                                <option value="ALL">ALL</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Fleet">Fleet</option>
+                            </select>
+                        </div>
                         @if (auth()->user()->jabatan != "karyawan")
                             <div class="col-md-3 mb-3">
                                 <label for="user_id">Employee</label>
@@ -107,6 +115,7 @@
                               <th>Transaction Date</th>
                               <th>Inquiry By</th>
                               <th>Total Inquiry</th>
+                              <th>Payment Type</th>
                               <th>Status Inquiry</th>
                           </tr>
                       </thead>
@@ -368,6 +377,7 @@ $(document).ready(function(){
         employees: [],
         status: null,
         user_id: null,
+        payment_type: 'ALL',
           reimburses: [
             {
               id: null,
@@ -451,7 +461,7 @@ $(document).ready(function(){
 
           // this.loadData()
           $('#show-data').on('change', () => {
-            this.loadData(this.start, this.end, this.status, this.user_id);
+            this.loadData(this.start, this.end, this.status, this.user_id, this.payment_type);
           });
           $(".number-format").change(function() {
             $(this).maskMoney({ thousands:'.', decimal:',', precision:0});
@@ -470,14 +480,14 @@ $(document).ready(function(){
               });
           });
           self = this
-          self.loadData(self.start,self.end,self.status, self.user_id);
+          self.loadData(self.start,self.end,self.status, self.user_id, self.payment_type);
           $("input.daterange").on('apply.daterangepicker', function(ev, picker) {
             var startDate = picker.startDate.format('YYYY-MM-DD');
             var endDate = picker.endDate.format('YYYY-MM-DD');
             self.start = startDate
             self.end = endDate
             console.log("Selected date range: " + startDate + ' to ' + endDate);
-            self.loadData(startDate,endDate,self.status, self.user_id);
+            self.loadData(startDate,endDate,self.status, self.user_id, self.payment_type);
           });
           this.initSelectForm()
 
@@ -531,30 +541,19 @@ $(document).ready(function(){
         reset(){
           this.status = null
           this.user_id = null
+          this.payment_type = 'ALL'
           var start = moment().startOf('month');
           var end = moment().endOf('month');
           this.start = start.format('YYYY-MM-DD');
           this.end = end.format('YYYY-MM-DD');
-          this.loadData(this.start,this.end,this.status, this.user_id);
+          this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type);
 
         },
         search(){
-          this.loadData(this.start,this.end,this.status, this.user_id);
+          this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type);
         },
 
         print(){
-
-          var status = $('.status').val();
-          if (status==null) {
-            alert('Status cannot be empty');
-            return false;
-          }
-
-          var employee = $('.employee').val();
-          if (employee=="") {
-            alert('Employee cannot be empty');
-            return false;
-          }
 
           // Ambil semua nilai checkbox yang diceklis
           var selectedValues = [];
@@ -565,12 +564,9 @@ $(document).ready(function(){
           // Tampilkan hasil
           if(selectedValues.length > 0){
               var id = selectedValues.join(",");
-              window.open("{{url('/')}}/reimbursement-driver-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status, "_blank")
+              window.open("{{url('/')}}/reimbursement-driver-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type, "_blank")
           } else {
-              
-              // window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status, "_blank")
-              var user_id = $('.employee').val();
-              window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+user_id+"&status="+this.status, "_blank")
+              window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type, "_blank")
           }
           
         },
@@ -680,7 +676,7 @@ $(document).ready(function(){
             }
           })
         },
-        loadData(start = null,end = null, status= null, driver= null) {
+        loadData(start = null,end = null, status= null, driver= null, payment_type = 'ALL') {
           try {
             $('#myTable').dataTable().fnDestroy();
             
@@ -707,6 +703,7 @@ $(document).ready(function(){
                 last:end,
                 status:status,
                 driver:driver,
+                payment_type:payment_type,
               }
             },
             columns: [
@@ -733,6 +730,10 @@ $(document).ready(function(){
                       {
                         data: 'nominal_pengajuan',
                         name: 'nominal_pengajuan'
+                      },
+                      {
+                        data: 'payment_type',
+                        name: 'payment_type'
                       },
                       {
                         data: 'action',
