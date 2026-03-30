@@ -75,7 +75,8 @@
       }
 
       .idr-rate-input,
-      .tax-input {
+      .tax-input,
+      .exchange-rate-input {
         width: 150px !important;
       }
 
@@ -126,7 +127,7 @@
                                 </div>
                             </div>
                             <hr />
-                            <div v-for="(dt,i) in rates" class="row">
+                            <div v-for="(dt,i) in rates" :key="'travel-rate-row-'+i" class="row">
                                 <div class="col-md-6">
                                     <div class="row">
                                         <div class="col-md-3">
@@ -135,7 +136,7 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control" :name="'rates['+i+'][rate]'" v-model="dt.rate" />
+                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" v-model.lazy="dt.rate" />
                                         </div>
                                     </div>
                                 </div>
@@ -453,21 +454,58 @@ $(document).ready(function(){
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
             self.calculateTotal(0,0)
-        });      
+        });
+        this.$nextTick(() => {
+            this.bindExchangeRateMasks();
+        });
       },
       methods : {
         changeAmount(i) {
 
         },
+        numericRate(val) {
+            if (val === null || val === undefined || val === '') return 0;
+            const s = String(val).replace(/\./g, '').replace(/,/g, '');
+            const n = parseInt(s, 10);
+            return isNaN(n) ? 0 : n;
+        },
+        bindExchangeRateMasks() {
+            $('#app .exchange-rate-input').each(function() {
+                var $el = $(this);
+                if ($el.data('exchange-rate-masked')) {
+                    return;
+                }
+                $el.maskMoney({
+                    thousands: '.',
+                    decimal: ',',
+                    allowZero: true,
+                    allowNegative: true,
+                    allowEmpty: true,
+                    precision: 0
+                });
+                $el.data('exchange-rate-masked', true);
+                if ($el.val() !== '' && $el.val() != null) {
+                    $el.maskMoney('mask');
+                }
+            });
+        },
+        syncRatesFromExchangeInputs() {
+            const vm = this;
+            $('#app .exchange-rate-input').each(function(idx) {
+                if (vm.rates[idx]) {
+                    vm.rates[idx].rate = $(this).val();
+                }
+            });
+        },
         getRate(currency, amt) {
             self = this;
+            var rate;
             try {
-                rate = self.rates.filter(a => a.code == currency)[0].rate
+                rate = self.rates.filter(a => a.code == currency)[0].rate;
             } catch (error) {
-                if(currency == "IDR")
-                    rate = 1
+                rate = currency == "IDR" ? 1 : 0;
             }
-            return parseInt(amt.replaceAll(".","")) * parseInt(`${rate}`.replaceAll(".",""));
+            return this.numericRate(amt) * this.numericRate(rate);
              
         },
         initSelectForm() {
@@ -606,17 +644,15 @@ $(document).ready(function(){
             // Dapatkan nilai allowance
             const allowance = self.trip_types.filter(a => a.id == id)[0].allowance;
 
-            // Ambil value dari input rates[1][rate]
+            // Ambil value dari input rates[1][rate] (dukung pemisah ribuan, mis. 15.000)
             const rateInput = document.querySelector('[name="rates[1][rate]"]');
-            const rate = rateInput ? parseFloat(rateInput.value) : 1;
+            const rate = rateInput ? this.numericRate(rateInput.value) : 0;
 
-            // Cek jika rate kosong atau tidak valid
-            if (!rateInput || isNaN(rate)) {
+            if (!rateInput || rate <= 0) {
                 alert('Please enter the USD exchange rate first, below the IDR exchange rate.');
                 return;
             }
 
-            // Hitung trip_allowance berdasarkan allowance * rate
             const totalAllowance = allowance * rate;
 
             // Simpan hasil perkalian ke reimburses[i].trip_allowance
@@ -640,12 +676,14 @@ $(document).ready(function(){
             this.reimburses[i].travel_time = `${hoursDifference} Hours and ${minutesDifference} minutes.`;
         },
         addRate() {
+            this.syncRatesFromExchangeInputs();
             this.rates.push({
                 code: null,
                 rate: null
             });
-            
-            
+            this.$nextTick(() => {
+                this.bindExchangeRateMasks();
+            });
         },
         addTravel() {
             this.reimburses.push({
