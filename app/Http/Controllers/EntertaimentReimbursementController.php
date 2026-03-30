@@ -332,24 +332,23 @@ class EntertaimentReimbursementController extends Controller
                             url('/reimbursement-entertaiment/' . $data->id),
                     ])->post();
                 
-                $id_approval  = $user->id_approval;
-                $approval = DB::select(DB::raw("SELECT * FROM users WHERE id='$id_approval'"));
-
-
-                $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
-                    ->withData([
-                        'target' => $approval['0']->phoneNumber,
-                        'message' =>
-                            "Hai *" .
-                            $approval['0']->name .
-                            "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
-                            $data->no_reimbursement .
-                            "* sebesar *Rp " .
-                            number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
-                            url('/reimbursement-entertaiment/' . $data->id),
-                    ])->post();
+                $approver = $user->id_approval ? User::find($user->id_approval) : null;
+                if ($approver && !empty($approver->phoneNumber)) {
+                    $curl = \Curl::to('https://api.fonnte.com/send')
+                        ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                        ->withData([
+                            'target' => $approver->phoneNumber,
+                            'message' =>
+                                "Hai *" .
+                                $approver->name .
+                                "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
+                                $data->no_reimbursement .
+                                "* sebesar *Rp " .
+                                number_format($data->nominal_pengajuan, 0, ',', '.') .
+                                "* telah diterima.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+                                url('/reimbursement-entertaiment/' . $data->id),
+                        ])->post();
+                }
             }
 
             DB::commit();
@@ -514,24 +513,23 @@ class EntertaimentReimbursementController extends Controller
                         $query->where('departmentId', $user->departmentId)->orWhere('departmentId', null);
                         })->get();
 
-                $id_approval  = $user->id_approval;
-                $approval = DB::select(DB::raw("SELECT * FROM users WHERE id='$id_approval'"));
-
-
-                $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
-                    ->withData([
-                        'target' => $approval['0']->phoneNumber,
-                        'message' =>
-                            "Hai *" .
-                            $approval['0']->name .
-                            "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
-                            $data->no_reimbursement .
-                            "* sebesar *Rp " .
-                            number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diajukan kembali.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
-                            url('/reimbursement-entertaiment/' . $data->id),
-                    ])->post();
+                $approver = $user->id_approval ? User::find($user->id_approval) : null;
+                if ($approver && !empty($approver->phoneNumber)) {
+                    $curl = \Curl::to('https://api.fonnte.com/send')
+                        ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                        ->withData([
+                            'target' => $approver->phoneNumber,
+                            'message' =>
+                                "Hai *" .
+                                $approver->name .
+                                "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
+                                $data->no_reimbursement .
+                                "* sebesar *Rp " .
+                                number_format($data->nominal_pengajuan, 0, ',', '.') .
+                                "* telah diajukan kembali.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+                                url('/reimbursement-entertaiment/' . $data->id),
+                        ])->post();
+                }
             }
             
             return redirect()->back()->with(['success' => $notif]);
