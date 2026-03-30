@@ -75,7 +75,8 @@
       }
 
       .idr-rate-input,
-      .tax-input {
+      .tax-input,
+      .exchange-rate-input {
         width: 150px !important;
       }
 
@@ -125,7 +126,7 @@
                                 </div>
                             </div>
                             <hr />
-                            <div v-for="(dt,i) in rates" class="row">
+                            <div v-for="(dt,i) in rates" :key="'travel-rate-row-'+i" class="row">
                                 <div class="col-md-6">
                                     <div class="row">
                                         <div class="col-md-3">
@@ -134,7 +135,7 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control" :name="'rates['+i+'][rate]'" v-model="dt.rate" />
+                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" v-model.lazy="dt.rate" />
                                         </div>
                                     </div>
                                 </div>
@@ -451,21 +452,63 @@ $(document).ready(function(){
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
             self.calculateTotal(0,0)
-        });      
+        });
+        this.$nextTick(() => {
+            this.bindExchangeRateMasks();
+        });
       },
       methods : {
         changeAmount(i) {
 
         },
+        numericRate(val) {
+            if (val === null || val === undefined || val === '') return 0;
+            const s = String(val).replace(/\./g, '').replace(/,/g, '');
+            const n = parseInt(s, 10);
+            return isNaN(n) ? 0 : n;
+        },
+        /**
+         * Jangan destroy + re-init semua mask: itu mereset nilai tampilan jadi 0/1.
+         * Hanya pasang maskMoney pada input yang belum pernah dipasang (node baru / pertama kali).
+         * Sebelum tambah baris, syncRatesFromExchangeInputs() agar v-model.lazy tidak kehilangan isian.
+         */
+        bindExchangeRateMasks() {
+            $('#app .exchange-rate-input').each(function() {
+                var $el = $(this);
+                if ($el.data('exchange-rate-masked')) {
+                    return;
+                }
+                $el.maskMoney({
+                    thousands: '.',
+                    decimal: ',',
+                    allowZero: true,
+                    allowNegative: true,
+                    allowEmpty: true,
+                    precision: 0
+                });
+                $el.data('exchange-rate-masked', true);
+                if ($el.val() !== '' && $el.val() != null) {
+                    $el.maskMoney('mask');
+                }
+            });
+        },
+        syncRatesFromExchangeInputs() {
+            const vm = this;
+            $('#app .exchange-rate-input').each(function(idx) {
+                if (vm.rates[idx]) {
+                    vm.rates[idx].rate = $(this).val();
+                }
+            });
+        },
         getRate(currency, amt) {
             self = this;
+            var rate;
             try {
-                rate = self.rates.filter(a => a.code == currency)[0].rate
+                rate = self.rates.filter(a => a.code == currency)[0].rate;
             } catch (error) {
-                if(currency == "IDR")
-                    rate = 1
+                rate = currency == "IDR" ? 1 : 0;
             }
-            return parseInt(amt.replaceAll(".","")) * parseInt(`${rate}`.replaceAll(".",""));
+            return this.numericRate(amt) * this.numericRate(rate);
              
         },
         initSelectForm() {
@@ -617,8 +660,8 @@ $(document).ready(function(){
                     return;
                 }
 
-                // Hitung allowance x exchange rate
-                const totalAllowance = allowance * foundRate.rate;
+                // Hitung allowance x exchange rate (rate boleh berformat ribuan, mis. 15.000)
+                const totalAllowance = allowance * this.numericRate(foundRate.rate);
                 this.reimburses[i].trip_allowance = totalAllowance.toLocaleString('de-DE');
             }
 
@@ -640,12 +683,14 @@ $(document).ready(function(){
             this.reimburses[i].travel_time = `${hoursDifference} Hours and ${minutesDifference} minutes.`;
         },
         addRate() {
+            this.syncRatesFromExchangeInputs();
             this.rates.push({
                 code: null,
                 rate: null
             });
-            
-            
+            this.$nextTick(() => {
+                this.bindExchangeRateMasks();
+            });
         },
         addTravel() {
             this.reimburses.push({
