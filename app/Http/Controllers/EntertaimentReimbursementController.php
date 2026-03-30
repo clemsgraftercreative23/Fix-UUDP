@@ -260,6 +260,7 @@ class EntertaimentReimbursementController extends Controller
                 "id_user" => auth()->user()->id,
                 "no_reimbursement" => "UUDP-REIMBURSE-E-00".$id_max,
                 "date" => $request->date,
+                "reimbursement_department_id" => $request->reimbursement_department_id,
                 "mengetahui_op" => "-",
                 "mengetahui_finance" => "-",
                 "mengetahui_owner" => "-",
@@ -752,103 +753,111 @@ class EntertaimentReimbursementController extends Controller
     
     function print(Request $request) {
 
-        if (isset($request->selected)) {
+        $selectRaw = 'reimbursement.id AS id_main, reimbursement.nominal_pengajuan, reimbursement.no_reimbursement, '
+            . 'reimbursement.mengetahui_op, reimbursement.mengetahui_finance, reimbursement.mengetahui_owner, '
+            . 'reimbursement.date, reimbursement.remark AS remark_header, reimbursement.status AS reimbursement_status, '
+            . 'reimbursement.reimbursement_department_id, users.name, users.idKaryawan AS nik, '
+            . 'departemen.nama_departemen, reimbursement.created_at';
 
-            $selected =  explode(',', $request->selected);
+        if ($request->filled('selected')) {
 
-            $data = Reimbursement::selectRaw('reimbursement.id AS id_main, reimbursement.nominal_pengajuan,no_reimbursement , mengetahui_op, mengetahui_finance, mengetahui_owner, reimbursement.date , users.name ,reimbursement.created_at')
-            ->join('users','users.id','=','reimbursement.id_user')
-            ->whereIn('reimbursement.id', $selected);
-          
-            $head_dept = $data->get()['0']->mengetahui_op;
+            $selected = explode(',', $request->selected);
 
-            $bdc = Reimbursement::selectRaw('SUM(total_bdc) as total')->whereIn('reimbursement.id', $selected);;
-            $total_cash = Reimbursement::selectRaw('SUM(total_cash) as total')->whereIn('reimbursement.id', $selected);; 
-           
-            if (isset($request->start)) {
+            $data = Reimbursement::selectRaw($selectRaw)
+                ->join('users', 'users.id', '=', 'reimbursement.id_user')
+                ->leftJoin('departemen', 'departemen.id', '=', 'reimbursement.reimbursement_department_id')
+                ->whereIn('reimbursement.id', $selected)
+                ->where('reimbursement.reimbursement_type', 3);
+
+            $bdc = Reimbursement::selectRaw('SUM(total_bdc) as total')->whereIn('reimbursement.id', $selected)
+                ->where('reimbursement_type', 3);
+            $total_cash = Reimbursement::selectRaw('SUM(total_cash) as total')->whereIn('reimbursement.id', $selected)
+                ->where('reimbursement_type', 3);
+
+            if ($request->filled('start')) {
                 $data = $data->whereDate('reimbursement.created_at', '>=', $request->start);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $request->start)->where('reimbursement_type',3);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $request->start)->where('reimbursement_type',3);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $request->start);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $request->start);
             }
 
-            if (isset($request->end)) {
+            if ($request->filled('end')) {
                 $data = $data->whereDate('reimbursement.created_at', '<=', $request->end);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $request->end)->where('reimbursement_type',3);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $request->end)->where('reimbursement_type',3);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $request->end);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $request->end);
             }
 
-            if (isset($request->status)) {
-
+            if ($request->filled('status') && $request->status !== 'ALL') {
                 $data = $data->where('reimbursement.status', $request->status);
-                $bdc = $bdc->where('reimbursement.status', $request->status)->where('reimbursement_type',3);
-                $total_cash = $total_cash->where('reimbursement.status', $request->status)->where('reimbursement_type',3);
+                $bdc = $bdc->where('reimbursement.status', $request->status);
+                $total_cash = $total_cash->where('reimbursement.status', $request->status);
             }
 
             $data = $data->orderBy('reimbursement.id', 'DESC')->get();
-            
-            $detail  = DB::select( DB::raw("SELECT * FROM reimbursement_entertaiments"));
-            $bdc =  $bdc->get()['0']->total;  
-            $total_cash =  $total_cash->get()['0']->total; 
-          
+
+            $head_dept = $data->first() ? $data->first()->mengetahui_op : '-';
+
+            $bdc = optional($bdc->first())->total ?? 0;
+            $total_cash = optional($total_cash->first())->total ?? 0;
 
         } else {
-          
-          
 
-            $data = Reimbursement::selectRaw('reimbursement.id AS id_main, reimbursement.nominal_pengajuan,no_reimbursement , mengetahui_op, mengetahui_finance, mengetahui_owner, reimbursement.date , users.name ,reimbursement.created_at')
-            ->join('users','users.id','=','reimbursement.id_user')
-            ->where('reimbursement_type', 3);
+            $data = Reimbursement::selectRaw($selectRaw)
+                ->join('users', 'users.id', '=', 'reimbursement.id_user')
+                ->leftJoin('departemen', 'departemen.id', '=', 'reimbursement.reimbursement_department_id')
+                ->where('reimbursement.reimbursement_type', 3);
 
-            $id_user = $_GET['driver'];
-            $head_dept = DB::select( DB::raw("SELECT nama_approval FROM users WHERE id = '$id_user'"))['0']->nama_approval;
+            $id_user = $request->input('driver', auth()->user()->id);
+            $head_dept_row = DB::table('users')->where('id', $id_user)->value('nama_approval');
+            $head_dept = $head_dept_row ?? '-';
 
-            $bdc = Reimbursement::selectRaw('SUM(total_bdc) as total');
-            $total_cash = Reimbursement::selectRaw('SUM(total_cash) as total'); 
-           
-            if (isset($request->start)) {
+            $bdc = Reimbursement::selectRaw('SUM(total_bdc) as total')->where('reimbursement_type', 3);
+            $total_cash = Reimbursement::selectRaw('SUM(total_cash) as total')->where('reimbursement_type', 3);
+
+            if ($request->filled('start')) {
                 $data = $data->whereDate('reimbursement.created_at', '>=', $request->start);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $request->start)->where('reimbursement_type',3);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $request->start)->where('reimbursement_type',3);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $request->start);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $request->start);
             }
 
-            if (isset($request->end)) {
+            if ($request->filled('end')) {
                 $data = $data->whereDate('reimbursement.created_at', '<=', $request->end);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $request->end)->where('reimbursement_type',3);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $request->end)->where('reimbursement_type',3);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $request->end);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $request->end);
             }
 
-            if (isset($request->status)) {
-
+            if ($request->filled('status') && $request->status !== 'ALL') {
                 $data = $data->where('reimbursement.status', $request->status);
-                $bdc = $bdc->where('reimbursement.status', $request->status)->where('reimbursement_type',3);
-                $total_cash = $total_cash->where('reimbursement.status', $request->status)->where('reimbursement_type',3);
+                $bdc = $bdc->where('reimbursement.status', $request->status);
+                $total_cash = $total_cash->where('reimbursement.status', $request->status);
             }
 
-            if (isset($request->driver) && $request->driver != "") {
+            if ($request->filled('driver')) {
                 $data = $data->where('reimbursement.id_user', '=', $request->driver);
-                $bdc = $bdc->where('reimbursement.id_user', '=', $request->driver)->where('reimbursement_type',3);
-                $total_cash = $total_cash->where('reimbursement.id_user', '=', $request->driver)->where('reimbursement_type',3);
-            }              
+                $bdc = $bdc->where('reimbursement.id_user', '=', $request->driver);
+                $total_cash = $total_cash->where('reimbursement.id_user', '=', $request->driver);
+            }
 
             $data = $data->orderBy('reimbursement.id', 'DESC')->get();
 
-            //if (count($data)==0) {
-            //    dd("Belum ada data");
-            //}
+            $bdc = optional($bdc->first())->total ?? 0;
+            $total_cash = optional($total_cash->first())->total ?? 0;
+        }
 
-            $detail  = DB::select( DB::raw("SELECT * FROM reimbursement_entertaiments"));
-            $bdc =  $bdc->get()['0']->total;  
+        $reimbursementIds = $data->pluck('id_main')->unique()->filter()->values()->all();
+        $detail = collect();
+        if (count($reimbursementIds) > 0) {
+            $detail = ReimbursementEntertaiment::whereIn('reimbursement_id', $reimbursementIds)
+                ->where('status', 1)
+                ->orderBy('id')
+                ->get();
+        }
 
-            $total_cash =  $total_cash->get()['0']->total; 
-
-        }  
-        
-        if ($data->count()==0) {
+        if ($data->count() == 0) {
             echo "Data not found. Please make sure the <strong>search button has been clicked first</strong>.";
         } else {
             return view('print.entertainment-reimbursement', compact('data', 'detail', 'bdc', 'total_cash', 'head_dept'));
         }
-    
+
     }
 
     public function approveMultiple($id)
