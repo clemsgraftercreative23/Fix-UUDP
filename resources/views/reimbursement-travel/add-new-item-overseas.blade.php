@@ -13,6 +13,176 @@
         overflow-y: auto; 
     }
 
+    </style>
+<script>
+    (function () {
+        const travelDraftKey = 'travel-draft:' + window.location.pathname + ':{{Request::segment(3)}}';
+        const travelFormSelector = '#travel-form';
+        let isRestoringTravelDraft = false;
+
+        function getTravelForm() {
+            return $(travelFormSelector).first();
+        }
+
+        function updateNewItemLabel(value) {
+            $('.item-new').text(value || 'New Item');
+        }
+
+        function getTravelDraftState() {
+            const state = {
+                main: {},
+                rates: [],
+                details: []
+            };
+
+            const mainFields = [
+                'reimburse[0][date]',
+                'reimburse[0][purpose]',
+                'reimburse[0][trip_type_id]',
+                'reimburse[0][hotel_condition_id]',
+                'reimburse[0][start_time]',
+                'reimburse[0][end_time]',
+                'reimburse[0][allowance]',
+                'reimburse[0][total]'
+            ];
+
+            mainFields.forEach(function (fieldName) {
+                const $field = getTravelForm().find('[name="' + fieldName + '"]');
+                if ($field.length) {
+                    state.main[fieldName] = $field.val();
+                }
+            });
+
+            getTravelForm().find('.fieldGroup').each(function () {
+                const $row = $(this);
+                state.rates.push({
+                    id_rate: $row.find('.id_rate').val() || '',
+                    code: $row.find('input[name*="[code]"]').val() || '',
+                    rate: $row.find('input[name*="[rate]"]').val() || ''
+                });
+            });
+
+            getTravelForm().find('.fieldGroupDetail').each(function () {
+                const $row = $(this);
+                state.details.push({
+                    id_detail: $row.find('input[name*="[id_detail]"]').val() || '',
+                    cost_type_id: $row.find('[name*="[cost_type_id]"]').val() || '',
+                    destination: $row.find('[name*="[destination]"]').val() || '',
+                    currency: $row.find('[name*="[currency]"]').val() || '',
+                    amount: $row.find('[name*="[amount]"]').val() || '',
+                    idr_rate: $row.find('[name*="[idr_rate]"]').val() || '',
+                    tax: $row.find('[name*="[tax]"]').val() || '',
+                    payment_type: $row.find('[name*="[payment_type]"]').val() || ''
+                });
+            });
+
+            return state;
+        }
+
+        function saveTravelDraft() {
+            if (isRestoringTravelDraft) {
+                return;
+            }
+
+            try {
+                localStorage.setItem(travelDraftKey, JSON.stringify(getTravelDraftState()));
+            } catch (error) {
+                console.warn('Unable to save travel draft', error);
+            }
+        }
+
+        function restoreTravelDraft() {
+            const rawDraft = localStorage.getItem(travelDraftKey);
+            if (!rawDraft) {
+                return;
+            }
+
+            let state;
+            try {
+                state = JSON.parse(rawDraft);
+            } catch (error) {
+                return;
+            }
+
+            isRestoringTravelDraft = true;
+
+            try {
+                const form = getTravelForm();
+
+                while (form.find('.fieldGroup').length < state.rates.length) {
+                    form.find('.addMore').last().trigger('click');
+                }
+
+                while (form.find('.fieldGroupDetail').length < state.details.length) {
+                    form.find('.addMoreDetail').last().trigger('click');
+                }
+
+                Object.keys(state.main || {}).forEach(function (fieldName) {
+                    const $field = getTravelForm().find('[name="' + fieldName + '"]');
+                    if ($field.length) {
+                        $field.val(state.main[fieldName]);
+                    }
+                });
+
+                form.find('.fieldGroup').each(function (index) {
+                    const savedRate = state.rates[index];
+                    if (!savedRate) {
+                        return;
+                    }
+
+                    const $row = $(this);
+                    $row.find('.id_rate').val(savedRate.id_rate || $row.find('.id_rate').val());
+                    $row.find('input[name*="[code]"]').val(savedRate.code || '');
+                    $row.find('input[name*="[rate]"]').val(savedRate.rate || '');
+                });
+
+                form.find('.fieldGroupDetail').each(function (index) {
+                    const savedDetail = state.details[index];
+                    if (!savedDetail) {
+                        return;
+                    }
+
+                    const $row = $(this);
+                    $row.find('input[name*="[id_detail]"]').val(savedDetail.id_detail || $row.find('input[name*="[id_detail]"]').val() || '');
+                    $row.find('[name*="[cost_type_id]"]').val(savedDetail.cost_type_id || '').trigger('change');
+                    $row.find('[name*="[destination]"]').val(savedDetail.destination || '');
+                    $row.find('[name*="[currency]"]').val(savedDetail.currency || '').trigger('change');
+                    $row.find('[name*="[amount]"]').val(savedDetail.amount || '');
+                    $row.find('[name*="[idr_rate]"]').val(savedDetail.idr_rate || '');
+                    $row.find('[name*="[tax]"]').val(savedDetail.tax || '');
+                    $row.find('[name*="[payment_type]"]').val(savedDetail.payment_type || '');
+                });
+
+                $('.currency').maskMoney('mask');
+                calculateTimeDifference();
+                total_nominal();
+                updateNewItemLabel(getTravelForm().find('[name="reimburse[0][date]"]').val());
+            } finally {
+                isRestoringTravelDraft = false;
+            }
+        }
+
+        $(document).on('input change', travelFormSelector + ' :input:not([type="file"]):not([type="button"]), ' + travelFormSelector + ' select', saveTravelDraft);
+        $(document).on('input change', travelFormSelector + ' [name="reimburse[0][date]"]', function () {
+            updateNewItemLabel($(this).val());
+        });
+        $(document).on('click', '.addMore, .addMoreDetail, .remove-currency, .remove-detail', function () {
+            setTimeout(saveTravelDraft, 0);
+        });
+
+        $(document).on('submit', travelFormSelector, function () {
+            localStorage.removeItem(travelDraftKey);
+        });
+
+        $(function () {
+            restoreTravelDraft();
+            updateNewItemLabel(getTravelForm().find('[name="reimburse[0][date]"]').val());
+        });
+    }());
+
+    </script>
+<style>
+
     .modal-body {
         overflow-y: auto;
         max-height: 90vh; 
@@ -120,7 +290,7 @@ function rupiah($angka){
 @endif
 <div class="">
   
-    <form action="{!!url('reimbursement-travel/save-item/'.Request::segment(3).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
+    <form id="travel-form" data-main-id="{{Request::segment(3)}}" data-travel-id="new" action="{!!url('reimbursement-travel/save-item/'.Request::segment(3).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
         @csrf 
         <div class="row">
             <div class="col-xl">
@@ -171,15 +341,15 @@ function rupiah($angka){
                         <hr>
                         <div class="row">
                             <div class="col-md-12">
-                                <div class="row fieldGroup">
+                                <div class="row fieldGroup" data-rate-index="0">
                                     <input type="hidden" name="id_rate" class="id_rate" value="{{$travel_trip['0']->id}}">
                                     <div class="col-md-3">
                                         <label for="">Currency</label>
-                                        <input type="text" class="form-control" name="currency_rate[]" value="{{$travel_trip['0']->currency}}">
+                                        <input type="text" class="form-control" name="rates[0][code]" value="{{$travel_trip['0']->currency}}">
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($travel_trip['0']->rate)}}">
+                                        <input type="text" class="form-control currency exchange-rate-input" name="rates[0][rate]" value="{{rupiah($travel_trip['0']->rate)}}">
                                     </div>
                                     <div class="col-md-3">
                                         <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
@@ -187,15 +357,15 @@ function rupiah($angka){
                                 </div>
                                 @foreach($travel_trip as $key => $row)
                                     @if($key > 0)
-                                    <div class="row fieldGroup">
+                                    <div class="row fieldGroup" data-rate-index="{{$key}}">
                                         <input type="hidden" name="id_rate" class="id_rate" value="{{$row->id}}">
                                         <div class="col-md-3">
                                             <label for="">Currency</label>
-                                            <input type="text" class="form-control" name="currency_rate[]" value="{{$row->currency}}">
+                                            <input type="text" class="form-control" name="rates[{{$key}}][code]" value="{{$row->currency}}">
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($row->rate)}}">
+                                            <input type="text" class="form-control currency exchange-rate-input" name="rates[{{$key}}][rate]" value="{{rupiah($row->rate)}}">
                                         </div>
                                         <div class="col-md-3">
                                             <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
@@ -238,15 +408,15 @@ function rupiah($angka){
                         <div class="row">
                             <div class="col-md-3">
                                 <label for="">Transaction Date</label>
-                                <input type="date" name="date" class="form-control" required>
+                                <input type="date" name="reimburse[0][date]" class="form-control" required>
                             </div>
                             <div class="col-md-3">
                                 <label for="">Purpose</label>
-                                <input type="text" name="purpose" class="form-control" required>
+                                <input type="text" name="reimburse[0][purpose]" class="form-control" required>
                             </div>
                             <div class="col-md-3">
                                 <label for="">Trip Type</label>
-                                <select id="trip_type_id" class="form-control change-type" name="trip_type_id" required>
+                                <select id="trip_type_id" class="form-control change-type" name="reimburse[0][trip_type_id]" required>
                                     <option value="" selected disabled>Select...</option>
                                     @foreach ($trip_types as $item)
                                         <option value="{{$item->id}}">{!!$item->name!!}</option>
@@ -256,7 +426,7 @@ function rupiah($angka){
                             
                             <div class="col-md-3">
                                 <label for="">Hotel </label>
-                                <select id="hotel_condition_id" class="form-control" name="hotel_condition_id" required>
+                                <select id="hotel_condition_id" class="form-control" name="reimburse[0][hotel_condition_id]" required>
                                     <option value="" selected disabled>Pilih...</option>
                                     @foreach ($hotel_conditions as $item)
                                         <option value="{{$item->id}}">{{$item->name}}</option>
@@ -266,17 +436,17 @@ function rupiah($angka){
                             
                             <div class="col-md-3">
                                 <label for="">Start</label>
-                                <input type="time" class="form-control" name="start_time" id="start_time" required>
+                                <input type="time" class="form-control" name="reimburse[0][start_time]" id="start_time" required>
                             </div>  
                             
                             <div class="col-md-3">
                                 <label for="">Arrival</label>
-                                <input type="time" class="form-control" name="end_time" id="end_time" required>
+                                <input type="time" class="form-control" name="reimburse[0][end_time]" id="end_time" required>
                             </div>    
                             
                             <div class="col-md-3">
                                 <label for="">Original Allowance</label>
-                                <input type="text" class="form-control number-format allowance change-rate currency" name="allowance" id="usd-allowance" readonly required>
+                                <input type="text" class="form-control number-format allowance change-rate currency" name="reimburse[0][allowance]" id="usd-allowance" readonly required>
                             </div>  
                             <div class="col-md-3">
                                 <label for="">Travel Times</label>
@@ -302,10 +472,10 @@ function rupiah($angka){
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr class="fieldGroupDetail">
+                                        <tr class="fieldGroupDetail" data-detail-index="0">
                                             <td>
-                                                <input type="hidden" name="id_detail[]" value="{{$travel_detail['0']->id}}">
-                                                <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
+                                                <input type="hidden" name="reimburse[0][detail][0][id_detail]" value="">
+                                                <select class="form-control cost_type_id0 cost-type-select" name="reimburse[0][detail][0][cost_type_id]">
                                                     <option value="">Select...</option>
                                                     @foreach ($types as $item)
                                                         <option value="{{$item->id}}">{{$item->name}}</option>
@@ -313,10 +483,10 @@ function rupiah($angka){
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control destination-input" name="destination[]">
+                                                <input type="text" class="form-control destination-input" name="reimburse[0][detail][0][destination]">
                                             </td>
                                             <td>
-                                                <select class="form-control currency0 currency-select" name="currency[]" style="width:130%">
+                                                <select class="form-control currency0 currency-select" name="reimburse[0][detail][0][currency]" style="width:130%">
                                                     <option value="">Select...</option>
                                                     @foreach ($currency as $item)
                                                         <option value="{{$item->currency}}">{{$item->currency}}</option>
@@ -324,16 +494,16 @@ function rupiah($angka){
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control currency amount0 change-amount amount-input" name="amount[]">
+                                                <input type="text" class="form-control currency amount0 change-amount amount-input" name="reimburse[0][detail][0][amount]">
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" name="idr_rate[]" readonly>
+                                                <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" name="reimburse[0][detail][0][idr_rate]" readonly>
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control currency number-format tax0 tax-input" readonly name="tax[]">
+                                                <input type="text" class="form-control currency number-format tax0 tax-input" readonly name="reimburse[0][detail][0][tax]">
                                             </td>
                                             <td>
-                                                <select class="form-control payment-select" name="payment_type[]" style="width:130%">
+                                                <select class="form-control payment-select" name="reimburse[0][detail][0][payment_type]" style="width:130%">
                                                     <option value="">Select...</option>
                                                     <option value="BDC">BDC</option>
                                                     <option value="Cash">Cash</option>
@@ -346,8 +516,8 @@ function rupiah($angka){
                                                 <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                                                     <i class="fa fa-camera"></i>
                                                 </button>
-                                                <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                                                <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                                                <input type="file" accept="image/*" name="reimburse[0][detail][0][file]" style="display: none;" class="file-input file1">
+                                                <input type="file" accept="image/*" name="reimburse[0][detail][0][proof]" capture="camera" class="camera-input" style="display: none;">
                                             </td>
                                             <td>
                                                 <div id="preview_1">
@@ -367,7 +537,7 @@ function rupiah($angka){
                         <div class="row">
                             <div class="col-md-3">
                                 <label for="">Total</label>
-                                <input type="text" readonly class="form-control total-nominal" name="nominal_pengajuan">
+                                <input type="text" readonly class="form-control total-nominal" name="reimburse[0][total]">
                             </div>     
                             <div class="col-md-9">
                                 <br><span style="color:#62d49e; float: right;" class="warning-upload">
@@ -579,7 +749,7 @@ $(document).ready(function(){
   
     $("#trip_type_id").change(function(){
         id = $('#trip_type_id').val();
-        let usd_rate = $('input[name="rate[]"]').eq(1).val().replace(/\./g, '');
+        let usd_rate = $('input[name*="rates"][name*="rate"]').eq(1).val().replace(/\./g, '');
         $.ajax({
             url:"../../../get-trip-type/"+id,
             dataType:"json",
@@ -716,7 +886,8 @@ $(document).ready(function(){
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
          
-          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
+          const nextIndex = $('body').find('.fieldGroup').length;
+          var fieldHTML = '<div class="row fieldGroup" data-rate-index="'+nextIndex+'"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="rates['+nextIndex+'][code]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency exchange-rate-input" name="rates['+nextIndex+'][rate]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
           $(function() {
             $('.currency').maskMoney({
@@ -724,10 +895,17 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0 // ubah ke 2 kalau butuh angka desimal
+              precision: 0
             });
             $('.currency').maskMoney('mask');
           });
+          
+          // Refresh all currency dropdowns to include the new currency option
+          setTimeout(function() {
+            $('.currency-select').each(function() {
+              $(this).trigger('focus');
+            });
+          }, 100);
       } else{
           alert('Maximum '+maxGroup+' groups are allowed.');
       }
@@ -742,8 +920,8 @@ $(document).ready(function(){
 
         let id_rate = $group.find(".id_rate").val();
         let reim_id = "{{Request::segment('3')}}";
-        let rate = $group.find('input[name="rate[]"]').val().replace(/\./g, '');
-        let currency = $group.find('input[name="currency_rate[]"]').val();
+        let rate = $group.find('input[name*="rates"][name*="rate"]').val().replace(/\./g, '');
+        let currency = $group.find('input[name*="rates"][name*="code"]').val();
 
         
         $.ajax({
@@ -782,7 +960,7 @@ $(document).ready(function(){
         ct++;
         if($('body').find('.fieldGroupDetail').length < maxGroup){
          
-          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+          var fieldHTML = '<tr class="fieldGroupDetail" data-detail-index="'+count+'"><td><input type="hidden" name="reimburse[0][detail]['+count+'][id_detail]"><select class="form-control cost_type_id'+count+'" name="reimburse[0][detail]['+count+'][cost_type_id]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="reimburse[0][detail]['+count+'][destination]"></td><td><select class="form-control currency'+count+' currency-select" name="reimburse[0][detail]['+count+'][currency]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="reimburse[0][detail]['+count+'][amount]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="reimburse[0][detail]['+count+'][idr_rate]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="reimburse[0][detail]['+count+'][tax]"></td><td><select class="form-control" name="reimburse[0][detail]['+count+'][payment_type]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="reimburse[0][detail]['+count+'][file]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="reimburse[0][detail]['+count+'][proof]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
           $('body').find('.fieldGroupDetail:last').after(fieldHTML);
           $(function() {
             $('.currency').maskMoney({
@@ -1163,7 +1341,10 @@ $(document).ready(function(){
             total_nominal();  
           });
           
-          
+          // Refresh newly added detail row's currency dropdown to show all available currencies
+          setTimeout(function() {
+            $('tr.fieldGroupDetail:last').find('.currency-select').trigger('focus');
+          }, 100);
           
       } else{
           alert('Maximum '+maxGroup+' groups are allowed.');
@@ -1928,12 +2109,12 @@ $(document).ready(function(){
   });
 
 
-    $(document).on('blur', 'input[name="rate[]"]', function () {
+    $(document).on('blur', 'input[name*="rates"][name*="rate"]', function () {
         let $group = $(this).closest('.fieldGroup');
 
         let id_rate = $group.find('.id_rate').val();
         let rate = $(this).val().replace(/\./g, '');
-        let currency = $group.find('input[name="currency_rate[]"]').val();
+        let currency = $group.find('input[name*="rates"][name*="code"]').val();
         let reim_id = "{{Request::segment('3')}}";
 
         $.ajax({
@@ -1960,6 +2141,192 @@ $(document).ready(function(){
         let selectedCurrency = $select.val();
         let reim_id = "{{ Request::segment('3') }}";
 
+        // Collect currency codes from all rate inputs on the form
+        let formCurrencies = [];
+
+    (function () {
+        function getForm() {
+            return $('#travel-form').first();
+        }
+
+        function saveDraft(draftId) {
+            const form = getForm();
+            const draft = {
+                main: {},
+                rates: [],
+                details: []
+            };
+
+            draft.main['reimburse[0][date]'] = form.find('[name="reimburse[0][date]"]').val();
+            draft.main['reimburse[0][purpose]'] = form.find('[name="reimburse[0][purpose]"]').val();
+            draft.main['reimburse[0][trip_type_id]'] = form.find('[name="reimburse[0][trip_type_id]"]').val();
+            draft.main['reimburse[0][hotel_condition_id]'] = form.find('[name="reimburse[0][hotel_condition_id]"]').val();
+            draft.main['reimburse[0][start_time]'] = form.find('[name="reimburse[0][start_time]"]').val();
+            draft.main['reimburse[0][end_time]'] = form.find('[name="reimburse[0][end_time]"]').val();
+            draft.main['reimburse[0][allowance]'] = form.find('[name="reimburse[0][allowance]"]').val();
+            draft.main['reimburse[0][total]'] = form.find('[name="reimburse[0][total]"]').val();
+
+            $('.fieldGroup').each(function () {
+                const $row = $(this);
+                draft.rates.push({
+                    id_rate: $row.find('.id_rate').val() || '',
+                    code: $row.find('input[name*="[code]"]').val() || '',
+                    rate: $row.find('input[name*="[rate]"]').val() || ''
+                });
+            });
+
+            $('.fieldGroupDetail').each(function () {
+                const $row = $(this);
+                draft.details.push({
+                    id_detail: $row.find('input[name*="[id_detail]"]').val() || '',
+                    cost_type_id: $row.find('[name*="[cost_type_id]"]').val() || '',
+                    destination: $row.find('[name*="[destination]"]').val() || '',
+                    currency: $row.find('[name*="[currency]"]').val() || '',
+                    amount: $row.find('[name*="[amount]"]').val() || '',
+                    idr_rate: $row.find('[name*="[idr_rate]"]').val() || '',
+                    tax: $row.find('[name*="[tax]"]').val() || '',
+                    payment_type: $row.find('[name*="[payment_type]"]').val() || ''
+                });
+            });
+
+            sessionStorage.setItem(draftId, JSON.stringify(draft));
+        }
+
+        function restoreDraft(draftId) {
+            const rawDraft = sessionStorage.getItem(draftId);
+            if (!rawDraft) {
+                return false;
+            }
+
+            const draft = JSON.parse(rawDraft);
+            const form = getForm();
+
+            Object.keys(draft.main || {}).forEach(function (name) {
+                form.find('[name="' + name + '"]').val(draft.main[name]);
+            });
+
+            while ($('.fieldGroup').length < draft.rates.length) {
+                $('.addMore').trigger('click');
+            }
+            while ($('.fieldGroup').length > draft.rates.length) {
+                $('.fieldGroup:last .remove-currency').trigger('click');
+            }
+
+            while ($('.fieldGroupDetail').length < draft.details.length) {
+                $('.addMoreDetail').trigger('click');
+            }
+            while ($('.fieldGroupDetail').length > draft.details.length) {
+                $('.fieldGroupDetail:last .remove-detail').trigger('click');
+            }
+
+            $('.fieldGroup').each(function (index) {
+                const row = $(this);
+                const rate = draft.rates[index] || {};
+                row.find('.id_rate').val(rate.id_rate || '0');
+                row.find('input[name*="[code]"]').val(rate.code || '');
+                row.find('input[name*="[rate]"]').val(rate.rate || '');
+            });
+
+            $('.fieldGroupDetail').each(function (index) {
+                const row = $(this);
+                const detail = draft.details[index] || {};
+                row.find('input[name*="[id_detail]"]').val(detail.id_detail || '');
+                row.find('[name*="[cost_type_id]"]').val(detail.cost_type_id || '').trigger('change');
+                row.find('[name*="[destination]"]').val(detail.destination || '');
+                row.find('[name*="[currency]"]').val(detail.currency || '').trigger('change');
+                row.find('[name*="[amount]"]').val(detail.amount || '');
+                row.find('[name*="[idr_rate]"]').val(detail.idr_rate || '');
+                row.find('[name*="[tax]"]').val(detail.tax || '');
+                row.find('[name*="[payment_type]"]').val(detail.payment_type || '');
+            });
+
+            $('.currency').maskMoney('mask');
+            calculateTimeDifference();
+            total_nominal();
+            return true;
+        }
+
+        function switchTravelItem(url, sourceDraftId) {
+            saveDraft(sourceDraftId || ('travel-item-draft:' + '{{Request::segment(3)}}' + ':' + (getForm().attr('data-travel-id') || 'new')));
+            $.ajax({
+                url: url,
+                type: 'GET',
+                dataType: 'json',
+                success: function (payload) {
+                    const form = getForm();
+                    form.attr('action', payload.form_action);
+                    form.attr('data-travel-id', payload.id_travel);
+
+                    form.find('[name="reimburse[0][date]"]').val(payload.data_travel[0].date);
+                    form.find('[name="reimburse[0][purpose]"]').val(payload.data_travel[0].purpose);
+                    form.find('[name="reimburse[0][trip_type_id]"]').val(payload.data_travel[0].trip_type_id).trigger('change');
+                    form.find('[name="reimburse[0][hotel_condition_id]"]').val(payload.data_travel[0].hotel_condition_id).trigger('change');
+                    form.find('[name="reimburse[0][start_time]"]').val(payload.data_travel[0].start_time);
+                    form.find('[name="reimburse[0][end_time]"]').val(payload.data_travel[0].end_time);
+                    form.find('[name="reimburse[0][allowance]"]').val(payload.data_travel[0].allowance);
+
+                    while ($('.fieldGroup').length < payload.travel_trip.length) {
+                        $('.addMore').trigger('click');
+                    }
+                    while ($('.fieldGroup').length > payload.travel_trip.length) {
+                        $('.fieldGroup:last .remove-currency').trigger('click');
+                    }
+
+                    while ($('.fieldGroupDetail').length < payload.travel_detail.length) {
+                        $('.addMoreDetail').trigger('click');
+                    }
+                    while ($('.fieldGroupDetail').length > payload.travel_detail.length) {
+                        $('.fieldGroupDetail:last .remove-detail').trigger('click');
+                    }
+
+                    $('.fieldGroup').each(function (index) {
+                        const rate = payload.travel_trip[index];
+                        const row = $(this);
+                        row.find('.id_rate').val(rate.id);
+                        row.find('input[name*="[code]"]').val(rate.currency);
+                        row.find('input[name*="[rate]"]').val(rate.rate);
+                    });
+
+                    $('.fieldGroupDetail').each(function (index) {
+                        const detail = payload.travel_detail[index];
+                        const row = $(this);
+                        row.find('input[name*="[id_detail]"]').val(detail.id);
+                        row.find('[name*="[cost_type_id]"]').val(detail.cost_type_id).trigger('change');
+                        row.find('[name*="[destination]"]').val(detail.destination);
+                        row.find('[name*="[currency]"]').val(detail.currency).trigger('change');
+                        row.find('[name*="[amount]"]').val(detail.amount);
+                        row.find('[name*="[idr_rate]"]').val(detail.idr_rate);
+                        row.find('[name*="[tax]"]').val(detail.tax);
+                        row.find('[name*="[payment_type]"]').val(detail.payment_type);
+                    });
+
+                    $('.nav-tabs .nav-link').removeClass('active');
+                    $('.nav-tabs .nav-link[href="' + url + '"]').addClass('active');
+
+                    restoreDraft('travel-item-draft:' + payload.id_main + ':' + payload.id_travel);
+                    calculateTimeDifference();
+                    total_nominal();
+                },
+                error: function (xhr) {
+                    console.error('Failed to load travel item', xhr);
+                }
+            });
+        }
+
+        $(document).on('click', '.nav-tabs a.nav-link[href*="/reimbursement-travel/add-item/"]', function (event) {
+            event.preventDefault();
+            const url = $(this).attr('href');
+            const draftId = 'travel-item-draft:' + '{{Request::segment(3)}}' + ':' + ($('form#travel-form').attr('data-travel-id') || 'new');
+            switchTravelItem(url, draftId);
+        });
+    }());
+        $('input[name*="rates"][name*="code"]').each(function() {
+            let currency = $(this).val();
+            if (currency) {
+                formCurrencies.push({ code: currency });
+            }
+        });
+
         $.ajax({
             url: '../../../get-currency-options',
             type: 'GET',
@@ -1968,7 +2335,16 @@ $(document).ready(function(){
                 reim_id: reim_id
             },
             success: function(response) {
-                $select.html(response.options);
+                // Combine database options with form-added options
+                let options = response.options;
+
+                formCurrencies.forEach(function(curr) {
+                    if (!options.includes('<option value="' + curr.code + '"')) {
+                        options += '<option value="' + curr.code + '">' + curr.code + '</option>';
+                    }
+                });
+
+                $select.html(options);
             },
             error: function(xhr) {
                 console.error('Gagal load currency:', xhr);

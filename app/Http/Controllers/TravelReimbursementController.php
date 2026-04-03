@@ -869,6 +869,30 @@ class TravelReimbursementController extends Controller
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb' "));
 
+        if (request()->ajax()) {
+            $status = isset($data_travel['0']->status) ? $data_travel['0']->status : null;
+            $action = 'update-item';
+
+            if ($status == 9) {
+                $action = 'update-item-reject';
+            } elseif (in_array($status, [1, 2, 3, 5])) {
+                $action = 'update-item-approval';
+            }
+
+            return response()->json([
+                'data' => $data,
+                'data_travel' => $data_travel,
+                'travel_trip' => $travel_trip,
+                'travel_detail' => $travel_detail,
+                'currency' => $currency,
+                'data_item' => $item,
+                'travel_type' => $travel_type,
+                'id_main' => $id_main,
+                'id_travel' => $id_travel,
+                'form_action' => url('reimbursement-travel/' . $action . '/' . $id_main . '/' . $id_travel),
+            ]);
+        }
+
         return view('reimbursement-travel.'.$file.'',[
             "trip_types" => $tripTypes,
             "types" => $types,
@@ -905,6 +929,20 @@ class TravelReimbursementController extends Controller
         $id_detail = $data_travel['0']->id;
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb'"));
+
+        if (request()->ajax()) {
+            return response()->json([
+                'data' => $data,
+                'data_travel' => $data_travel,
+                'travel_trip' => $travel_trip,
+                'travel_detail' => $travel_detail,
+                'currency' => $currency,
+                'data_item' => $item,
+                'travel_type' => $travel_type,
+                'id_main' => $id_main,
+                'form_action' => url('reimbursement-travel/save-item/' . $id_main),
+            ]);
+        }
 
         return view('reimbursement-travel.'.$file.'',[
             "trip_types" => $tripTypes,

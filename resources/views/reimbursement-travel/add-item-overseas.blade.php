@@ -128,7 +128,7 @@ function rupiah($angka){
     @if($data['0']->status!=9)
     	<form action="{!!url('reimbursement-travel/update-item/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
     @else
-        <form id="reimbursement-form" action="{!!url('reimbursement-travel/update-item-reject/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
+        <form id="reimbursement-form" data-main-id="{{$data['0']->id}}" data-travel-id="{{$data_travel['0']->id}}" action="{!!url('reimbursement-travel/update-item-reject/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
     @endif
           
         @csrf 
@@ -2169,6 +2169,90 @@ $(document).ready(function(){
             }
         });
     });
+
+    (function () {
+        var formSelector = '#reimbursement-form';
+
+        function getForm() {
+            return $(formSelector).first();
+        }
+
+        function getDraftKey() {
+            var form = getForm();
+            return 'travel-item-draft:' + window.location.pathname + ':' + (form.attr('data-main-id') || '') + ':' + (form.attr('data-travel-id') || '');
+        }
+
+        function updateNewItemLabel(value) {
+            $('.item-new').text(value || 'New Item');
+        }
+
+        function saveDraft() {
+            var form = getForm();
+            if (!form.length) {
+                return;
+            }
+
+            var draft = {};
+            form.find(':input').not('[type="file"]').not('[type="button"]').each(function () {
+                var name = this.name;
+                if (!name) {
+                    return;
+                }
+
+                if (!draft[name]) {
+                    draft[name] = [];
+                }
+
+                draft[name].push($(this).val());
+            });
+
+            sessionStorage.setItem(getDraftKey(), JSON.stringify(draft));
+        }
+
+        function restoreDraft() {
+            var rawDraft = sessionStorage.getItem(getDraftKey());
+            if (!rawDraft) {
+                return;
+            }
+
+            var draft = JSON.parse(rawDraft);
+            var form = getForm();
+            Object.keys(draft).forEach(function (name) {
+                var fields = form.find('[name="' + name + '"]');
+                fields.each(function (index) {
+                    if (typeof draft[name][index] !== 'undefined') {
+                        $(this).val(draft[name][index]);
+                    }
+                });
+            });
+
+            updateNewItemLabel(form.find('[name="date"]').val());
+        }
+
+        $(document).on('input change', formSelector + ' :input', function () {
+            saveDraft();
+            if (this.name === 'date') {
+                updateNewItemLabel($(this).val());
+            }
+        });
+
+        $(document).on('input change', formSelector + ' [name="date"]', function () {
+            updateNewItemLabel($(this).val());
+        });
+
+        $(window).on('beforeunload', function () {
+            saveDraft();
+        });
+
+        $(document).on('submit', formSelector, function () {
+            sessionStorage.removeItem(getDraftKey());
+        });
+
+        $(function () {
+            restoreDraft();
+            updateNewItemLabel(getForm().find('[name="date"]').val());
+        });
+    }());
 
 </script>
 
