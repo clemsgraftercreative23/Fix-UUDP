@@ -320,6 +320,22 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script type="text/javascript">
+(function () {
+    window.syncBulkApproveVisibility = function () {
+        var status = $('select[name="status"]').val();
+        var show = false;
+        @if(Auth::user()->jabatan=='Direktur Operasional')
+          show = (status == '9' || status == '0');
+        @elseif(Auth::user()->jabatan=='Finance')
+          show = (status == '1');
+        @elseif(Auth::user()->jabatan=='Owner')
+          show = (status == '2');
+        @elseif(Auth::user()->jabatan=='superadmin')
+          show = (status == '0' || status == '1' || status == '2');
+        @endif
+        if (show) { $('.btn-approve').show(); } else { $('.btn-approve').hide(); }
+    };
+})();
 $(document).ready(function(){
     
     @if(Auth::user()->status_password != 1)
@@ -397,34 +413,10 @@ $(document).ready(function(){
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     // $('#sum').maskMoney({ thousands:'.', decimal:',', precision:0});
-    
+
     $('select[name="status"]').on('change', function(){
         var status = $(this).val();
-      
-      	@if(Auth::user()->jabatan=='Direktur Operasional')
-          if (status == 9 || status == 0) {
-            $('.btn-approve').show();
-          } else {
-            $('.btn-approve').hide();
-          }
-        @endif
-
-        @if(Auth::user()->jabatan=='Finance')
-          if (status == 1) {
-          	$('.btn-approve').show();
-          } else {
-          	$('.btn-approve').hide();
-          }
-        @endif
-
-        @if(Auth::user()->jabatan=='Owner')
-          if (status == 2) {
-        	$('.btn-approve').show();
-      	  } else {
-            $('.btn-approve').hide();
-      	  }
-      	@endif
-      	
+        window.syncBulkApproveVisibility();
       
         if(status) {
             $.ajax({
@@ -651,8 +643,8 @@ $(document).ready(function(){
                 });
             }
         });
-  		
-  		$('.btn-approve').hide();
+
+        window.syncBulkApproveVisibility();
   });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
@@ -718,24 +710,30 @@ $(document).ready(function(){
           self.loadData(startDate,endDate,self.status, self.user_id);
         });
         this.initSelectForm()
+        this.$nextTick(function () {
+          if (typeof window.syncBulkApproveVisibility === 'function') {
+            window.syncBulkApproveVisibility();
+          }
+        });
        
       },
     
       methods: {
-        // searchStatus(){
-        //   self = this
-        //   // this.loadData(this.start,this.end,this.status, this.user_id);
-        //   $.ajax({
-        //     url: `{{url("/")}}/reimbursement-user?status=${self.status}&reimbursement_type=3`,
-        //     methods: 'GET',
-        //     success: function(e) {
-        //       console.log(e)
-              
-        //       self.employees = e.data
-        //     }
-        //   })
-
-        // },
+        searchStatus(){
+          let self = this;
+          this.$nextTick(function () {
+            if (typeof window.syncBulkApproveVisibility === 'function') {
+              window.syncBulkApproveVisibility();
+            }
+          });
+          $.ajax({
+            url: `{{url("/")}}/reimbursement-user?status=${self.status}&reimbursement_type=3`,
+            methods: 'GET',
+            success: function(e) {
+              self.employees = e.data
+            }
+          })
+        },
         searchDriver(){
 
         },

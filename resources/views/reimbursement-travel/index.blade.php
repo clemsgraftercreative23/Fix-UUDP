@@ -4,19 +4,24 @@
 
 <div class="page-content" id="app">
 
-@if(auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='Finance')
+@php
+  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
+@endphp
+@if($showApprovalTab)
 <div class="clearfix">
      <a href="{!!url('reimbursement-travel')!!}" class="btn btn-success float-left" style="width: 48%;">My Inquiry</a>
      <a href="{!!url('reimbursement-travel-approval')!!}" class="btn btn-info float-right" style="width: 48%;">Approval</a>
 </div>
-@else
-  
-  @if($check_approval > 0)
-  <div class="clearfix">
-       <a href="{!!url('reimbursement-travel')!!}" class="btn btn-success float-left" style="width: 48%;">My Inquiry</a>
-       <a href="{!!url('reimbursement-travel-approval')!!}" class="btn btn-info float-right" style="width: 48%;">Approval</a>
-  </div>
 @endif
+
+@if($showApprovalTab)
+<div class="alert alert-info mt-2 mb-0" role="alert">
+  <strong>Cara approve:</strong> Di halaman ini tidak ada tombol approve per baris. Buka tab <strong>Approval</strong> untuk setujui banyak klaim sekaligus, atau klik <strong>nomor klaim</strong> lalu gunakan tombol <strong>Approve</strong> di halaman detail (sesuai peran: Head Department → HR GA → Finance).
+</div>
+@else
+<div class="alert alert-light border mt-2 mb-0" role="alert">
+  Pengajuan Anda bisa dilihat di tabel di bawah. Untuk menyetujui klaim orang lain, akun Anda harus memiliki peran verifikator (Head Department / HR GA / Finance) atau akses Approval.
+</div>
 @endif
 
 <br>

@@ -322,6 +322,22 @@
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script type="text/javascript">
+(function () {
+    window.syncBulkApproveVisibility = function () {
+        var status = $('select[name="status"]').val();
+        var show = false;
+        @if(Auth::user()->jabatan=='Direktur Operasional')
+          show = (status == '9' || status == '0');
+        @elseif(Auth::user()->jabatan=='Finance')
+          show = (status == '1');
+        @elseif(Auth::user()->jabatan=='Owner')
+          show = (status == '2');
+        @elseif(Auth::user()->jabatan=='superadmin')
+          show = (status == '0' || status == '1' || status == '2');
+        @endif
+        if (show) { $('.btn-approve').show(); } else { $('.btn-approve').hide(); }
+    };
+})();
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
         $('#modalPassword').modal('show');
@@ -333,8 +349,10 @@ $(document).ready(function(){
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     // $('#sum').maskMoney({ thousands:'.', decimal:',', precision:0});
+
     $('select[name="status"]').on('change', function(){
         var status = $(this).val();
+        window.syncBulkApproveVisibility();
         if(status) {
             $.ajax({
                 url: 'reimbursement-user?status='+status+'&reimbursement_type=1',
@@ -357,10 +375,8 @@ $(document).ready(function(){
             $('select[name="user_id"]').empty();
         }
     });
-  
-    $('.btn-approve').hide();
 
-
+    window.syncBulkApproveVisibility();
 
   });
 </script>
@@ -490,6 +506,11 @@ $(document).ready(function(){
             self.loadData(startDate,endDate,self.status, self.user_id, self.payment_type);
           });
           this.initSelectForm()
+          this.$nextTick(function () {
+            if (typeof window.syncBulkApproveVisibility === 'function') {
+              window.syncBulkApproveVisibility();
+            }
+          });
 
         },
 
@@ -498,29 +519,9 @@ $(document).ready(function(){
             
             let self = this;
             this.$nextTick(() => {
-              @if(Auth::user()->jabatan=='Direktur Operasional')
-                if (self.status == 9 || self.status == 0) {
-                  $('.btn-approve').show();
-                } else {
-                  $('.btn-approve').hide();
-                }
-              @endif
-              
-              @if(Auth::user()->jabatan=='Finance')
-                if (self.status == 1) {
-                  $('.btn-approve').show();
-                } else {
-                  $('.btn-approve').hide();
-                }
-              @endif
-              
-              @if(Auth::user()->jabatan=='Owner')
-                if (self.status == 2) {
-                  $('.btn-approve').show();
-                } else {
-                  $('.btn-approve').hide();
-                }
-              @endif
+              if (typeof window.syncBulkApproveVisibility === 'function') {
+                window.syncBulkApproveVisibility();
+              }
             });
             
             // this.loadData(this.start,this.end,this.status, this.user_id);

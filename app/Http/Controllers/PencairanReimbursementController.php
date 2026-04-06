@@ -597,7 +597,22 @@ class PencairanReimbursementController extends Controller
 
             $data = $data->orderBy('reimbursement.id', 'DESC')->get();
 
-            return view('pencairan-reimbursement.export', compact('data'));
+            $data->loadMissing([
+                'user',
+                'department',
+                'entertaiments',
+                'drivers',
+                'travels.tripType',
+                'travels.hotelCondition',
+                'travels.details.costType',
+                'rates',
+            ]);
+
+            return view('pencairan-reimbursement.export', [
+                'data' => $data,
+                'periodStart' => $request->start,
+                'periodEnd' => $request->end,
+            ]);
 
 
     }

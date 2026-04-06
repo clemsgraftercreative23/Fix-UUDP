@@ -881,7 +881,7 @@ $(document).ready(function(){
 
         
         $.ajax({
-            url: '../../../delete-currency-options',
+            url: "{{ url('/delete-currency-options') }}",
             type: 'POST',
             data: {
                 reim_id: reim_id,
@@ -895,11 +895,9 @@ $(document).ready(function(){
             },
             error: function(xhr) {
                 console.error("Gagal hapus:", xhr);
+                $group.remove();
             }
         });
-
-        // Kalau langsung hapus tanpa AJAX
-        $group.remove();
     });
 
     
@@ -2160,31 +2158,72 @@ $(document).ready(function(){
   });
 
 
-    $(document).on('blur', 'input[name="rate[]"]', function () {
-        let $group = $(this).closest('.fieldGroup');
-
-        let id_rate = $group.find('.id_rate').val();
-        let rate = $(this).val().replace(/\./g, '');
-        let currency = $group.find('input[name="currency_rate[]"]').val();
-        let reim_id = "{{Request::segment('3')}}";
-
+    function persistTripRateRow($group) {
+        if (!$group || !$group.length) {
+            return;
+        }
+        var id_rate = parseInt($group.find('.id_rate').val(), 10) || 0;
+        var rateVal = $group.find('input[name="rate[]"]').val();
+        var rate = rateVal ? String(rateVal).replace(/\./g, '') : '';
+        var currency = ($group.find('input[name="currency_rate[]"]').val() || '').trim();
+        var reim_id = "{{ Request::segment(3) }}";
+        if (!currency) {
+            return;
+        }
         $.ajax({
-            url: '../../../update-currency', // Ganti dengan URL yang sesuai
+            url: "{{ url('/update-currency') }}",
             type: 'POST',
             data: {
                 reim_id: reim_id,
                 id_rate: id_rate,
                 rate: rate,
                 currency: currency,
-                _token: $('meta[name="csrf-token"]').attr('content') // Laravel CSRF Token
+                _token: $('meta[name="csrf-token"]').attr('content')
             },
             success: function (response) {
-                console.log('Berhasil update:', response);
+                if (response && response.id_rate) {
+                    $group.find('.id_rate').val(response.id_rate);
+                }
             },
-            error: function (xhr, status, error) {
-                console.error('Gagal update:', error);
+            error: function (xhr) {
+                console.error('Gagal simpan kurs:', xhr.responseJSON || xhr.statusText);
             }
         });
+    }
+
+    function debouncePersistTripRate($group, delay) {
+        var key = 'tripRateSaveTimer';
+        var t = $group.data(key);
+        if (t) {
+            clearTimeout(t);
+        }
+        $group.data(key, setTimeout(function () {
+            $group.removeData(key);
+            persistTripRateRow($group);
+        }, delay || 500));
+    }
+
+    function clearTripRateDebounce($group) {
+        var key = 'tripRateSaveTimer';
+        var t = $group.data(key);
+        if (t) {
+            clearTimeout(t);
+            $group.removeData(key);
+        }
+    }
+
+    $(document).on('blur', '.fieldGroup input[name="rate[]"]', function () {
+        var $g = $(this).closest('.fieldGroup');
+        clearTripRateDebounce($g);
+        persistTripRateRow($g);
+    });
+    $(document).on('blur', '.fieldGroup input[name="currency_rate[]"]', function () {
+        var $g = $(this).closest('.fieldGroup');
+        clearTripRateDebounce($g);
+        persistTripRateRow($g);
+    });
+    $(document).on('input', '.fieldGroup input[name="currency_rate[]"], .fieldGroup input[name="rate[]"]', function () {
+        debouncePersistTripRate($(this).closest('.fieldGroup'), 500);
     });
 
     $(document).on('focus', '.currency-select', function () {
@@ -2193,7 +2232,7 @@ $(document).ready(function(){
         let reim_id = "{{ Request::segment('3') }}";
 
         $.ajax({
-            url: '../../../get-currency-options',
+            url: "{{ url('/get-currency-options') }}",
             type: 'GET',
             data: {
                 selected: selectedCurrency,

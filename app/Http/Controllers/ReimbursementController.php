@@ -238,20 +238,24 @@ class ReimbursementController extends Controller
                 ->withErrors(['Reimbursement tidak ditemukan']);
         }
 
-        $nama_approval = ucfirst(auth()->user()->name);
-        if (auth()->user()->jabatan=='Direktur Operasional') {
+        $approver = auth()->user();
+        $nama_approval = ucfirst($approver->name);
+        if ($approver->jabatan == 'Direktur Operasional' || ($approver->jabatan == 'superadmin' && (int) $data->status === 0)) {
             $level = 'Head Department';
-        } else if (auth()->user()->jabatan=='Finance') {
+        } else if ($approver->jabatan == 'Finance' || ($approver->jabatan == 'superadmin' && (int) $data->status === 1)) {
             $level = 'HR GA';
+        } else if ($approver->jabatan == 'superadmin' && (int) $data->status === 2) {
+            $level = 'Finance';
         } else {
             $level = 'Finance';
         }
 
-        $user = auth()->user();
-        if ($data->status == 0 && $user->jabatan == "Direktur Operasional") {
+        $processed = false;
+        if ($data->status == 0 && ($approver->jabatan == 'Direktur Operasional' || $approver->jabatan == 'superadmin')) {
+            $processed = true;
             $data->update([
                 'status' => 1,
-                'mengetahui_op' => $user->name,
+                'mengetahui_op' => $approver->name,
             ]);
 
             $user = \App\User::where('id', $data->id_user)->first();
@@ -298,11 +302,11 @@ class ReimbursementController extends Controller
             }
 
             
-        }
-        if ($data->status == 1 && $user->jabatan == "Finance") {
+        } elseif ($data->status == 1 && ($approver->jabatan == 'Finance' || $approver->jabatan == 'superadmin')) {
+            $processed = true;
             $data->update([
                 'status' => 2,
-                'mengetahui_finance' => $user->name,
+                'mengetahui_finance' => $approver->name,
             ]);
 
             $user = \App\User::where('id', $data->id_user)->first();
@@ -347,11 +351,11 @@ class ReimbursementController extends Controller
                     ->post();
 
             }
-        }
-        if ($data->status == 2 && $user->jabatan == "Owner") {
+        } elseif ($data->status == 2 && ($approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
+            $processed = true;
             $data->update([
                 'status' => 3,
-                'mengetahui_owner' => $user->name,
+                'mengetahui_owner' => $approver->name,
             ]);
 
             $user = \App\User::where('id', $data->id_user)->first();
@@ -399,9 +403,16 @@ class ReimbursementController extends Controller
 
             
         }
+
+        if ($processed) {
+            return redirect()
+                ->back()
+                ->with(['success' => "Berhasil disetujui"]);
+        }
+
         return redirect()
             ->back()
-            ->with(['success' => "Berhasil disetujui"]);
+            ->withErrors(['Tidak dapat memproses approval: periksa peran Anda dan status klaim.']);
     }
 
     function reject(Request $request, $id)

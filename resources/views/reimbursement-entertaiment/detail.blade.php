@@ -67,7 +67,20 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">DETAIL REIMBURSEMENT ENTERTAINMENT</h5><hr>
-                        <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p><hr>
+                        <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
+                        @php
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Owner', 'superadmin'], true);
+                        @endphp
+                        @if($isApproverRole && in_array((int) $data->status, [0, 1, 2], true))
+                        <div class="alert alert-info mb-0 mt-2" role="alert">
+                          Verifikasi bertahap: status <strong>PENDING</strong> = tunggu Head Department; setelah itu HR GA lalu Finance. Anda juga bisa memproses dari halaman <a href="{{ url('reimbursement-entertaiment-approval') }}" class="alert-link">Approval (bulk)</a>.
+                        </div>
+                        @elseif(auth()->id() == $data->id_user && in_array((int) $data->status, [0, 1, 2], true))
+                        <div class="alert alert-secondary mb-0 mt-2" role="alert">
+                          Ini pengajuan Anda. Tombol <strong>Approve</strong> hanya untuk verifikator. Silakan tunggu proses dari Head Department / HR GA / Finance.
+                        </div>
+                        @endif
+                        <hr>
                         @if(session()->has('success'))
                         <div class="alert alert-success">
                             {{ session()->get('success') }}
@@ -291,7 +304,7 @@
                     @endif 
                     <br>
                     <center>
-                        @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional')                                
+                        @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin'))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -308,7 +321,7 @@
                             <button type="button" class="btn btn-primary"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
                         @endif
                         
-                        @if ($data->status == 1 && auth()->user()->jabatan == 'Finance')                                
+                        @if ($data->status == 1 && (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'superadmin'))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -317,7 +330,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner')                                
+                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
