@@ -91,12 +91,60 @@ function export_ent_amount($line)
     return (float) str_replace(['.', ','], ['', '.'], (string) $raw);
 }
 
+function export_data_uri_from_public($relativePath)
+{
+    try {
+        $full = public_path(trim((string) $relativePath, '/\\'));
+        if (!is_file($full) || !is_readable($full)) {
+            return null;
+        }
+        $bin = @file_get_contents($full);
+        if ($bin === false || $bin === '') {
+            return null;
+        }
+        $mime = @mime_content_type($full);
+        if (!$mime || strpos($mime, 'image/') !== 0) {
+            $ext = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+            if ($ext === 'jpg' || $ext === 'jpeg') {
+                $mime = 'image/jpeg';
+            } elseif ($ext === 'png') {
+                $mime = 'image/png';
+            } elseif ($ext === 'gif') {
+                $mime = 'image/gif';
+            } elseif ($ext === 'webp') {
+                $mime = 'image/webp';
+            } else {
+                return null;
+            }
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($bin);
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+function export_evidence_cell($filename)
+{
+    $name = trim((string) $filename);
+    if ($name === '') {
+        return '-';
+    }
+    $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+    $uri = export_data_uri_from_public('images/file_bukti/' . $name);
+    if (!$uri) {
+        return $safeName;
+    }
+
+    return '<img src="' . $uri . '" alt="" width="82" height="82" style="width:82px;height:82px;object-fit:contain;border:1px solid #9e9e9e;display:block;margin:0 auto 4px auto;">'
+        . '<div style="font-size:9px;color:#455a64;text-align:center;word-break:break-all;">' . $safeName . '</div>';
+}
+
 $periodLine = '-';
 if (!empty($periodStart) && !empty($periodEnd)) {
     $periodLine = export_date_ymd($periodStart) . ' - ' . export_date_ymd($periodEnd);
 }
 
-$logoAbsoluteUrl = url('access/images/logo.png');
 $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
 
 ?>
@@ -132,7 +180,7 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
         .report-section:last-child {
             page-break-after: auto;
         }
-        /* Watermark di dalam sel (bukan absolute) — Excel tidak menganggapnya gambar mengambang */
+        /* Watermark teks di dalam sel (relative, bukan linked image) */
         .wm-in-cell {
             border-collapse: collapse;
             width: 100%;
@@ -143,12 +191,26 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
             background: #f9fbf9;
             text-align: center;
             vertical-align: middle;
-            padding: 2px 4px;
+            padding: 8px 4px;
             mso-height-source: userset;
         }
         .wm-in-cell img {
             display: block;
             margin: 0 auto;
+        }
+        .wm-paid {
+            position: relative;
+            display: inline-block;
+            font-size: 96px;
+            font-weight: 800;
+            line-height: 1.05;
+            color: #d50000;
+            letter-spacing: 6px;
+            transform: rotate(-25deg);
+            -ms-transform: rotate(-25deg);
+            opacity: 0.12;
+            filter: alpha(opacity=12);
+            mso-color-alt: #d50000;
         }
         .table-laporan {
             border-collapse: collapse;
@@ -294,23 +356,15 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
             {{-- Watermark: satu baris satu sel — gambar kecil, in-cell (bukan floating) --}}
             <table class="wm-in-cell" cellspacing="0" cellpadding="0">
                 <tr>
-                    <td align="center" valign="middle" height="22"
-                        style="height:22px;text-align:center;vertical-align:middle;">
-                        <!-- <img src="{{ $logoAbsoluteUrl }}" alt=""
-                             width="250" height="100"
-                             style="width:250px;height:100px;opacity:0.12;filter:Alpha(Opacity=12);-ms-filter:'progid:DXImageTransform.Microsoft.Alpha(Opacity=12)';"> -->
+                    <td align="center" valign="middle" height="120"
+                        style="height:120px;text-align:center;vertical-align:middle;">
+                        <span class="wm-paid">PAID</span>
                     </td>
                 </tr>
             </table>
 
             <table class="hdr-brand" cellspacing="0" cellpadding="0">
                 <tr>
-                    <td class="logo-cell" width="72" height="30" align="center" valign="middle"
-                        style="width:72px;height:30px;overflow:hidden;text-align:center;vertical-align:middle;">
-                        <img src="{{ $logoAbsoluteUrl }}" alt=""
-                             width="250" height="33"
-                             style="width:250px;height:33px;display:block;margin:0 auto;">
-                    </td>
                     <td>
                         <div class="company-line">PT. SUMITOMO FORESTRY INDONESIA</div>
                         <div class="doc-line">Settlement Reimbursement UUDP — Laporan Detail (Pencairan)</div>
@@ -420,7 +474,7 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
                         <td>{{ $line->payment_type ?? '' }}</td>
                         <td class="text-right">{{ export_nominal(export_ent_amount($line)) }}</td>
                         <td>{{ $line->remark ?? '' }}</td>
-                        <td>{{ $line->evidence ?? '' }}</td>
+                        <td class="text-center">{!! export_evidence_cell($line->evidence ?? '') !!}</td>
                     </tr>
                 @empty
                     <tr>
@@ -501,7 +555,7 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
                         <td>{{ $line->payment_type ?? '' }}</td>
                         <td class="text-right">{{ export_nominal($line->subtotal ?? 0) }}</td>
                         <td>{{ $line->remark ?? '' }}</td>
-                        <td>{{ $line->evidence ?? '' }}</td>
+                        <td class="text-center">{!! export_evidence_cell($line->evidence ?? '') !!}</td>
                     </tr>
                 @empty
                     <tr>
@@ -604,7 +658,7 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
                             <td class="text-right">{{ export_nominal($dt->tax ?? 0) }}</td>
                             <td>{{ $dt->payment_type ?? '' }}</td>
                             <td>{{ $dt->remarks ?? '' }}</td>
-                            <td>{{ $dt->evidence ?? '' }}</td>
+                            <td class="text-center">{!! export_evidence_cell($dt->evidence ?? '') !!}</td>
                         </tr>
                     @empty
                         <tr>

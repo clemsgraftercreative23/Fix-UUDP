@@ -90,7 +90,7 @@
 
 <div class="page-content" id="app">
     <div class="">
-        <form action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
+        <form action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="syncRatesFromExchangeInputs">
             @csrf
             <div class="row">
                 <div class="col-xl">
@@ -131,11 +131,11 @@
                                     <div class="row">
                                         <div class="col-md-3">
                                             <label for="">Currency</label>
-                                            <input type="text" class="form-control" :name="'rates['+i+'][code]'" v-model="dt.code" />
+                                            <input type="text" class="form-control" :name="'rates['+i+'][code]'" v-model.trim="dt.code" @blur="dt.code = (dt.code || '').toUpperCase()" />
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" v-model.lazy="dt.rate" />
+                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" :value="dt.rate" @input="onExchangeRateInput(i, $event)" @focus="onExchangeRateFocus(i, $event)" @blur="onExchangeRateBlur(i, $event)" autocomplete="off" inputmode="numeric" />
                                         </div>
                                     </div>
                                 </div>
@@ -249,8 +249,9 @@
                                                         <input type="text" class="form-control destination-input" :name="'reimburse['+i+'][detail]['+a+'][destination]'" />
                                                     </td>
                                                     <td>
-                                                        <select :name="'reimburse['+i+'][detail]['+a+'][currency]'" class="form-control currency-select" id="" v-model="dt.currency">
-                                                            <option v-for="dt in rates" :value="dt.code">@{{dt.code}}</option>
+                                                        <select :name="'reimburse['+i+'][detail]['+a+'][currency]'" class="form-control currency-select" id="" v-model="dt.currency" required>
+                                                            <option value="" disabled>Pilih...</option>
+                                                            <option v-for="rt in rates" v-if="rt.code" :value="rt.code">@{{rt.code}}</option>
                                                         </select>
                                                     </td>
                                                     <td>
@@ -403,7 +404,7 @@ $(document).ready(function(){
                     {
                         cost_type: null,
                         destination: null,
-                        currency: null,
+                        currency: 'IDR',
                         amount: null,
                         tax: null,
                         idr_rate: null,
@@ -454,7 +455,7 @@ $(document).ready(function(){
             self.calculateTotal(0,0)
         });
         this.$nextTick(() => {
-            this.bindExchangeRateMasks();
+            this.syncRatesFromExchangeInputs();
         });
       },
       methods : {
@@ -472,32 +473,60 @@ $(document).ready(function(){
          * Hanya pasang maskMoney pada input yang belum pernah dipasang (node baru / pertama kali).
          * Sebelum tambah baris, syncRatesFromExchangeInputs() agar v-model.lazy tidak kehilangan isian.
          */
-        bindExchangeRateMasks() {
-            $('#app .exchange-rate-input').each(function() {
-                var $el = $(this);
-                if ($el.data('exchange-rate-masked')) {
-                    return;
-                }
-                $el.maskMoney({
-                    thousands: '.',
-                    decimal: ',',
-                    allowZero: true,
-                    allowNegative: true,
-                    allowEmpty: true,
-                    precision: 0
+        formatRateDisplay(val) {
+            const n = this.numericRate(val);
+            return n > 0 ? n.toLocaleString('de-DE') : '';
+        },
+        logExchangeRate(action, idx, payload) {
+            try {
+                const code = this.rates[idx] ? (this.rates[idx].code || '') : '';
+                console.log('[EXCHANGE_RATE]', {
+                    action: action,
+                    index: idx,
+                    code: code,
+                    payload: payload,
+                    at: new Date().toISOString()
                 });
-                $el.data('exchange-rate-masked', true);
-                if ($el.val() !== '' && $el.val() != null) {
-                    $el.maskMoney('mask');
-                }
-            });
+            } catch (e) {
+                console.log('[EXCHANGE_RATE]', action, idx, payload);
+            }
+        },
+        onExchangeRateFocus(idx, event) {
+            this.logExchangeRate('focus', idx, { domValue: event && event.target ? event.target.value : '' });
+        },
+        onExchangeRateInput(idx, event) {
+            const raw = event && event.target ? event.target.value : '';
+            const cleaned = String(raw).replace(/[^0-9]/g, '');
+            const display = cleaned ? parseInt(cleaned, 10).toLocaleString('de-DE') : '';
+            if (this.rates[idx]) {
+                this.$set(this.rates[idx], 'rate', display);
+            }
+            if (event && event.target) {
+                event.target.value = display;
+            }
+            this.logExchangeRate('input', idx, { raw: raw, cleaned: cleaned, display: display });
+        },
+        onExchangeRateBlur(idx, event) {
+            const current = this.rates[idx] ? this.rates[idx].rate : '';
+            const display = this.formatRateDisplay(current);
+            if (this.rates[idx]) {
+                this.$set(this.rates[idx], 'rate', display);
+            }
+            if (event && event.target) {
+                event.target.value = display;
+            }
+            this.logExchangeRate('blur', idx, { normalized: display });
         },
         syncRatesFromExchangeInputs() {
             const vm = this;
-            $('#app .exchange-rate-input').each(function(idx) {
-                if (vm.rates[idx]) {
-                    vm.rates[idx].rate = $(this).val();
-                }
+            vm.rates = vm.rates.map(function(r, idx) {
+                const normalizedCode = (r.code || '').trim().toUpperCase();
+                const normalizedRate = vm.formatRateDisplay(r.rate);
+                vm.logExchangeRate('sync', idx, { code: normalizedCode, rate: normalizedRate });
+                return {
+                    code: normalizedCode,
+                    rate: normalizedRate
+                };
             });
         },
         getRate(currency, amt) {
@@ -689,7 +718,7 @@ $(document).ready(function(){
                 rate: null
             });
             this.$nextTick(() => {
-                this.bindExchangeRateMasks();
+                this.syncRatesFromExchangeInputs();
             });
         },
         addTravel() {
@@ -700,7 +729,7 @@ $(document).ready(function(){
                     {
                         cost_type: null,
                         destination: null,
-                        currency: null,
+                        currency: 'IDR',
                         amount: null,
                         tax: null,
                         code: null,
@@ -734,7 +763,7 @@ $(document).ready(function(){
             this.reimburses[i].details.push({
                 cost_type: null,
                 destination: null,
-                currency: null,
+                currency: 'IDR',
                 amount: null,
                 tax: null,
                 code: null,
