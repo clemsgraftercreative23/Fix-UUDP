@@ -496,7 +496,22 @@ class ReimbursementController extends Controller
     function listSettlement(Request $request)
     {
         $status = $request->status;
-        $user = DB::select(DB::raw("SELECT users.id, users.name FROM reimbursement LEFT JOIN users ON users.id = reimbursement.id_user WHERE status='$status' GROUP BY users.id"));
+        $type = $request->reimbursement_type;
+
+        $user = DB::table('reimbursement')
+            ->leftJoin('users', 'users.id', '=', 'reimbursement.id_user')
+            ->select('users.id', 'users.name')
+            ->whereIn('reimbursement.status', [3, 5]);
+
+        if (!empty($status) && $status !== 'ALL') {
+            $user->where('reimbursement.status', $status);
+        }
+
+        if (!empty($type)) {
+            $user->where('reimbursement.reimbursement_type', $type);
+        }
+
+        $user = $user->groupBy('users.id', 'users.name')->get();
         
         return json_encode($user);
     }

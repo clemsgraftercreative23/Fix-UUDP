@@ -26,7 +26,7 @@
                     <div class="row">
                         <div class="col-md-2 mb-3">
                             <label for="status">Status</label>
-                            <select name="status" class="form-control select2 status">
+                            <select id="filter-status" name="status" class="form-control select2 status">
                                 <option value="">-Select Status-</option>
                                 <option value="3">APPROVED FINANCE</option>
                                 <option value="5">SETTLED</option>
@@ -35,7 +35,7 @@
                        
                             <div class="col-md-2 mb-2">
                                 <label for="type">Type</label>
-                                <select name="type" class="form-control select2 type">
+                                <select id="filter-type" name="type" class="form-control select2 type">
                                     <option value="">-Choose Type-</option>
                                     <option value="1">DRIVER</option>
                                     <option value="2">TRAVEL</option>
@@ -46,14 +46,14 @@
                         @if (auth()->user()->jabatan != "karyawan")
                             <div class="col-md-3 mb-3">
                                 <label for="user_id">Employee</label>
-                                <select name="user_id" class="form-control select2 user_id">
+                                <select id="filter-user-id" name="user_id" class="form-control select2 user_id">
                                     <option value="">-Choose Employee-</option>
                                 </select>
                             </div>
                         @endif
                         <div class="col-md-3 mb-3">
                             <label for="daterange">Period</label>
-                            <input type="text" name="daterange" class="form-control daterange"/>
+                            <input type="text" id="filter-daterange" name="daterange" class="form-control daterange"/>
                         </div>
                         <div class="col-md-2 mb-4">
                             <div class="btn-group" role="group" aria-label="Basic example">
@@ -165,161 +165,189 @@ $(document).ready(function(){
         $('#modalPassword').modal('show');
     @endif
 
-    load_data();
-
-    function load_data(first = '' , last = '' , status = '', user_id = '', type= '') {
-      // function load_data() {
-        $('#myTable').dataTable({
-
-          processing: false,
-          serverSide: false,
-          "bPaginate": true,
-          "bLengthChange": false,
-          "bFilter": false,
-          "bInfo": false,
-          "bAutoWidth": false,
-          "pageLength": 10,
-          "order": [],
-           ajax: {
-            url:'{{ url("pencairan-reimbursement") }}',
-            data:{first:first,last:last,status:status, user_id:user_id, type:type}
-           },
-           columns: [
-
-                    {
-                      data: 'no_reimbursement',
-                      name: 'no_reimbursement'
-                    },
-                    {
-                      data: 'reimbursement_type',
-                      name: 'reimbursement_type'
-                    },
-                    {
-                      data: 'created_at',
-                      name: 'created_at'
-                    },
-                    {
-                      data: 'date',
-                      name: 'date'
-                    },
-                    {
-                      data: 'name',
-                      name: 'name'
-                    },
-                    {
-                      data: 'nominal_pengajuan',
-                      name: 'nominal_pengajuan'
-                    },
-                    {
-                      data: 'action',
-                      name: 'action'
-                    },
-
-              ],
-      });
-    }
-
     var start = moment().startOf('month');
     var end = moment().endOf('month');
-    this.start = start.format('YYYY-MM-DD');
-    this.end = end.format('YYYY-MM-DD');
+    var isDateFilterApplied = false;
 
     $(function() {
-        $('input.daterange').daterangepicker({
+                $('#filter-daterange').daterangepicker({
             startDate: start,
             endDate: end,
+            autoUpdateInput: false,
+            locale: {
+                cancelLabel: 'Clear'
+            },
             opens: 'left'
         }, function(start, end, label) {
+            isDateFilterApplied = true;
+            $('#filter-daterange').val(start.format('MM/DD/YYYY') + ' - ' + end.format('MM/DD/YYYY'));
             console.log("A new date selection was made: " + start.format('YYYY-MM-DD') + ' to ' + end.format('YYYY-MM-DD'));
+        });
+
+        $('#filter-daterange').on('cancel.daterangepicker', function(ev, picker) {
+            isDateFilterApplied = false;
+            $(this).val('');
         });
     });
 
-    $('select[name="status"]').on('change', function(){
-        var status = $(this).val();
-        if(status) {
-            $.ajax({
-                url: 'settlement-user?status='+status+'',
-                type:"GET",
-                dataType:"json",
-                beforeSend: function(){
-                
-                },
-                success:function(data) {
-                    $('select[name="user_id"]').empty();
-                    $('select[name="user_id"]').append('<option value="">-Select Employee-</option>')
-                    $.each(data, function(key, value){
-                    $('select[name="user_id"]').append('<option value="'+ value.id +'">' + value.name + '</option>');
-                    });
-
-
-                },
-            });
-        } else {
-            $('select[name="user_id"]').empty();
+    function getSelectedPeriod() {
+        if (!isDateFilterApplied) {
+            return {
+                start: '',
+                end: ''
+            };
         }
+
+        var picker = $('#filter-daterange').data('daterangepicker');
+
+        if (picker && picker.startDate && picker.endDate) {
+            return {
+                start: picker.startDate.format('YYYY-MM-DD'),
+                end: picker.endDate.format('YYYY-MM-DD')
+            };
+        }
+
+        return {
+            start: '',
+            end: ''
+        };
+    }
+
+        function getSelectedFilters() {
+                var period = getSelectedPeriod();
+
+                return {
+                        first: period.start,
+                        last: period.end,
+                        status: $('#filter-status').val(),
+                        user_id: $('#filter-user-id').length ? $('#filter-user-id').val() : '',
+                        type: $('#filter-type').val()
+                };
+        }
+
+        var table = $('#myTable').DataTable({
+                processing: true,
+            serverSide: true,
+                "bPaginate": true,
+                "bLengthChange": false,
+                "bFilter": false,
+                "bInfo": false,
+                "bAutoWidth": false,
+                "pageLength": 10,
+                "order": [],
+                ajax: {
+                        url: '{{ url("pencairan-reimbursement") }}',
+                        data: function(d) {
+                                var filters = getSelectedFilters();
+                                d.first = filters.first;
+                                d.last = filters.last;
+                                d.status = filters.status;
+                                d.user_id = filters.user_id;
+                                d.type = filters.type;
+                        }
+                },
+                columns: [
+                        {
+                            data: 'no_reimbursement',
+                            name: 'no_reimbursement'
+                        },
+                        {
+                            data: 'reimbursement_type',
+                            name: 'reimbursement_type'
+                        },
+                        {
+                            data: 'created_at',
+                            name: 'created_at'
+                        },
+                        {
+                            data: 'date',
+                            name: 'date'
+                        },
+                        {
+                            data: 'name',
+                            name: 'name'
+                        },
+                        {
+                            data: 'nominal_pengajuan',
+                            name: 'nominal_pengajuan'
+                        },
+                        {
+                            data: 'action',
+                            name: 'action'
+                        },
+                ],
+        });
+
+    function loadSettlementUsers() {
+                if (!$('#filter-user-id').length) {
+                        return;
+                }
+
+                var status = $('#filter-status').val();
+                var type = $('#filter-type').val();
+
+        $.ajax({
+            url: 'settlement-user',
+            type:"GET",
+            dataType:"json",
+            data: {
+                status: status,
+                reimbursement_type: type
+            },
+            success:function(data) {
+                $('#filter-user-id').empty();
+                $('#filter-user-id').append('<option value="">-Select Employee-</option>')
+
+                $.each(data, function(key, value){
+                    $('#filter-user-id').append('<option value="'+ value.id +'">' + value.name + '</option>');
+                });
+
+                $('#filter-user-id').trigger('change.select2');
+            },
+        });
+    }
+
+    $('#filter-status').on('change', function(){
+        loadSettlementUsers();
+    });
+
+    $('#filter-type').on('change', function(){
+        loadSettlementUsers();
     });
 
     $(".search-data").click(function(){
-        var dateRange = $('.daterange').val();
-
-        var dates = dateRange.split(' - ');
-        var startDate = dates[0];
-        var endDate = dates[1];
-
-        var parts = startDate.split("/"); 
-        var start = parts[2] + '-' + parts[0] + '-' + parts[1];
-
-        var partsend = endDate.split("/"); 
-        var end = partsend[2] + '-' + partsend[0] + '-' + partsend[1];
-
-        if ($.fn.dataTable.isDataTable('#myTable')) {
-            $('#myTable').DataTable().clear().destroy();
-        }
-
-        var status = $('.status').val();
-        var user_id = $('.user_id').val();
-        var type = $('.type').val();
-        
-        load_data(start, end, status, user_id, type);
-        
+        table.ajax.reload();
     });
 
     $(".reset-data").click(function(){
-        
-        if ($.fn.dataTable.isDataTable('#myTable')) {
-            $('#myTable').DataTable().clear().destroy();
+        $('#filter-status').val('').trigger('change.select2');
+        $('#filter-type').val('').trigger('change.select2');
+
+        if ($('#filter-user-id').length) {
+            $('#filter-user-id').val('').trigger('change.select2');
         }
 
-        var status = $('.status').val("");
-        var user_id = $('.user_id').val("");
-        var type = $('.type').val("");
+        var picker = $('#filter-daterange').data('daterangepicker');
+        if (picker) {
+            isDateFilterApplied = false;
+            picker.setStartDate(start);
+            picker.setEndDate(end);
+            $('#filter-daterange').val('');
+        }
 
-        load_data();
+        loadSettlementUsers();
+        table.ajax.reload();
         
     });
 
     $(".export-data").click(function(){
-        
-        var dateRange = $('.daterange').val();
-
-        var dates = dateRange.split(' - ');
-        var startDate = dates[0];
-        var endDate = dates[1];
-
-        var parts = startDate.split("/"); 
-        var start = parts[2] + '-' + parts[0] + '-' + parts[1];
-
-        var partsend = endDate.split("/"); 
-        var end = partsend[2] + '-' + partsend[0] + '-' + partsend[1];
-    
-
-        var status = $('.status').val();
-        var user_id = $('.user_id').val();
-        var type = $('.type').val();
+        var filters = getSelectedFilters();
                 
-        location.href = 'export-settlement?start='+start+'&end='+end+'&status='+status+'&user_id='+user_id+'&type='+type+'';
+        location.href = 'export-settlement?start='+filters.first+'&end='+filters.last+'&status='+filters.status+'&user_id='+filters.user_id+'&type='+filters.type+'';
         
     });
+
+    loadSettlementUsers();
 
   });
     

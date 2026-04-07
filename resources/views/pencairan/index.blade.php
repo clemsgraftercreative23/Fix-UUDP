@@ -219,7 +219,7 @@ $(document).ready(function(){
         });
       }
     //
-    $('#first').click(function(){
+    $('#first').on('change', function(){
       var first = $('#first').val();
       var last = $('#last').val();
       $('#myTable').dataTable().fnDestroy();
@@ -228,7 +228,7 @@ $(document).ready(function(){
       sisapencairan(first,last);
 
      });
-    $('#last').click(function(){
+    $('#last').on('change', function(){
       var first = $('#first').val();
       var last = $('#last').val();
       $('#myTable').dataTable().fnDestroy();
