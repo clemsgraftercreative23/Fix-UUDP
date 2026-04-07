@@ -712,7 +712,7 @@ class PencairanReimbursementController extends Controller
         $endRow = max($headerRow, $r - 1);
         $applyTableStyle($sheet, 'A', $headerRow, 'Q', $endRow, $headerRow);
         if ($endRow > $headerRow) {
-            $sheet$sheet->getStyle('N' . ($headerRow + 1) . ':N' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle('N' . ($headerRow + 1) . ':N' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
             $sheet->getStyle('Q' . ($headerRow + 1) . ':Q' . $endRow)->applyFromArray([
                 'font' => [
                     'bold' => true,
