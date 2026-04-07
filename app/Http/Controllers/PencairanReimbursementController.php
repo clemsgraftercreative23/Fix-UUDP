@@ -15,7 +15,6 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use DB;
 class PencairanReimbursementController extends Controller
 {
@@ -611,7 +610,9 @@ class PencairanReimbursementController extends Controller
         ]);
 
         $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Settlement');
+        $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(10);
 
         $applyTableStyle = function ($sheet, $startCol, $startRow, $endCol, $endRow, $headerRow = null) {
             $range = $startCol . $startRow . ':' . $endCol . $endRow;
@@ -641,310 +642,159 @@ class PencairanReimbursementController extends Controller
             : '-';
         $exportedAt = now()->format('Y-m-d H:i');
 
-        if ($data->isEmpty()) {
-            $sheet = $spreadsheet->createSheet(0);
-            $sheet->setTitle('Settlement');
-            $sheet->setCellValue('A1', 'No data found for selected filter');
-        } else {
-            foreach ($data as $idx => $row) {
-                $sheet = $spreadsheet->createSheet($idx);
+        $sheet->setCellValue('A1', 'Settlement Reimbursement UUDP - Data Export');
+        $sheet->setCellValue('A2', 'Periode filter: ' . $periodLine . ' | Diekspor: ' . $exportedAt);
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A2')->getFont()->setSize(9)->getColor()->setRGB('4E5D6C');
 
-                $sheetName = trim((string) ($row->no_reimbursement ?: ('Inquiry ' . ($idx + 1))));
-                $sheetName = str_replace(['\\', '/', ':', '?', '*', '[', ']'], '-', $sheetName);
-                $sheetName = substr($sheetName, 0, 31);
-                if ($sheetName === '') {
-                    $sheetName = 'Inquiry ' . ($idx + 1);
-                }
-                $sheet->setTitle($sheetName);
+        $headerRow = 4;
+        $headers = [
+            'No', 'Inquiry No', 'Apply Date', 'Inquiry By', 'Department', 'Type', 'Status', 'Transaction Date',
+            'Payment Type', 'Detail Date', 'Attendance', 'Position', 'Place', 'Guest', 'Trip Type', 'Purpose',
+            'Cost Type', 'Destination', 'Currency', 'Toll', 'Parking', 'Gasoline', 'Other', 'Amount',
+            'Remark (Header)', 'Remark (Detail)', 'Watermark'
+        ];
+        $sheet->fromArray($headers, null, 'A' . $headerRow);
 
-                $typeName = ((int) $row->reimbursement_type === 1) ? 'DRIVER' : (((int) $row->reimbursement_type === 2) ? 'TRAVEL' : 'ENTERTAINMENT');
-                $statusName = ((int) $row->status === 5) ? 'SETTLED' : 'PROCESS SETTLEMENT';
-                $nik = optional($row->user)->nikNo ?: (optional($row->user)->idKaryawan ?: '-');
+        $mapType = function ($type) {
+            $type = (int) $type;
+            if ($type === 1) {
+                return 'DRIVER';
+            }
+            if ($type === 2) {
+                return 'TRAVEL';
+            }
+            return 'ENTERTAINMENT';
+        };
 
-                $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
+        $mapStatus = function ($status) {
+            return ((int) $status === 5) ? 'SETTLED' : 'PROCESS SETTLEMENT';
+        };
 
-                if ((int) $row->status === 5) {
-                    $sheet->mergeCells('A1:C3');
-                    $sheet->setCellValue('A1', 'PAID');
-                    $sheet->getStyle('A1')->applyFromArray([
-                        'font' => [
-                            'bold' => true,
-                            'size' => 46,
-                            'color' => ['rgb' => 'E10600'],
-                        ],
-                        'alignment' => [
-                            'horizontal' => Alignment::HORIZONTAL_CENTER,
-                            'vertical' => Alignment::VERTICAL_CENTER,
-                        ],
-                    ]);
-                }
+        $r = $headerRow + 1;
+        $no = 1;
 
-                $sheet->mergeCells('A4:H4');
-                $sheet->mergeCells('A5:H5');
-                $sheet->mergeCells('A6:H6');
-                $sheet->setCellValue('A4', 'PT. SUMITOMO FORESTRY INDONESIA');
-                $sheet->setCellValue('A5', 'Settlement Reimbursement UUDP - Laporan Detail (Pencairan)');
-                $sheet->setCellValue('A6', 'Periode filter: ' . $periodLine . ' | Diekspor: ' . $exportedAt . ' | No. Inquiry: ' . $row->no_reimbursement);
-                $sheet->getStyle('A4')->getFont()->setBold(true)->setSize(13)->getColor()->setRGB('1B5E20');
-                $sheet->getStyle('A5')->getFont()->setBold(true);
-                $sheet->getStyle('A6')->getFont()->setSize(9)->getColor()->setRGB('37474F');
+        foreach ($data as $row) {
+            $base = [
+                $no,
+                $row->no_reimbursement ?: '-',
+                optional($row->created_at)->format('Y-m-d') ?: '-',
+                optional($row->user)->name ?: '-',
+                optional($row->department)->nama_departemen ?: '-',
+                $mapType($row->reimbursement_type),
+                $mapStatus($row->status),
+                $row->date ?: '-',
+            ];
+            $paidMark = ((int) $row->status === 5) ? 'PAID' : '';
 
-                $sheet->mergeCells('A7:H7');
-                $sheet->setCellValue('A7', $typeName . ' Reimbursement');
-                $sheet->getStyle('A7')->applyFromArray([
-                    'font' => ['bold' => true, 'size' => 12],
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'E8F5E9'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                    ],
-                ]);
-
-                $sheet->setCellValue('A8', 'INQUIRY NO');
-                $sheet->mergeCells('B8:D8');
-                $sheet->setCellValue('B8', $row->no_reimbursement ?: '-');
-                $sheet->setCellValue('E8', 'APPLY DATE');
-                $sheet->mergeCells('F8:H8');
-                $sheet->setCellValue('F8', optional($row->created_at)->format('Y-m-d') ?: '-');
-
-                $sheet->setCellValue('A9', 'INQUIRY BY');
-                $sheet->mergeCells('B9:D9');
-                $sheet->setCellValue('B9', optional($row->user)->name ?: '-');
-                $sheet->setCellValue('E9', 'TRANSACTION DATE');
-                $sheet->mergeCells('F9:H9');
-                $sheet->setCellValue('F9', $row->date ?: '-');
-
-                $sheet->setCellValue('A10', 'NIK');
-                $sheet->mergeCells('B10:D10');
-                $sheet->setCellValue('B10', $nik);
-                $sheet->setCellValue('E10', 'STATUS');
-                $sheet->mergeCells('F10:H10');
-                $sheet->setCellValue('F10', $statusName);
-
-                $sheet->setCellValue('A11', 'DEPARTMENT');
-                $sheet->mergeCells('B11:D11');
-                $sheet->setCellValue('B11', optional($row->department)->nama_departemen ?: '-');
-                $sheet->setCellValue('E11', 'TYPE');
-                $sheet->mergeCells('F11:H11');
-                $sheet->setCellValue('F11', $typeName);
-
-                $sheet->setCellValue('A12', 'REMARK (HEADER)');
-                $sheet->mergeCells('B12:H12');
-                $sheet->setCellValue('B12', $row->remark ?: '-');
-
-                $sheet->setCellValue('A13', 'TOTAL INQUIRY');
-                $sheet->mergeCells('B13:H13');
-                $sheet->setCellValue('B13', (float) $row->nominal_pengajuan);
-                $sheet->getStyle('B13')->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('B13')->getFont()->setBold(true);
-
-                $sheet->getStyle('A8:A13')->getFont()->setBold(true);
-                $sheet->getStyle('E8:E11')->getFont()->setBold(true);
-                $applyTableStyle($sheet, 'A', 8, 'H', 13);
-
-                $r = 15;
-
-                if ((int) $row->reimbursement_type === 1) {
-                    $groups = $row->drivers->groupBy(function ($line) {
-                        $payment = strtoupper(trim((string) ($line->payment_type ?? '')));
-                        return $payment !== '' ? $payment : 'UNKNOWN';
-                    });
-
-                    if ($groups->isEmpty()) {
-                        $groups = collect(['UNKNOWN' => collect()]);
-                    }
-
-                    foreach ($groups as $paymentType => $lines) {
-                        $sheet->mergeCells('A' . $r . ':H' . $r);
-                        $sheet->setCellValue('A' . $r, 'Payment Type: ' . $paymentType);
-                        $sheet->getStyle('A' . $r)->applyFromArray([
-                            'font' => ['bold' => true, 'color' => ['rgb' => '1B5E20']],
-                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E8F5E9']],
-                        ]);
-                        $r++;
-
-                        $sheet->fromArray(['No', 'Toll', 'Parking', 'Gasolin', 'Other', 'Payment', 'Amount', 'Remark (Detail)'], null, 'A' . $r);
-                        $headerRow = $r;
-                        $r++;
-                        $no = 1;
-                        $total = 0;
-
-                        foreach ($lines as $line) {
-                            $subtotal = (float) ($line->subtotal ?? 0);
-                            $total += $subtotal;
-                            $sheet->fromArray([
-                                $no++,
-                                (float) ($line->toll ?? 0),
-                                (float) ($line->parking ?? 0),
-                                (float) ($line->gasoline ?? 0),
-                                (float) ($line->others ?? 0),
-                                $line->payment_type ?? '',
-                                $subtotal,
-                                $line->remark ?? '',
-                            ], null, 'A' . $r);
-                            $r++;
-                        }
-
-                        $sheet->setCellValue('A' . $r, 'Total ' . $paymentType);
-                        $sheet->mergeCells('A' . $r . ':F' . $r);
-                        $sheet->setCellValue('G' . $r, $total);
-                        $sheet->setCellValue('H' . $r, '');
-                        $sheet->getStyle('A' . $r . ':H' . $r)->getFont()->setBold(true);
-
-                        $applyTableStyle($sheet, 'A', $headerRow, 'H', $r, $headerRow);
-                        $sheet->getStyle('B' . ($headerRow + 1) . ':G' . $r)->getNumberFormat()->setFormatCode('#,##0');
-                        $r += 2;
-                    }
-                } elseif ((int) $row->reimbursement_type === 3) {
-                    $groups = $row->entertaiments->groupBy(function ($line) {
-                        $payment = strtoupper(trim((string) ($line->payment_type ?? '')));
-                        return $payment !== '' ? $payment : 'UNKNOWN';
-                    });
-
-                    if ($groups->isEmpty()) {
-                        $groups = collect(['UNKNOWN' => collect()]);
-                    }
-
-                    foreach ($groups as $paymentType => $lines) {
-                        $sheet->mergeCells('A' . $r . ':H' . $r);
-                        $sheet->setCellValue('A' . $r, 'Payment Type: ' . $paymentType);
-                        $sheet->getStyle('A' . $r)->applyFromArray([
-                            'font' => ['bold' => true, 'color' => ['rgb' => '1B5E20']],
-                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E8F5E9']],
-                        ]);
-                        $r++;
-
-                        $sheet->fromArray(['Date', 'Attendance', 'Position', 'Place', 'Guest', 'Payment', 'Amount', 'Remark (Detail)'], null, 'A' . $r);
-                        $headerRow = $r;
-                        $r++;
-                        $total = 0;
-
-                        foreach ($lines as $line) {
-                            $amount = (float) ($line->amount ?? 0);
-                            $total += $amount;
-                            $sheet->fromArray([
-                                $line->date ?? '',
-                                $line->attendance ?? '',
-                                $line->position ?? '',
-                                $line->place ?? '',
-                                $line->guest ?? '',
-                                $line->payment_type ?? '',
-                                $amount,
-                                $line->remark ?? '',
-                            ], null, 'A' . $r);
-                            $r++;
-                        }
-
-                        $sheet->setCellValue('A' . $r, 'Total ' . $paymentType);
-                        $sheet->mergeCells('A' . $r . ':F' . $r);
-                        $sheet->setCellValue('G' . $r, $total);
-                        $sheet->setCellValue('H' . $r, '');
-                        $sheet->getStyle('A' . $r . ':H' . $r)->getFont()->setBold(true);
-
-                        $applyTableStyle($sheet, 'A', $headerRow, 'H', $r, $headerRow);
-                        $sheet->getStyle('G' . ($headerRow + 1) . ':G' . $r)->getNumberFormat()->setFormatCode('#,##0');
-                        $r += 2;
-                    }
+            if ((int) $row->reimbursement_type === 1) {
+                if ($row->drivers->isEmpty()) {
+                    $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', '', '', 0, 0, 0, 0, (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
+                    $r++;
                 } else {
-                    $groups = collect();
-                    foreach ($row->travels as $travel) {
-                        foreach ($travel->details as $detail) {
-                            $payment = strtoupper(trim((string) ($detail->payment_type ?? '')));
-                            if ($payment === '') {
-                                $payment = 'UNKNOWN';
-                            }
-                            if (!$groups->has($payment)) {
-                                $groups->put($payment, collect());
-                            }
-                            $groups[$payment]->push(['travel' => $travel, 'detail' => $detail]);
-                        }
-                    }
-
-                    if ($groups->isEmpty()) {
-                        $groups = collect(['UNKNOWN' => collect()]);
-                    }
-
-                    foreach ($groups as $paymentType => $lines) {
-                        $sheet->mergeCells('A' . $r . ':I' . $r);
-                        $sheet->setCellValue('A' . $r, 'Payment Type: ' . $paymentType);
-                        $sheet->getStyle('A' . $r)->applyFromArray([
-                            'font' => ['bold' => true, 'color' => ['rgb' => '1B5E20']],
-                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E8F5E9']],
-                        ]);
+                    foreach ($row->drivers as $line) {
+                        $sheet->fromArray(array_merge($base, [
+                            $line->payment_type ?: '',
+                            '', '', '', '', '', '', '', '', '',
+                            (float) ($line->toll ?? 0),
+                            (float) ($line->parking ?? 0),
+                            (float) ($line->gasoline ?? 0),
+                            (float) ($line->others ?? 0),
+                            (float) ($line->subtotal ?? 0),
+                            $row->remark ?: '',
+                            $line->remark ?: '',
+                            $paidMark,
+                        ]), null, 'A' . $r);
                         $r++;
-
-                        $sheet->fromArray(['Trip Date', 'Trip Type', 'Purpose', 'Cost Type', 'Destination', 'Currency', 'Amount (IDR)', 'Payment', 'Remark (Detail)'], null, 'A' . $r);
-                        $headerRow = $r;
+                    }
+                }
+            } elseif ((int) $row->reimbursement_type === 3) {
+                if ($row->entertaiments->isEmpty()) {
+                    $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', '', '', 0, 0, 0, 0, (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
+                    $r++;
+                } else {
+                    foreach ($row->entertaiments as $line) {
+                        $sheet->fromArray(array_merge($base, [
+                            $line->payment_type ?: '',
+                            $line->date ?: '',
+                            $line->attendance ?: '',
+                            $line->position ?: '',
+                            $line->place ?: '',
+                            '',
+                            '',
+                            '',
+                            '',
+                            '',
+                            0,
+                            0,
+                            0,
+                            0,
+                            (float) ($line->amount ?? 0),
+                            $row->remark ?: '',
+                            $line->remark ?: '',
+                            $paidMark,
+                        ]), null, 'A' . $r);
                         $r++;
-                        $total = 0;
-
-                        foreach ($lines as $pair) {
-                            $travel = $pair['travel'];
-                            $detail = $pair['detail'];
-                            $idr = (float) ($detail->idr_rate ?? 0);
-                            $total += $idr;
-                            $sheet->fromArray([
-                                $travel->date ?? $row->date ?? '',
-                                optional($travel->tripType)->name ?? '',
-                                $travel->purpose ?? '',
-                                optional($detail->costType)->name ?? '',
-                                $detail->destination ?? '',
-                                $detail->currency ?? '',
-                                $idr,
-                                $detail->payment_type ?? '',
-                                $detail->remarks ?? '',
-                            ], null, 'A' . $r);
-                            $r++;
-                        }
-
-                        $sheet->setCellValue('A' . $r, 'Total ' . $paymentType);
-                        $sheet->mergeCells('A' . $r . ':F' . $r);
-                        $sheet->setCellValue('G' . $r, $total);
-                        $sheet->mergeCells('H' . $r . ':I' . $r);
-                        $sheet->getStyle('A' . $r . ':I' . $r)->getFont()->setBold(true);
-
-                        $applyTableStyle($sheet, 'A', $headerRow, 'I', $r, $headerRow);
-                        $sheet->getStyle('G' . ($headerRow + 1) . ':G' . $r)->getNumberFormat()->setFormatCode('#,##0');
-                        $r += 2;
+                    }
+                }
+            } else {
+                $hasDetail = false;
+                foreach ($row->travels as $travel) {
+                    foreach ($travel->details as $detail) {
+                        $hasDetail = true;
+                        $sheet->fromArray(array_merge($base, [
+                            $detail->payment_type ?: '',
+                            $travel->date ?: ($row->date ?: ''),
+                            '',
+                            '',
+                            '',
+                            optional($travel->tripType)->name ?: '',
+                            $travel->purpose ?: '',
+                            optional($detail->costType)->name ?: '',
+                            $detail->destination ?: '',
+                            $detail->currency ?: '',
+                            0,
+                            0,
+                            0,
+                            0,
+                            (float) ($detail->idr_rate ?? 0),
+                            $row->remark ?: '',
+                            $detail->remarks ?: '',
+                            $paidMark,
+                        ]), null, 'A' . $r);
+                        $r++;
                     }
                 }
 
-                $r += 1;
-                $sheet->mergeCells('A' . $r . ':C' . $r);
-                $sheet->mergeCells('D' . $r . ':F' . $r);
-                $sheet->mergeCells('G' . $r . ':H' . $r);
-                $sheet->setCellValue('A' . $r, 'Head Department');
-                $sheet->setCellValue('D' . $r, 'HR GA');
-                $sheet->setCellValue('G' . $r, 'Finance');
-                $sheet->getStyle('A' . $r . ':H' . $r)->applyFromArray([
-                    'font' => ['bold' => true],
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'D9EAD3'],
-                    ],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
-                ]);
-
-                $r++;
-                $sheet->getRowDimension($r)->setRowHeight(30);
-                $r++;
-                $sheet->mergeCells('A' . $r . ':C' . $r);
-                $sheet->mergeCells('D' . $r . ':F' . $r);
-                $sheet->mergeCells('G' . $r . ':H' . $r);
-                $sheet->setCellValue('A' . $r, strtoupper((string) ($row->mengetahui_op ?? '-')));
-                $sheet->setCellValue('D' . $r, strtoupper((string) ($row->mengetahui_finance ?? '-')));
-                $sheet->setCellValue('G' . $r, strtoupper((string) ($row->mengetahui_owner ?? '-')));
-                $sheet->getStyle('A' . $r . ':H' . $r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                $applyTableStyle($sheet, 'A', $r - 2, 'H', $r);
-
-                foreach (range('A', 'I') as $col) {
-                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                if (!$hasDetail) {
+                    $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', '', '', 0, 0, 0, 0, (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
+                    $r++;
                 }
             }
+
+            $no++;
         }
+
+        if ($data->isEmpty()) {
+            $sheet->setCellValue('A5', 'No data found for selected filter');
+        }
+
+        $endRow = max($headerRow, $r - 1);
+        $applyTableStyle($sheet, 'A', $headerRow, 'AA', $endRow, $headerRow);
+        if ($endRow > $headerRow) {
+            $sheet->getStyle('T' . ($headerRow + 1) . ':X' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle('AA' . ($headerRow + 1) . ':AA' . $endRow)->applyFromArray([
+                'font' => [
+                    'bold' => true,
+                    'color' => ['rgb' => 'C62828'],
+                ],
+            ]);
+        }
+
+        foreach (range('A', 'Z') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+        $sheet->getColumnDimension('AA')->setAutoSize(true);
 
         $spreadsheet->setActiveSheetIndex(0);
 
