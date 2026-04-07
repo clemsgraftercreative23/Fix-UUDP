@@ -13,6 +13,8 @@
         "ixudra/curl": "^6.22",
         "laravel/framework": "5.8.*",
         "laravel/tinker": "^1.0",
+        "maennchen/zipstream-php": "2.1.0",
+        "phpoffice/phpspreadsheet": "1.23.0",
         "pusher/pusher-php-server": "^4.1",
         "yajra/laravel-datatables-oracle": "^9.10"
     },

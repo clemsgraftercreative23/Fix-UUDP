@@ -140,6 +140,22 @@ function export_evidence_cell($filename)
         . '<div style="font-size:9px;color:#455a64;text-align:center;word-break:break-all;">' . $safeName . '</div>';
 }
 
+function export_sheet_name($row, $index)
+{
+    $raw = trim((string) ($row->no_reimbursement ?? 'Inquiry ' . ($index + 1)));
+    $safe = str_replace(['\\', '/', ':', '?', '*', '[', ']'], '-', $raw);
+    $safe = trim((string) $safe);
+    if ($safe === '') {
+        $safe = 'Inquiry ' . ($index + 1);
+    }
+
+    if (strlen($safe) > 31) {
+        $safe = substr($safe, 0, 31);
+    }
+
+    return $safe;
+}
+
 $periodLine = '-';
 if (!empty($periodStart) && !empty($periodEnd)) {
     $periodLine = export_date_ymd($periodStart) . ' - ' . export_date_ymd($periodEnd);
@@ -150,16 +166,21 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
 ?>
 
 <!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
     <meta charset="utf-8">
     <!--[if gte mso 9]>
     <xml>
         <x:ExcelWorkbook>
-            <x:ExcelWorksheets><x:ExcelWorksheet>
-                <x:Name>Settlement</x:Name>
-                <x:WorksheetOptions><x:Print><x:ValidPrinterInfo/></x:Print></x:WorksheetOptions>
-            </x:ExcelWorksheet></x:ExcelWorksheets>
+            <x:ExcelWorksheets>
+            @foreach ($data as $sheetIndex => $sheetRow)
+                <x:ExcelWorksheet>
+                    <x:Name>{{ export_sheet_name($sheetRow, $sheetIndex) }}</x:Name>
+                    <x:WorksheetSource HRef="#sheet{{ $sheetIndex + 1 }}"/>
+                    <x:WorksheetOptions><x:Print><x:ValidPrinterInfo/></x:Print></x:WorksheetOptions>
+                </x:ExcelWorksheet>
+            @endforeach
+            </x:ExcelWorksheets>
         </x:ExcelWorkbook>
     </xml>
     <![endif]-->
@@ -174,11 +195,15 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
             background: #fff;
         }
         .report-section {
-            page-break-after: always;
             margin-bottom: 8px;
         }
-        .report-section:last-child {
-            page-break-after: auto;
+        .inquiry-page-break {
+            page-break-before: always;
+            mso-special-character: line-break;
+            height: 0;
+            line-height: 0;
+            margin: 0;
+            padding: 0;
         }
         /* Watermark teks di dalam sel (relative, bukan linked image) */
         .wm-in-cell {
@@ -267,12 +292,30 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
         .bordernya {
             border-collapse: collapse;
             width: 100%;
+            border: 1px solid #37474f;
+            mso-border-alt: solid #37474f .75pt;
         }
         .bordernya th,
         .bordernya td {
             border: 1px solid #37474f;
+            mso-border-alt: solid #37474f .75pt;
             padding: 6px 8px;
             vertical-align: middle;
+        }
+        .payment-section {
+            margin-bottom: 10px;
+        }
+        .payment-break {
+            page-break-before: always;
+        }
+        .payment-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1b5e20;
+            margin: 0 0 6px 0;
+            padding: 4px 6px;
+            border: 1px solid #2e7d32;
+            background: #e8f5e9;
         }
         .bordernya thead th,
         .bordernya th.hdr-fill {
@@ -341,7 +384,10 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
 </head>
 <body>
 
-@foreach ($data as $row)
+@foreach ($data as $sheetIndex => $row)
+    <table id="sheet{{ $sheetIndex + 1 }}" style="mso-element:worksheet;" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+    <td>
     @php
         $typeName = export_type_name($row->reimbursement_type);
         $title = $typeName === 'ENTERTAINMENT'
@@ -427,85 +473,81 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
             $sumEnt = $entLines->sum(function ($line) {
                 return export_ent_amount($line);
             });
-            $sumBdcDetail = $entLines->filter(function ($line) {
-                return strtoupper(trim((string) ($line->payment_type ?? ''))) === 'BDC';
-            })->sum(function ($line) {
-                return export_ent_amount($line);
+            $entGrouped = $entLines->groupBy(function ($line) {
+                $payment = strtoupper(trim((string) ($line->payment_type ?? '')));
+                return $payment !== '' ? $payment : 'UNKNOWN';
             });
-            $sumCashDetail = $entLines->filter(function ($line) {
-                return strtoupper(trim((string) ($line->payment_type ?? ''))) === 'CASH';
-            })->sum(function ($line) {
-                return export_ent_amount($line);
-            });
-            $totalBdcSheet = $row->total_bdc !== null && $row->total_bdc !== '' ? (float) $row->total_bdc : $sumBdcDetail;
-            $totalCashSheet = $row->total_cash !== null && $row->total_cash !== '' ? (float) $row->total_cash : $sumCashDetail;
+
+            if ($entGrouped->isEmpty()) {
+                $entGrouped = collect(['UNKNOWN' => collect()]);
+            }
         @endphp
 
-        <table class="table-laporan bordernya" style="margin-bottom: 8px;">
-            <thead>
-                <tr>
-                    <th>Transaction Date</th>
-                    <th>No of Attendance</th>
-                    <th>Attendance</th>
-                    <th>Position</th>
-                    <th>Place</th>
-                    <th>Guest</th>
-                    <th>Guest Position</th>
-                    <th>Company</th>
-                    <th>Type</th>
-                    <th>Payment</th>
-                    <th>Amount</th>
-                    <th>Remark (Detail)</th>
-                    <th>Evidence</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($entLines as $idx => $line)
-                    <tr class="{{ ($idx % 2) === 1 ? 'tr-alt' : '' }}">
-                        <td class="text-center">{{ export_date_ymd($line->date ?? null) }}</td>
-                        <td>{{ $line->empty_zone ?? '' }}</td>
-                        <td>{{ $line->attendance ?? '' }}</td>
-                        <td>{{ $line->position ?? '' }}</td>
-                        <td>{{ $line->place ?? '' }}</td>
-                        <td>{{ $line->guest ?? '' }}</td>
-                        <td>{{ $line->guest_position ?? '' }}</td>
-                        <td>{{ $line->company ?? '' }}</td>
-                        <td>{{ $line->type ?? '' }}</td>
-                        <td>{{ $line->payment_type ?? '' }}</td>
-                        <td class="text-right">{{ export_nominal(export_ent_amount($line)) }}</td>
-                        <td>{{ $line->remark ?? '' }}</td>
-                        <td class="text-center">{!! export_evidence_cell($line->evidence ?? '') !!}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="13" class="text-center">No detail rows</td>
-                    </tr>
-                @endforelse
-                <tr class="total-row">
-                    <td colspan="10" class="text-right">Total</td>
-                    <td class="text-right">{{ export_nominal($sumEnt) }}</td>
-                    <td colspan="2"></td>
-                </tr>
-            </tbody>
-        </table>
+        @foreach ($entGrouped as $paymentType => $paymentLines)
+            @php
+                $payTotal = $paymentLines->sum(function ($line) {
+                    return export_ent_amount($line);
+                });
+            @endphp
+            <div class="payment-section {{ $loop->first ? '' : 'payment-break' }}">
+                <div class="payment-title">Payment Type: {{ $paymentType }}</div>
+                <table class="table-laporan bordernya" style="margin-bottom: 8px;" border="1" cellspacing="0" cellpadding="0">
+                    <thead>
+                        <tr>
+                            <th>Transaction Date</th>
+                            <th>No of Attendance</th>
+                            <th>Attendance</th>
+                            <th>Position</th>
+                            <th>Place</th>
+                            <th>Guest</th>
+                            <th>Guest Position</th>
+                            <th>Company</th>
+                            <th>Type</th>
+                            <th>Payment</th>
+                            <th>Amount</th>
+                            <th>Remark (Detail)</th>
+                            <th>Evidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($paymentLines as $idx => $line)
+                            <tr class="{{ ($idx % 2) === 1 ? 'tr-alt' : '' }}">
+                                <td class="text-center">{{ export_date_ymd($line->date ?? null) }}</td>
+                                <td>{{ $line->empty_zone ?? '' }}</td>
+                                <td>{{ $line->attendance ?? '' }}</td>
+                                <td>{{ $line->position ?? '' }}</td>
+                                <td>{{ $line->place ?? '' }}</td>
+                                <td>{{ $line->guest ?? '' }}</td>
+                                <td>{{ $line->guest_position ?? '' }}</td>
+                                <td>{{ $line->company ?? '' }}</td>
+                                <td>{{ $line->type ?? '' }}</td>
+                                <td>{{ $line->payment_type ?? '' }}</td>
+                                <td class="text-right">{{ export_nominal(export_ent_amount($line)) }}</td>
+                                <td>{{ $line->remark ?? '' }}</td>
+                                <td class="text-center">{!! export_evidence_cell($line->evidence ?? '') !!}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="13" class="text-center">No detail rows</td>
+                            </tr>
+                        @endforelse
+                        <tr class="total-row">
+                            <td colspan="10" class="text-right">Total {{ $paymentType }}</td>
+                            <td class="text-right">{{ export_nominal($payTotal) }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        @endforeach
 
-        <table class="table-laporan bordernya" style="margin-bottom: 6px;">
+        <table class="table-laporan bordernya" style="margin-bottom: 16px;" border="1" cellspacing="0" cellpadding="0">
             <tr>
-                <th colspan="13" class="text-left checker-head">Checker's Sheet BDC</th>
+                <th colspan="13" class="text-left checker-head">Grand Total Entertainment</th>
             </tr>
             <tr>
                 <td colspan="10">Total Payment to be paid</td>
-                <td class="text-right">{{ export_nominal($totalBdcSheet) }}</td>
-                <td colspan="2"></td>
-            </tr>
-        </table>
-        <table class="table-laporan bordernya" style="margin-bottom: 16px;">
-            <tr>
-                <th colspan="13" class="text-left checker-head">Checker's Sheet Cash</th>
-            </tr>
-            <tr>
-                <td colspan="10">Total Payment to be paid</td>
-                <td class="text-right">{{ export_nominal($totalCashSheet) }}</td>
+                <td class="text-right">{{ export_nominal($sumEnt) }}</td>
                 <td colspan="2"></td>
             </tr>
         </table>
@@ -515,78 +557,74 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
             $sumDrv = $drvLines->sum(function ($line) {
                 return (float) ($line->subtotal ?? 0);
             });
-            $sumFleet = $drvLines->filter(function ($line) {
-                return strtoupper(trim((string) ($line->payment_type ?? ''))) === 'FLEET';
-            })->sum(function ($line) {
-                return (float) ($line->subtotal ?? 0);
+            $drvGrouped = $drvLines->groupBy(function ($line) {
+                $payment = strtoupper(trim((string) ($line->payment_type ?? '')));
+                return $payment !== '' ? $payment : 'UNKNOWN';
             });
-            $sumCashDrv = $drvLines->filter(function ($line) {
-                return strtoupper(trim((string) ($line->payment_type ?? ''))) === 'CASH';
-            })->sum(function ($line) {
-                return (float) ($line->subtotal ?? 0);
-            });
-            $sheetFleet = $row->total_fleet !== null && $row->total_fleet !== '' ? (float) $row->total_fleet : $sumFleet;
-            $sheetCashDrv = $row->total_cash !== null && $row->total_cash !== '' ? (float) $row->total_cash : $sumCashDrv;
+
+            if ($drvGrouped->isEmpty()) {
+                $drvGrouped = collect(['UNKNOWN' => collect()]);
+            }
         @endphp
 
-        <table class="table-laporan bordernya" style="margin-bottom: 8px;">
-            <thead>
-                <tr>
-                    <th>No</th>
-                    <th>Toll</th>
-                    <th>Parking</th>
-                    <th>Gasoline</th>
-                    <th>Other</th>
-                    <th>Payment</th>
-                    <th>Amount</th>
-                    <th>Remark (Detail)</th>
-                    <th>Evidence</th>
-                </tr>
-            </thead>
-            <tbody>
-                @php $noD = 1; @endphp
-                @forelse ($drvLines as $idx => $line)
-                    <tr class="{{ ($idx % 2) === 1 ? 'tr-alt' : '' }}">
-                        <td class="text-center">{{ $noD++ }}</td>
-                        <td class="text-right">{{ export_nominal($line->toll ?? 0) }}</td>
-                        <td class="text-right">{{ export_nominal($line->parking ?? 0) }}</td>
-                        <td class="text-right">{{ export_nominal($line->gasoline ?? 0) }}</td>
-                        <td class="text-right">{{ export_nominal($line->others ?? 0) }}</td>
-                        <td>{{ $line->payment_type ?? '' }}</td>
-                        <td class="text-right">{{ export_nominal($line->subtotal ?? 0) }}</td>
-                        <td>{{ $line->remark ?? '' }}</td>
-                        <td class="text-center">{!! export_evidence_cell($line->evidence ?? '') !!}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="9" class="text-center">No detail rows</td>
-                    </tr>
-                @endforelse
-                <tr class="total-row">
-                    <td colspan="6" class="text-right">Total</td>
-                    <td class="text-right">{{ export_nominal($sumDrv) }}</td>
-                    <td colspan="2"></td>
-                </tr>
-            </tbody>
-        </table>
+        @foreach ($drvGrouped as $paymentType => $paymentLines)
+            @php
+                $payTotal = $paymentLines->sum(function ($line) {
+                    return (float) ($line->subtotal ?? 0);
+                });
+            @endphp
+            <div class="payment-section {{ $loop->first ? '' : 'payment-break' }}">
+                <div class="payment-title">Payment Type: {{ $paymentType }}</div>
+                <table class="table-laporan bordernya" style="margin-bottom: 8px;" border="1" cellspacing="0" cellpadding="0">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Toll</th>
+                            <th>Parking</th>
+                            <th>Gasoline</th>
+                            <th>Other</th>
+                            <th>Payment</th>
+                            <th>Amount</th>
+                            <th>Remark (Detail)</th>
+                            <th>Evidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @php $noD = 1; @endphp
+                        @forelse ($paymentLines as $idx => $line)
+                            <tr class="{{ ($idx % 2) === 1 ? 'tr-alt' : '' }}">
+                                <td class="text-center">{{ $noD++ }}</td>
+                                <td class="text-right">{{ export_nominal($line->toll ?? 0) }}</td>
+                                <td class="text-right">{{ export_nominal($line->parking ?? 0) }}</td>
+                                <td class="text-right">{{ export_nominal($line->gasoline ?? 0) }}</td>
+                                <td class="text-right">{{ export_nominal($line->others ?? 0) }}</td>
+                                <td>{{ $line->payment_type ?? '' }}</td>
+                                <td class="text-right">{{ export_nominal($line->subtotal ?? 0) }}</td>
+                                <td>{{ $line->remark ?? '' }}</td>
+                                <td class="text-center">{!! export_evidence_cell($line->evidence ?? '') !!}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="9" class="text-center">No detail rows</td>
+                            </tr>
+                        @endforelse
+                        <tr class="total-row">
+                            <td colspan="6" class="text-right">Total {{ $paymentType }}</td>
+                            <td class="text-right">{{ export_nominal($payTotal) }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        @endforeach
 
-        <table class="table-laporan bordernya" style="margin-bottom: 6px;">
+        <table class="table-laporan bordernya" style="margin-bottom: 16px;" border="1" cellspacing="0" cellpadding="0">
             <tr>
-                <th colspan="9" class="text-left checker-head">Checker's Sheet Fleet</th>
+                <th colspan="9" class="text-left checker-head">Grand Total Driver</th>
             </tr>
             <tr>
                 <td colspan="6">Total Payment to be paid</td>
-                <td class="text-right">{{ export_nominal($sheetFleet) }}</td>
-                <td colspan="2"></td>
-            </tr>
-        </table>
-        <table class="table-laporan bordernya" style="margin-bottom: 16px;">
-            <tr>
-                <th colspan="9" class="text-left checker-head">Checker's Sheet Cash</th>
-            </tr>
-            <tr>
-                <td colspan="6">Total Payment to be paid</td>
-                <td class="text-right">{{ export_nominal($sheetCashDrv) }}</td>
+                <td class="text-right">{{ export_nominal($sumDrv) }}</td>
                 <td colspan="2"></td>
             </tr>
         </table>
@@ -602,113 +640,86 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
             $sumTravelIdr = $allDetails->sum(function ($pair) {
                 return (float) ($pair['dt']->idr_rate ?? 0);
             });
-            $sumBdcT = $allDetails->filter(function ($pair) {
-                return strtoupper(trim((string) ($pair['dt']->payment_type ?? ''))) === 'BDC';
-            })->sum(function ($pair) {
-                return (float) ($pair['dt']->idr_rate ?? 0);
+            $travelGrouped = $allDetails->groupBy(function ($pair) {
+                $payment = strtoupper(trim((string) ($pair['dt']->payment_type ?? '')));
+                return $payment !== '' ? $payment : 'UNKNOWN';
             });
-            $sumCashT = $allDetails->filter(function ($pair) {
-                return strtoupper(trim((string) ($pair['dt']->payment_type ?? ''))) === 'CASH';
-            })->sum(function ($pair) {
-                return (float) ($pair['dt']->idr_rate ?? 0);
-            });
-            $totalBdcT = $row->total_bdc !== null && $row->total_bdc !== '' ? (float) $row->total_bdc : $sumBdcT;
-            $totalCashT = $row->total_cash !== null && $row->total_cash !== '' ? (float) $row->total_cash : $sumCashT;
+
+            if ($travelGrouped->isEmpty()) {
+                $travelGrouped = collect(['UNKNOWN' => collect()]);
+            }
         @endphp
 
-        @forelse ($travelRows as $tv)
-            <table class="table-laporan bordernya" style="margin-bottom: 6px;">
-                <tr>
-                    <th class="th-sub">Trip — Transaction Date</th>
-                    <td>{{ export_date_ymd($tv->date ?? $row->date) }}</td>
-                    <th class="th-sub">Trip Type</th>
-                    <td>{{ optional($tv->tripType)->name ?? '-' }}</td>
-                    <th class="th-sub">Hotel</th>
-                    <td>{{ optional($tv->hotelCondition)->name ?? '-' }}</td>
-                    <th class="th-sub">Allowance</th>
-                    <td colspan="2" class="text-right">{{ export_nominal($tv->allowance ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <th class="th-sub">Purpose</th>
-                    <td colspan="8">{{ $tv->purpose ?? '-' }}</td>
-                </tr>
-            </table>
-            <table class="table-laporan bordernya" style="margin-bottom: 12px;">
-                <thead>
-                    <tr>
-                        <th>Cost Type</th>
-                        <th>Destination</th>
-                        <th>Currency</th>
-                        <th>Amount</th>
-                        <th>Amount (IDR)</th>
-                        <th>Tax</th>
-                        <th>Payment</th>
-                        <th>Remarks</th>
-                        <th>Evidence</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($tv->details ?? [] as $idx => $dt)
-                        <tr class="{{ ($idx % 2) === 1 ? 'tr-alt' : '' }}">
-                            <td>{{ optional($dt->costType)->name ?? '-' }}</td>
-                            <td>{{ $dt->destination ?? '' }}</td>
-                            <td>{{ $dt->currency ?? '' }}</td>
-                            <td class="text-right">{{ export_nominal($dt->amount ?? 0) }}</td>
-                            <td class="text-right">{{ export_nominal($dt->idr_rate ?? 0) }}</td>
-                            <td class="text-right">{{ export_nominal($dt->tax ?? 0) }}</td>
-                            <td>{{ $dt->payment_type ?? '' }}</td>
-                            <td>{{ $dt->remarks ?? '' }}</td>
-                            <td class="text-center">{!! export_evidence_cell($dt->evidence ?? '') !!}</td>
-                        </tr>
-                    @empty
+        @foreach ($travelGrouped as $paymentType => $paymentLines)
+            @php
+                $payTotal = $paymentLines->sum(function ($pair) {
+                    return (float) ($pair['dt']->idr_rate ?? 0);
+                });
+            @endphp
+            <div class="payment-section {{ $loop->first ? '' : 'payment-break' }}">
+                <div class="payment-title">Payment Type: {{ $paymentType }}</div>
+                <table class="table-laporan bordernya" style="margin-bottom: 12px;" border="1" cellspacing="0" cellpadding="0">
+                    <thead>
                         <tr>
-                            <td colspan="9" class="text-center">No cost lines for this trip</td>
+                            <th>Trip Date</th>
+                            <th>Trip Type</th>
+                            <th>Purpose</th>
+                            <th>Cost Type</th>
+                            <th>Destination</th>
+                            <th>Currency</th>
+                            <th>Amount</th>
+                            <th>Amount (IDR)</th>
+                            <th>Tax</th>
+                            <th>Payment</th>
+                            <th>Remarks</th>
+                            <th>Evidence</th>
                         </tr>
-                    @endforelse
-                    <tr class="total-row">
-                        <td colspan="7" class="text-right">Trip subtotal</td>
-                        <td class="text-right" colspan="2">{{ export_nominal($tv->total ?? 0) }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        @empty
-            <table class="table-laporan bordernya" style="margin-bottom: 16px;">
-                <tr>
-                    <td class="text-center">No travel segments</td>
-                </tr>
-            </table>
-        @endforelse
+                    </thead>
+                    <tbody>
+                        @forelse ($paymentLines as $idx => $pair)
+                            @php
+                                $tv = $pair['travel'];
+                                $dt = $pair['dt'];
+                            @endphp
+                            <tr class="{{ ($idx % 2) === 1 ? 'tr-alt' : '' }}">
+                                <td class="text-center">{{ export_date_ymd($tv->date ?? $row->date) }}</td>
+                                <td>{{ optional($tv->tripType)->name ?? '-' }}</td>
+                                <td>{{ $tv->purpose ?? '-' }}</td>
+                                <td>{{ optional($dt->costType)->name ?? '-' }}</td>
+                                <td>{{ $dt->destination ?? '' }}</td>
+                                <td>{{ $dt->currency ?? '' }}</td>
+                                <td class="text-right">{{ export_nominal($dt->amount ?? 0) }}</td>
+                                <td class="text-right">{{ export_nominal($dt->idr_rate ?? 0) }}</td>
+                                <td class="text-right">{{ export_nominal($dt->tax ?? 0) }}</td>
+                                <td>{{ $dt->payment_type ?? '' }}</td>
+                                <td>{{ $dt->remarks ?? '' }}</td>
+                                <td class="text-center">{!! export_evidence_cell($dt->evidence ?? '') !!}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="12" class="text-center">No travel segments</td>
+                            </tr>
+                        @endforelse
+                        <tr class="total-row">
+                            <td colspan="7" class="text-right">Total {{ $paymentType }}</td>
+                            <td class="text-right">{{ export_nominal($payTotal) }}</td>
+                            <td colspan="4"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        @endforeach
 
-        @if ($travelRows->isNotEmpty())
-            <table class="table-laporan bordernya" style="margin-bottom: 6px;">
-                <tr>
-                    <th colspan="9" class="text-left checker-head">Summary — all trips (IDR from details)</th>
-                </tr>
-                <tr class="total-row">
-                    <td colspan="6" class="text-right">Total (detail IDR sum)</td>
-                    <td class="text-right" colspan="3">{{ export_nominal($sumTravelIdr) }}</td>
-                </tr>
-            </table>
-
-            <table class="table-laporan bordernya" style="margin-bottom: 6px;">
-                <tr>
-                    <th colspan="9" class="text-left checker-head">Checker's Sheet BDC</th>
-                </tr>
-                <tr>
-                    <td colspan="6">Total Payment to be paid</td>
-                    <td class="text-right" colspan="3">{{ export_nominal($totalBdcT) }}</td>
-                </tr>
-            </table>
-            <table class="table-laporan bordernya" style="margin-bottom: 16px;">
-                <tr>
-                    <th colspan="9" class="text-left checker-head">Checker's Sheet Cash</th>
-                </tr>
-                <tr>
-                    <td colspan="6">Total Payment to be paid</td>
-                    <td class="text-right" colspan="3">{{ export_nominal($totalCashT) }}</td>
-                </tr>
-            </table>
-        @endif
+        <table class="table-laporan bordernya" style="margin-bottom: 16px;" border="1" cellspacing="0" cellpadding="0">
+            <tr>
+                <th colspan="12" class="text-left checker-head">Grand Total Travel (IDR)</th>
+            </tr>
+            <tr>
+                <td colspan="7">Total Payment to be paid</td>
+                <td class="text-right">{{ export_nominal($sumTravelIdr) }}</td>
+                <td colspan="4"></td>
+            </tr>
+        </table>
     @endif
 
             <table class="table-laporan bordernya" style="margin-bottom: 24px;">
@@ -731,6 +742,9 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
 
         </div>
     </div>
+    </td>
+    </tr>
+    </table>
 @endforeach
 
 </body>
