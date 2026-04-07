@@ -574,6 +574,7 @@ class PencairanReimbursementController extends Controller
                     ->leftJoin('users', 'reimbursement.id_user', 'users.id')
                     ->select('reimbursement.*', 'master_project.nama', 'master_project.no_project', 'master_project.keterangan', 'users.name')
                     ->whereIn('status', [3, 5])
+                    ->where('reimbursement.reimbursement_type', 3)
                     ->orderBy('reimbursement.created_at', 'desc');
 
         if (isset($request->start) && $request->start != "") {
@@ -649,23 +650,11 @@ class PencairanReimbursementController extends Controller
 
         $headerRow = 4;
         $headers = [
-            'No', 'Inquiry No', 'Apply Date', 'Inquiry By', 'Department', 'Type', 'Status', 'Transaction Date',
-            'Payment Type', 'Detail Date', 'Attendance', 'Position', 'Place', 'Guest', 'Trip Type', 'Purpose',
-            'Cost Type', 'Destination', 'Currency', 'Toll', 'Parking', 'Gasoline', 'Other', 'Amount',
+            'No', 'Inquiry No', 'Apply Date', 'Inquiry By', 'Department', 'Status', 'Transaction Date',
+            'Payment Type', 'Detail Date', 'Attendance', 'Position', 'Place', 'Guest', 'Amount',
             'Remark (Header)', 'Remark (Detail)', 'Watermark'
         ];
         $sheet->fromArray($headers, null, 'A' . $headerRow);
-
-        $mapType = function ($type) {
-            $type = (int) $type;
-            if ($type === 1) {
-                return 'DRIVER';
-            }
-            if ($type === 2) {
-                return 'TRAVEL';
-            }
-            return 'ENTERTAINMENT';
-        };
 
         $mapStatus = function ($status) {
             return ((int) $status === 5) ? 'SETTLED' : 'PROCESS SETTLEMENT';
@@ -681,93 +670,28 @@ class PencairanReimbursementController extends Controller
                 optional($row->created_at)->format('Y-m-d') ?: '-',
                 optional($row->user)->name ?: '-',
                 optional($row->department)->nama_departemen ?: '-',
-                $mapType($row->reimbursement_type),
                 $mapStatus($row->status),
                 $row->date ?: '-',
             ];
             $paidMark = ((int) $row->status === 5) ? 'PAID' : '';
 
-            if ((int) $row->reimbursement_type === 1) {
-                if ($row->drivers->isEmpty()) {
-                    $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', '', '', 0, 0, 0, 0, (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
-                    $r++;
-                } else {
-                    foreach ($row->drivers as $line) {
-                        $sheet->fromArray(array_merge($base, [
-                            $line->payment_type ?: '',
-                            '', '', '', '', '', '', '', '', '',
-                            (float) ($line->toll ?? 0),
-                            (float) ($line->parking ?? 0),
-                            (float) ($line->gasoline ?? 0),
-                            (float) ($line->others ?? 0),
-                            (float) ($line->subtotal ?? 0),
-                            $row->remark ?: '',
-                            $line->remark ?: '',
-                            $paidMark,
-                        ]), null, 'A' . $r);
-                        $r++;
-                    }
-                }
-            } elseif ((int) $row->reimbursement_type === 3) {
-                if ($row->entertaiments->isEmpty()) {
-                    $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', '', '', 0, 0, 0, 0, (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
-                    $r++;
-                } else {
-                    foreach ($row->entertaiments as $line) {
-                        $sheet->fromArray(array_merge($base, [
-                            $line->payment_type ?: '',
-                            $line->date ?: '',
-                            $line->attendance ?: '',
-                            $line->position ?: '',
-                            $line->place ?: '',
-                            '',
-                            '',
-                            '',
-                            '',
-                            '',
-                            0,
-                            0,
-                            0,
-                            0,
-                            (float) ($line->amount ?? 0),
-                            $row->remark ?: '',
-                            $line->remark ?: '',
-                            $paidMark,
-                        ]), null, 'A' . $r);
-                        $r++;
-                    }
-                }
+            if ($row->entertaiments->isEmpty()) {
+                $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
+                $r++;
             } else {
-                $hasDetail = false;
-                foreach ($row->travels as $travel) {
-                    foreach ($travel->details as $detail) {
-                        $hasDetail = true;
-                        $sheet->fromArray(array_merge($base, [
-                            $detail->payment_type ?: '',
-                            $travel->date ?: ($row->date ?: ''),
-                            '',
-                            '',
-                            '',
-                            optional($travel->tripType)->name ?: '',
-                            $travel->purpose ?: '',
-                            optional($detail->costType)->name ?: '',
-                            $detail->destination ?: '',
-                            $detail->currency ?: '',
-                            0,
-                            0,
-                            0,
-                            0,
-                            (float) ($detail->idr_rate ?? 0),
-                            $row->remark ?: '',
-                            $detail->remarks ?: '',
-                            $paidMark,
-                        ]), null, 'A' . $r);
-                        $r++;
-                    }
-                }
-
-                if (!$hasDetail) {
-                    $sheet->fromArray(array_merge($base, ['', '', '', '', '', '', '', '', '', 0, 0, 0, 0, (float) $row->nominal_pengajuan, $row->remark ?: '', '', $paidMark]), null, 'A' . $r);
+                foreach ($row->entertaiments as $line) {
+                    $sheet->fromArray(array_merge($base, [
+                        $line->payment_type ?: '',
+                        $line->date ?: '',
+                        $line->attendance ?: '',
+                        $line->position ?: '',
+                        $line->place ?: '',
+                        $line->guest ?: '',
+                        (float) ($line->amount ?? 0),
+                        $row->remark ?: '',
+                        $line->remark ?: '',
+                        $paidMark,
+                    ]), null, 'A' . $r);
                     $r++;
                 }
             }
@@ -780,10 +704,10 @@ class PencairanReimbursementController extends Controller
         }
 
         $endRow = max($headerRow, $r - 1);
-        $applyTableStyle($sheet, 'A', $headerRow, 'AA', $endRow, $headerRow);
+        $applyTableStyle($sheet, 'A', $headerRow, 'K', $endRow, $headerRow);
         if ($endRow > $headerRow) {
-            $sheet->getStyle('T' . ($headerRow + 1) . ':X' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
-            $sheet->getStyle('AA' . ($headerRow + 1) . ':AA' . $endRow)->applyFromArray([
+            $sheet->getStyle('M' . ($headerRow + 1) . ':M' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle('K' . ($headerRow + 1) . ':K' . $endRow)->applyFromArray([
                 'font' => [
                     'bold' => true,
                     'color' => ['rgb' => 'C62828'],
@@ -791,10 +715,9 @@ class PencairanReimbursementController extends Controller
             ]);
         }
 
-        foreach (range('A', 'Z') as $col) {
+        foreach (range('A', 'K') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-        $sheet->getColumnDimension('AA')->setAutoSize(true);
 
         $spreadsheet->setActiveSheetIndex(0);
 
