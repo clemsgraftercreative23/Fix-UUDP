@@ -627,12 +627,18 @@ class PencairanReimbursementController extends Controller
             ]);
 
             if ($headerRow !== null) {
-                $headerRange = $startCol . $headerRow . ':' . $endCol . $headerRow;
-                $sheet->getStyle($headerRange)->applyFromArray([
-                    'font' => ['bold' => true],
+                $headerRange = $startCol . $headerRow . ':' . $endCol . $headerRow;                $sheet->getStyle($headerRange)->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => '000000'],
+                    ],
                     'fill' => [
                         'fillType' => Fill::FILL_SOLID,
                         'startColor' => ['rgb' => 'D9EAD3'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                        'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
                     ],
                 ]);
             }
@@ -704,10 +710,10 @@ class PencairanReimbursementController extends Controller
         }
 
         $endRow = max($headerRow, $r - 1);
-        $applyTableStyle($sheet, 'A', $headerRow, 'K', $endRow, $headerRow);
+        $applyTableStyle($sheet, 'A', $headerRow, 'Q', $endRow, $headerRow);
         if ($endRow > $headerRow) {
-            $sheet->getStyle('M' . ($headerRow + 1) . ':M' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
-            $sheet->getStyle('K' . ($headerRow + 1) . ':K' . $endRow)->applyFromArray([
+            $sheet$sheet->getStyle('N' . ($headerRow + 1) . ':N' . $endRow)->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle('Q' . ($headerRow + 1) . ':Q' . $endRow)->applyFromArray([
                 'font' => [
                     'bold' => true,
                     'color' => ['rgb' => 'C62828'],
@@ -715,7 +721,7 @@ class PencairanReimbursementController extends Controller
             ]);
         }
 
-        foreach (range('A', 'K') as $col) {
+        foreach (range('A', 'Q') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -742,3 +748,8 @@ class PencairanReimbursementController extends Controller
 
 
 }
+
+
+
+
+
