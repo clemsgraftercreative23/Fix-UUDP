@@ -44,6 +44,31 @@
         padding: 10px 15px;
         white-space: nowrap; /* Pastikan teks tidak terpotong */
     }
+    .travel-tab {
+        display: flex;
+        align-items: center;
+    }
+    .tab-close-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        margin-left: 6px;
+        border-radius: 50%;
+        background: #dc3545;
+        color: #fff;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+    .tab-close-link:hover {
+        color: #fff;
+        text-decoration: none;
+        opacity: 0.85;
+    }
     .button-container {
         display: flex;
         flex-wrap: nowrap; /* Pastikan tombol tetap dalam satu baris */
@@ -231,7 +256,12 @@ function rupiah($angka){
                             <ul class="nav nav-tabs">
                                 @foreach($data_item as $item)
                                 <li class="nav-item">
-                                    <a class="nav-link @if($item->id == Request::segment(4)) active @endif" href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"><span class="item-1">{{$item->date}}</span></a>
+                                    <div class="travel-tab">
+                                        <a class="nav-link @if($item->id == Request::segment(4)) active @endif" href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"><span class="item-1">{{$item->date}}</span></a>
+                                        @if($data['0']->status == 10)
+                                        <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
+                                        @endif
+                                    </div>
                                 </li>
                                 @endforeach
                                 @if($data['0']->status==10)

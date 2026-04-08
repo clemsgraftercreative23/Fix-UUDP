@@ -920,6 +920,122 @@ class TravelReimbursementController extends Controller
         ]);
     }
 
+    private function recalculateTravelSummary($id_main)
+    {
+        $travelType = Reimbursement::where('id', $id_main)->value('travel_type');
+        $allowance = (float) ReimbursementTravel::where('reimbursement_id', $id_main)->sum('allowance');
+
+        if ($travelType !== 'Domestic') {
+            $usdRate = (float) TravelTripRate::where('reimbursement_id', $id_main)->where('currency', 'USD')->value('rate');
+            $allowance = $allowance * $usdRate;
+        }
+
+        $totalBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->sum('idr_rate');
+        $simcardBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 8)->sum('idr_rate');
+        $flightBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 4)->sum('idr_rate');
+        $rentalcarBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 3)->sum('idr_rate');
+        $hotelBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 1)->sum('idr_rate');
+        $tollBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 5)->sum('idr_rate');
+        $gasolineBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 7)->sum('idr_rate');
+        $taxiBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 2)->sum('idr_rate');
+        $trainBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 6)->sum('idr_rate');
+        $taxBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->sum('tax');
+        $othersBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 9)->sum('idr_rate');
+
+        $totalCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->sum('idr_rate');
+        $simcardCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 8)->sum('idr_rate');
+        $flightCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 4)->sum('idr_rate');
+        $rentalcarCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 3)->sum('idr_rate');
+        $hotelCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 1)->sum('idr_rate');
+        $tollCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 5)->sum('idr_rate');
+        $gasolineCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 7)->sum('idr_rate');
+        $taxiCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 2)->sum('idr_rate');
+        $trainCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 6)->sum('idr_rate');
+        $taxCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->sum('tax');
+        $othersCash = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'Cash')->where('cost_type_id', 9)->sum('idr_rate');
+        $nominalPengajuan = (float) ReimbursementTravel::where('reimbursement_id', $id_main)->sum('total');
+
+        Reimbursement::whereId($id_main)->update([
+            'total_bdc' => $totalBdc,
+            'allowance_bdc' => 0,
+            'simcard_bdc' => $simcardBdc,
+            'flight_bdc' => $flightBdc,
+            'rentalcar_bdc' => $rentalcarBdc,
+            'hotel_bdc' => $hotelBdc,
+            'toll_bdc' => $tollBdc,
+            'gasoline_bdc' => $gasolineBdc,
+            'taxi_bdc' => $taxiBdc,
+            'train_bdc' => $trainBdc,
+            'tax_bdc' => $taxBdc,
+            'others_bdc' => $othersBdc,
+            'total_cash' => $totalCash,
+            'allowance_cash' => $allowance,
+            'simcard_cash' => $simcardCash,
+            'flight_cash' => $flightCash,
+            'rentalcar_cash' => $rentalcarCash,
+            'hotel_cash' => $hotelCash,
+            'toll_cash' => $tollCash,
+            'gasoline_cash' => $gasolineCash,
+            'taxi_cash' => $taxiCash,
+            'train_cash' => $trainCash,
+            'tax_cash' => $taxCash,
+            'others_cash' => $othersCash,
+            'nominal_pengajuan' => $nominalPengajuan,
+        ]);
+    }
+
+    public function deleteItem($id_main, $id_travel)
+    {
+        DB::beginTransaction();
+
+        try {
+            $reimbursement = Reimbursement::findOrFail($id_main);
+
+            if ((int) $reimbursement->status !== 10) {
+                DB::rollback();
+                return redirect()->back()->withErrors(['Tab hanya bisa dihapus saat status draft']);
+            }
+
+            $travel = ReimbursementTravel::where('id', $id_travel)->where('reimbursement_id', $id_main)->firstOrFail();
+
+            $details = ReimbursementTravelDetail::where('reimbursement_travel_id', $travel->id)->get();
+            foreach ($details as $detail) {
+                if (!empty($detail->evidence)) {
+                    $filePath = public_path('images/file_bukti/' . $detail->evidence);
+                    if (file_exists($filePath)) {
+                        @unlink($filePath);
+                    }
+                }
+            }
+
+            ReimbursementTravelDetail::where('reimbursement_travel_id', $travel->id)->delete();
+            $travel->delete();
+
+            $remainingTravelCount = ReimbursementTravel::where('reimbursement_id', $id_main)->count();
+
+            if ($remainingTravelCount === 0) {
+                TravelTripRate::where('reimbursement_id', $id_main)->delete();
+                $reimbursement->delete();
+                DB::commit();
+
+                return redirect()->route('reimbursement-travel.index')->with(['success' => 'Tab travel berhasil dihapus']);
+            }
+
+            $this->recalculateTravelSummary($id_main);
+            $nextTravelId = ReimbursementTravel::where('reimbursement_id', $id_main)->orderBy('id')->value('id');
+
+            DB::commit();
+
+            return redirect('reimbursement-travel/add-item/' . $id_main . '/' . $nextTravelId)->with(['success' => 'Tab travel berhasil dihapus']);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors(['Error ' . $e->getMessage()]);
+        } catch (\Throwable $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors(['Error ' . $e->getMessage()]);
+        }
+    }
+
     public function editInquiry($id)
     {
 

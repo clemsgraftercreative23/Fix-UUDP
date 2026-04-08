@@ -94,7 +94,7 @@
   Route::resource('/pertanggungjawaban', 'PertanggungjawabanController');
   Route::get('/insertPertanggungjawaban/{id}','PertanggungjawabanController@insertPertanggungjawaban');
   Route::any('/addPertanggungjawaban', 'PertanggungjawabanController@addPertanggungjawaban')->name('addPertanggungjawaban');
-Route::post('/storePertanggingjawaban', 'PertanggungjawabanController@store')->name('store');
+  Route::post('/storePertanggingjawaban', 'PertanggungjawabanController@store')->name('store');
   Route::post('/getPertanggungjawaban', 'PertanggungjawabanController@getPertanggungjawaban')->name('getPertanggungjawaban');
   Route::post('/changePertanggungjawaban', 'PertanggungjawabanController@changePertanggungjawaban')->name('changePertanggungjawaban');
   Route::get('/pertanggungjawaban/fetchData/{id}', 'PertanggungjawabanController@fetchData');
@@ -175,6 +175,7 @@ Route::post('/storePertanggingjawaban', 'PertanggungjawabanController@store')->n
   Route::get('reimbursement-travel/approve_multiple/{id}', 'TravelReimbursementController@approveMultiple');
   Route::get('reimbursement-travel/add-item/{id_main}', 'TravelReimbursementController@addNewItem');
   Route::get('reimbursement-travel/add-item/{id_main}/{id_travel}', 'TravelReimbursementController@addItem');
+  Route::get('reimbursement-travel/delete-item/{id_main}/{id_travel}', 'TravelReimbursementController@deleteItem')->name('reimbursement-travel.delete-item');
   Route::post('reimbursement-travel/update-item/{id_main}/{id_travel}', 'TravelReimbursementController@updateItem');
   Route::post('reimbursement-travel/update-item-reject/{id_main}/{id_travel}', 'TravelReimbursementController@updateItemReject');
   Route::post('reimbursement-travel/update-item-approval/{id_main}/{id_travel}', 'TravelReimbursementController@updateItemApproval');
