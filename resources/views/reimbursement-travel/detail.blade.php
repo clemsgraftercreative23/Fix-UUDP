@@ -168,23 +168,26 @@
                             {{$item->date}}
                         </td>
                         <th>Trip Type</th>
-                        <td class="bg-secondary">{{$item->tripType->name}}</td>
+                        <td class="bg-secondary">{{ optional($item->tripType)->name ?? 'None' }}</td>
                         <th>Hotel At</th>
-                        <td class="bg-secondary">{{$item->hotelCondition->name}}</td>
+                        <td class="bg-secondary">{{ optional($item->hotelCondition)->name ?? 'Not Stay' }}</td>
                         <th>Original Allowance</th>
                         <td class="bg-secondary">
                             
                             @php
                                 $currency = App\TravelTripType::where('id', $item->trip_type_id)->first();
-                                $allowance_trip = $currency->allowance;
-
-                                echo number_format($allowance_trip, 0, ',', '.') . ' ' . $item->tripType->currency;
+                                if ($currency) {
+                                    $allowance_trip = $currency->allowance;
+                                    echo number_format($allowance_trip, 0, ',', '.') . ' ' . $currency->currency;
+                                } else {
+                                    echo '0';
+                                }
 
                             @endphp
                         </td>
                         <th>Allowance (IDR)</th>
                         <td class="bg-secondary">
-                            <!-- @php
+                            {{-- @php
                                 $currency = App\TravelTripRate::where('reimbursement_id',$data->id)->where('currency',$item->tripType->currency)->first();
                                 if ($currency) {
                                     $currency = $currency->rate;
@@ -201,7 +204,7 @@
                                 
 
                                 echo number_format($item->allowance * $currency,0,',','.');
-                            @endphp -->
+                                                            @endphp --}}
                             {{number_format($item->allowance,0,',','.')}}
                         </td>
                     </tr>

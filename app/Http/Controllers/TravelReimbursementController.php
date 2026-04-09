@@ -24,6 +24,48 @@ class TravelReimbursementController extends Controller
     public function __construct() {
         $this->middleware('auth');
     }
+
+    private function normalizeTripTypeId($value)
+    {
+        if ($value === null || $value === '' || $value === '0') {
+            return 0;
+        }
+
+        return $value;
+    }
+    
+    private function resolveNotStayHotelConditionId()
+    {
+        $hotelConditionId = TravelHotelCondition::whereRaw('LOWER(name) = ?', ['not stay'])->value('id');
+
+        return $hotelConditionId ?: 0;
+    }
+
+    private function normalizeHotelConditionId($value, $tripTypeId = null)
+    {
+        if ((int) $this->normalizeTripTypeId($tripTypeId) === 0) {
+            return $this->resolveNotStayHotelConditionId();
+        }
+
+        if ($value === null || $value === '' || $value === '0') {
+            return $this->resolveNotStayHotelConditionId();
+        }
+
+        return $value;
+    }
+
+    private function normalizeTravelTime($value, $tripTypeId = null)
+    {
+        if ((int) $this->normalizeTripTypeId($tripTypeId) === 0) {
+            return '00:00:00';
+        }
+
+        if ($value === null || $value === '') {
+            return '00:00:00';
+        }
+
+        return $value;
+    }
     /**
      * Display a listing of the resource.
      *
@@ -273,7 +315,8 @@ class TravelReimbursementController extends Controller
         return view('reimbursement-travel.create',[
             "trip_types" => $tripTypes,
             "types" => $types,
-            "hotel_conditions" => $hotelCondition
+            "hotel_conditions" => $hotelCondition,
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId()
         ]);
 
     }
@@ -293,7 +336,8 @@ class TravelReimbursementController extends Controller
         return view('reimbursement-travel.create-overseas',[
             "trip_types" => $tripTypes,
             "types" => $types,
-            "hotel_conditions" => $hotelCondition
+            "hotel_conditions" => $hotelCondition,
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId()
         ]);
 
     }
@@ -347,16 +391,17 @@ class TravelReimbursementController extends Controller
                 ]);
             }
             foreach ($request->reimburse as $key => $value) {
+                $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
                 $payload = [
                     'reimbursement_id' => $data->id,
                     'date' => $value['date'],
                     'purpose' => $value['purpose'],
-                    'trip_type_id' => $value['trip_type_id'],
-                    'hotel_condition_id' => $value['hotel_condition_id'],
-                    'start_time' => $value['start_time'],
-                    'end_time' => $value['end_time'],
+                    'trip_type_id' => $tripTypeId,
+                    'hotel_condition_id' => $this->normalizeHotelConditionId($value['hotel_condition_id'] ?? null, $tripTypeId),
+                    'start_time' => $this->normalizeTravelTime($value['start_time'] ?? null, $tripTypeId),
+                    'end_time' => $this->normalizeTravelTime($value['end_time'] ?? null, $tripTypeId),
                     'allowance' => str_replace(".","",$value['allowance']),
-                    'total' => str_replace(".",'',$value['total']),
+                    'total' => (str_replace(".",'',$value['total']) === '' ? 0 : str_replace(".",'',$value['total'])),
                 ];
     
                 $dt = ReimbursementTravel::create($payload);
@@ -621,12 +666,12 @@ class TravelReimbursementController extends Controller
                 'reimbursement_id'        =>  $id_main,
                 'date'        =>  $request->date,
                 'purpose'        =>  $request->purpose,
-                'trip_type_id'        =>  $request->trip_type_id,
-                'hotel_condition_id'        =>  $request->hotel_condition_id,
-                'start_time'        =>  $request->start_time,
-                'end_time'        =>  $request->end_time,
+                'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
+                'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
+                'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
+                'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
                 'allowance'        =>  str_replace(".", "", $request->allowance),
-                'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
+                'total'        =>  (str_replace(".", "", $request->nominal_pengajuan) === '' ? 0 : str_replace(".", "", $request->nominal_pengajuan)),
             );
 
             DB::table('reimbursement_travel')->insert($form_travel);
@@ -636,6 +681,10 @@ class TravelReimbursementController extends Controller
             $count_ = count($request->currency);
             
             for ($i=0; $i < $count_; $i++) {
+                $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+                if ($costTypeId === '') {
+                    continue;
+                }
               
                 if(empty($request->proof[$i]) && empty($request->file[$i])) {
                     $id_detail_ = $request->id_detail[$i];
@@ -654,10 +703,7 @@ class TravelReimbursementController extends Controller
                 $new = new ReimbursementTravelDetail;
                 $new->reimbursement_id = $id_main;
                 $new->reimbursement_travel_id = $id_detail;
-                $new->cost_type_id = $request->cost_type_id[$i];
-                $new->destination = $request->destination[$i];
-                $new->payment_type = $request->payment_type[$i];
-                $new->currency = $request->currency[$i];
+                $new->cost_type_id = (int) $costTypeId;
                 $new->idr_rate = str_replace(".", "", $request->idr_rate[$i]);
                 $new->amount = str_replace(".", "", $request->amount[$i]);
                 $new->tax = str_replace(".", "", $request->tax[$i]);
@@ -873,6 +919,7 @@ class TravelReimbursementController extends Controller
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
             "data" => $data,
             "data_travel" => $data_travel,
             "travel_trip" => $travel_trip,
@@ -910,6 +957,7 @@ class TravelReimbursementController extends Controller
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
             "data" => $data,
             "data_travel" => $data_travel,
             "travel_trip" => $travel_trip,
@@ -1057,6 +1105,7 @@ class TravelReimbursementController extends Controller
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
             "data" => $data,
             "data_travel" => $data_travel,
             "travel_trip" => $travel_trip,
@@ -1086,6 +1135,7 @@ class TravelReimbursementController extends Controller
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
             "data" => $data,
             "data_travel" => $data_travel,
             "travel_trip" => $travel_trip,
@@ -1139,10 +1189,10 @@ class TravelReimbursementController extends Controller
         
         $form_data = array(
             'purpose'        =>  $request->remark,
-            'trip_type_id'        =>  $request->trip_type_id,
-            'hotel_condition_id'        =>  $request->hotel_condition_id,
-            'start_time'        =>  $request->start_time,
-            'end_time'        =>  $request->end_time,
+            'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
+            'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
+            'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
+            'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
             'allowance'        =>  str_replace(".", "", $allowance),
         );
         
@@ -1156,6 +1206,10 @@ class TravelReimbursementController extends Controller
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
         
         for ($i=0; $i < $count_; $i++) {
+            $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+            if ($costTypeId === '') {
+                continue;
+            }
           
             if(empty($request->proof[$i]) && empty($request->file[$i])) {
                 $id_detail_ = $request->id_detail[$i];
@@ -1174,7 +1228,7 @@ class TravelReimbursementController extends Controller
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id;
             $new->reimbursement_travel_id = $id_detail;
-            $new->cost_type_id = $request->cost_type_id[$i];
+            $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i];
             $new->payment_type = $request->payment_type[$i];
             $new->currency = $request->currency[$i];
@@ -1375,10 +1429,10 @@ class TravelReimbursementController extends Controller
         
         $form_data = array(
             'purpose'        =>  $request->purpose,
-            'trip_type_id'        =>  $request->trip_type_id,
-            'hotel_condition_id'        =>  $request->hotel_condition_id,
-            'start_time'        =>  $request->start_time,
-            'end_time'        =>  $request->end_time,
+            'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
+            'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
+            'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
+            'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
             'allowance'        =>  str_replace(".", "", $allowance),
             'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
         );
@@ -1393,6 +1447,10 @@ class TravelReimbursementController extends Controller
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
         
         for ($i=0; $i < $count_; $i++) {
+            $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+            if ($costTypeId === '') {
+                continue;
+            }
           
             if(empty($request->proof[$i]) && empty($request->file[$i])) {
                 $id_detail_ = $request->id_detail[$i];
@@ -1411,7 +1469,7 @@ class TravelReimbursementController extends Controller
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
             $new->reimbursement_travel_id = $id_detail;
-            $new->cost_type_id = $request->cost_type_id[$i];
+            $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i];
             $new->payment_type = $request->payment_type[$i];
             $new->currency = $request->currency[$i];
@@ -1591,10 +1649,10 @@ class TravelReimbursementController extends Controller
         
         $form_data = array(
             'purpose'        =>  $request->purpose,
-            'trip_type_id'        =>  $request->trip_type_id,
-            'hotel_condition_id'        =>  $request->hotel_condition_id,
-            'start_time'        =>  $request->start_time,
-            'end_time'        =>  $request->end_time,
+            'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
+            'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
+            'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
+            'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
             'allowance'        =>  str_replace(".", "", $allowance),
             'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
         );
@@ -1610,6 +1668,10 @@ class TravelReimbursementController extends Controller
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
         
         for ($i=0; $i < $count_; $i++) {
+            $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+            if ($costTypeId === '') {
+                continue;
+            }
           
             if(empty($request->proof[$i]) && empty($request->file[$i])) {
                 $id_detail_ = $request->id_detail[$i];
@@ -1628,7 +1690,7 @@ class TravelReimbursementController extends Controller
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
             $new->reimbursement_travel_id = $id_detail;
-            $new->cost_type_id = $request->cost_type_id[$i];
+            $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i];
             $new->payment_type = $request->payment_type[$i];
             $new->currency = $request->currency[$i];
@@ -1804,10 +1866,10 @@ class TravelReimbursementController extends Controller
         
         $form_data = array(
             'purpose'        =>  $request->purpose,
-            'trip_type_id'        =>  $request->trip_type_id,
-            'hotel_condition_id'        =>  $request->hotel_condition_id,
-            'start_time'        =>  $request->start_time,
-            'end_time'        =>  $request->end_time,
+            'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
+            'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
+            'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
+            'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
             'allowance'        =>  str_replace(".", "", $allowance),
             'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
         );
@@ -1822,6 +1884,10 @@ class TravelReimbursementController extends Controller
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
         
         for ($i=0; $i < $count_; $i++) {
+            $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+            if ($costTypeId === '') {
+                continue;
+            }
           
             if(empty($request->proof[$i]) && empty($request->file[$i])) {
                 $id_detail_ = $request->id_detail[$i];
@@ -1840,7 +1906,7 @@ class TravelReimbursementController extends Controller
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
             $new->reimbursement_travel_id = $id_detail;
-            $new->cost_type_id = $request->cost_type_id[$i];
+            $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i];
             $new->payment_type = $request->payment_type[$i];
             $new->currency = $request->currency[$i];
@@ -2596,12 +2662,12 @@ class TravelReimbursementController extends Controller
                     'reimbursement_id' => $id_reimb,
                     'date' => $value['date'],
                     'purpose' => $value['purpose'],
-                    'trip_type_id' => $value['trip_type_id'],
+                    'trip_type_id' => $this->normalizeTripTypeId($value['trip_type_id'] ?? null),
                     'hotel_condition_id' => $value['hotel_condition_id'],
                     'start_time' => $value['start_time'],
                     'end_time' => $value['end_time'],
                     'allowance' => str_replace(".","",$value['allowance']),
-                    'total' => str_replace(".",'',$value['total']),
+                    'total' => (str_replace(".",'',$value['total']) === '' ? 0 : str_replace(".",'',$value['total'])),
                 ];
 
                 $dt = ReimbursementTravel::create($payload);
