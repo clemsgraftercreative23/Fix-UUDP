@@ -43,7 +43,7 @@
 </div>
 @endif
 
-@if($showApprovalTab)
+<!-- @if($showApprovalTab)
 <div class="alert alert-info mt-2 mb-0" role="alert">
   <strong>Cara approve:</strong> Di halaman ini tidak ada tombol approve per baris. Buka tab <strong>Approval</strong> untuk setujui banyak klaim sekaligus, atau klik <strong>nomor klaim</strong> lalu gunakan tombol <strong>Approve</strong> di halaman detail (sesuai peran: Head Department → HR GA → Finance).
 </div>
@@ -51,7 +51,7 @@
 <div class="alert alert-light border mt-2 mb-0" role="alert">
   Pengajuan Anda bisa dilihat di tabel di bawah. Untuk menyetujui klaim orang lain, akun Anda harus memiliki peran verifikator (Head Department / HR GA / Finance) atau akses Approval.
 </div>
-@endif
+@endif -->
 
 <br>
 
