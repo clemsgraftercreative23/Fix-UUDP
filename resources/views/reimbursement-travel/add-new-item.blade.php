@@ -151,7 +151,6 @@ function rupiah($angka){
             <div class="col-xl">
                 <div class="card">
                     <div class="card-body">
-                                    <select :name="'reimburse['+i+'][hotel_condition_id]'" id="" class="form-control" v-model="data.hotel_condition" :disabled="!data.trip" required>
                         <div class="d-flex justify-content-between w-100"><h2 id="exampleModalCenterTitle" class="modal-title maintitle clr-green mb-0">REIMBURSEMENT UUDP - TRAVEL {{strtoupper($travel_type)}}</h2> 
                         <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close"><i class="material-icons">close</i></a></div>
                         <hr>
@@ -160,12 +159,12 @@ function rupiah($angka){
                             <input type="hidden" name="travel_type" value="{{$travel_type}}">
                             <div class="col-md-3">
                                 <label for="">Employee</label>
-                                    <input type="time" :name="'reimburse['+i+'][start_time]'" @change="changeTime(i)" v-model="data.start_time" class="form-control" value="" :disabled="!data.trip" required/>
+                                <input type="text" class="form-control" readonly value="{{auth()->user()->name}}">
                                 <input type="hidden" class="form-control" name="id_editor" value="{{auth()->user()->id}}">
                                 <input type="hidden" class="form-control" name="id_user" value="{{$data['0']->id_user}}">
                             </div>
                             <div class="col-md-3">
-                                    <input type="time" :name="'reimburse['+i+'][end_time]'" @change="changeTime(i)" v-model="data.end_time" class="form-control" value="" :disabled="!data.trip" required/>
+                                <label for="">Apply Date</label>
                                 <input type="text" class="form-control" name="remark" value="{{ date('d F Y', strtotime($data['0']->created_at)) }}" readonly>
                             </div> 
                             <div class="col-md-3">
@@ -637,7 +636,6 @@ $(document).ready(function(){
             }
         })
     });
-                hotel_condition: null,
     
     $(".change-rate").change(function(){
         total_nominal();
