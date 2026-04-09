@@ -68,7 +68,7 @@
                     <th>Transaction Date</th>
                     <td class="bg-secondary">{{$item->date}}</td>
                     <th>Trip Type</th>
-                    <td class="bg-secondary">{{$item->tripType->name}}</td>
+                    <td class="bg-secondary">{{ optional($item->tripType)->name ?? 'None' }}</td>
                     <th>Hotel At</th>
                     <td class="bg-secondary">{{$item->hotelCondition->name}}</td>
                     <th>Allowance</th>
@@ -76,9 +76,12 @@
                         <!-- {{$item->tripType->currency}} {{number_format($item->allowance,0,',','.')}} -->
                         @php
                             $currency = App\TravelTripType::where('id', $item->trip_type_id)->first();
-                            $allowance_trip = $currency->allowance;
-
-                            echo number_format($allowance_trip, 0, ',', '.') . ' ' . $item->tripType->currency;
+                            if ($currency) {
+                                $allowance_trip = $currency->allowance;
+                                echo number_format($allowance_trip, 0, ',', '.') . ' ' . $currency->currency;
+                            } else {
+                                echo '0';
+                            }
 
                         @endphp
                     </td>

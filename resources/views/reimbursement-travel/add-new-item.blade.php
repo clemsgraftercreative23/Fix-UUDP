@@ -151,7 +151,7 @@ function rupiah($angka){
             <div class="col-xl">
                 <div class="card">
                     <div class="card-body">
-                        
+                                    <select :name="'reimburse['+i+'][hotel_condition_id]'" id="" class="form-control" v-model="data.hotel_condition" :disabled="!data.trip" required>
                         <div class="d-flex justify-content-between w-100"><h2 id="exampleModalCenterTitle" class="modal-title maintitle clr-green mb-0">REIMBURSEMENT UUDP - TRAVEL {{strtoupper($travel_type)}}</h2> 
                         <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close"><i class="material-icons">close</i></a></div>
                         <hr>
@@ -160,12 +160,12 @@ function rupiah($angka){
                             <input type="hidden" name="travel_type" value="{{$travel_type}}">
                             <div class="col-md-3">
                                 <label for="">Employee</label>
-                                <input type="text" class="form-control" readonly value="{{auth()->user()->name}}">
+                                    <input type="time" :name="'reimburse['+i+'][start_time]'" @change="changeTime(i)" v-model="data.start_time" class="form-control" value="" :disabled="!data.trip" required/>
                                 <input type="hidden" class="form-control" name="id_editor" value="{{auth()->user()->id}}">
                                 <input type="hidden" class="form-control" name="id_user" value="{{$data['0']->id_user}}">
                             </div>
                             <div class="col-md-3">
-                                <label for="">Apply Date</label>
+                                    <input type="time" :name="'reimburse['+i+'][end_time]'" @change="changeTime(i)" v-model="data.end_time" class="form-control" value="" :disabled="!data.trip" required/>
                                 <input type="text" class="form-control" name="remark" value="{{ date('d F Y', strtotime($data['0']->created_at)) }}" readonly>
                             </div> 
                             <div class="col-md-3">
@@ -276,8 +276,8 @@ function rupiah($angka){
                             </div>
                             <div class="col-md-3">
                                 <label for="">Trip Type</label>
-                                <select id="trip_type_id" class="form-control change-type" name="trip_type_id" required>
-                                    <option value="" selected disabled>Select...</option>
+                                <select id="trip_type_id" class="form-control change-type" name="trip_type_id">
+                                    <option value="">None</option>
                                     @foreach ($trip_types as $item)
                                         <option value="{{$item->id}}">{!!$item->name!!}</option>
                                     @endforeach
@@ -609,6 +609,11 @@ $(document).ready(function(){
   
     $("#trip_type_id").change(function(){
         id = $('#trip_type_id').val();
+        if (!id) {
+            $('.allowance ').val(numberWithCommas(0));
+            total_nominal();
+            return;
+        }
         let usd_rate = $('input[name="rate[]"]').eq(1).val().replace(/\./g, '');
         $.ajax({
             url:"../../../get-trip-type/"+id,
@@ -632,6 +637,7 @@ $(document).ready(function(){
             }
         })
     });
+                hotel_condition: null,
     
     $(".change-rate").change(function(){
         total_nominal();
@@ -1771,6 +1777,7 @@ $(document).ready(function(){
         ],
         types : @json($types),
         trip_types : @json($trip_types),
+                not_stay_hotel_condition_id : @json($not_stay_hotel_condition_id),
         grandtotal: 0
       },
       mounted() {
@@ -1829,6 +1836,15 @@ $(document).ready(function(){
         changeTrip(i) {
             const id = this.reimburses[i].trip;
             const selectedTrip = this.trip_types.find(a => a.id == id);
+            if (!selectedTrip) {
+                this.reimburses[i].trip_allowance = '0';
+                this.reimburses[i].hotel_condition = this.not_stay_hotel_condition_id;
+                this.reimburses[i].start_time = null;
+                this.reimburses[i].end_time = null;
+                this.reimburses[i].travel_time = null;
+                this.calculateTotal(i, 0);
+                return;
+            }
             const currency = selectedTrip.currency; // data-rate
             const allowance = selectedTrip.allowance;
             
@@ -1891,6 +1907,7 @@ $(document).ready(function(){
                 trip_allowance: null,
                 travel_time: null,
                 trip_data: null,
+                hotel_condition: null,
                 details: [
                     {
                         cost_type: null,

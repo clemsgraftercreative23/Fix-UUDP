@@ -432,10 +432,46 @@ $(document).ready(function(){
         $('.total-nominal').val(numberWithCommas(total_append));
     }
     
+    const notStayHotelConditionId = @json($not_stay_hotel_condition_id);
+
+    function syncNoneTripTypeFields() {
+        const tripTypeId = $('#trip_type_id').val();
+        const hotelSelect = $('#hotel_condition_id');
+        const startInput = $('input[name="start_time"]');
+        const endInput = $('input[name="end_time"]');
+
+        if (!tripTypeId) {
+            const notStayOption = hotelSelect.find('option').filter(function () {
+                return $(this).text().trim().toLowerCase() === 'not stay';
+            }).first();
+
+            if (notStayOption.length) {
+                hotelSelect.val(notStayOption.val());
+            } else if (notStayHotelConditionId) {
+                hotelSelect.val(notStayHotelConditionId);
+            }
+
+            hotelSelect.prop('disabled', true);
+            startInput.prop('disabled', true).val('');
+            endInput.prop('disabled', true).val('');
+            return;
+        }
+
+        hotelSelect.prop('disabled', false);
+        startInput.prop('disabled', false);
+        endInput.prop('disabled', false);
+    }
+
     $("#trip_type_id").change(function(){
         
         id = $('#trip_type_id').val();
-        
+        syncNoneTripTypeFields();
+        if (!id) {
+            $('.allowance ').val(numberWithCommas(0));
+            total_nominal();
+            return;
+        }
+
         $.ajax({
             url:"../../get-trip-type/"+id,
             dataType:"json",
@@ -446,6 +482,8 @@ $(document).ready(function(){
             }
         })
     });
+
+    syncNoneTripTypeFields();
     
     $(".change-rate").change(function(){
         total_nominal();
