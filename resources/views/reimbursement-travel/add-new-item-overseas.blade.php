@@ -69,6 +69,10 @@
         text-decoration: none;
         opacity: 0.85;
     }
+    #rt-travel-item-pane.rt-pane-loading {
+        opacity: 0.55;
+        pointer-events: none;
+    }
     .button-container {
         display: flex;
         flex-wrap: nowrap; /* Pastikan tombol tetap dalam satu baris */
@@ -241,12 +245,15 @@ function rupiah($angka){
             <div class="col-xl">
                 <div class="card">
                     <div class="card-body">
+                        <div id="rt-travel-item-pane"
+                             data-main-id="{{ $data['0']->id }}"
+                             data-travel-id="0">
                         <div class="nav-tabs-container">
                             <ul class="nav nav-tabs">
                                 @foreach($data_item as $item)
                                 <li class="nav-item">
                                     <div class="travel-tab">
-                                        <a class="nav-link" href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"><span class="item-1">{{$item->date}}</span></a>
+                                        <a class="nav-link travel-item-link" href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"><span class="item-1">{{$item->date}}</span></a>
                                         @if($data['0']->status == 10)
                                         <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
                                         @endif
@@ -422,6 +429,7 @@ function rupiah($angka){
                             
                             
                         </div>
+                        </div>
                        
                     </div>
                 </div>
@@ -513,8 +521,8 @@ $(document).ready(function(){
         }
     }
 
-    // Event listener untuk setiap perubahan input time
-    $("#start_time, #end_time").on("input", function() {
+    // Event listener untuk setiap perubahan input time (delegated)
+    $(document).on("input", "#rt-travel-item-pane #start_time, #rt-travel-item-pane #end_time", function() {
         calculateTimeDifference();
     });
 
@@ -591,6 +599,51 @@ $(document).ready(function(){
         
         $('.total-nominal').val(numberWithCommas(total_append));
     }
+
+    window.rtNumberWithCommas = numberWithCommas;
+    window.rtTotalNominalTravel = total_nominal;
+    window.rtCalculateTimeDifference = calculateTimeDifference;
+
+    $(document).on('change', '#rt-travel-item-pane input[name="amount[]"]', function () {
+        var $tr = $(this).closest('tr');
+        var currency = $tr.find('select[name="currency[]"]').val();
+        var id = "{{ Request::segment(3) }}";
+        var amountStr = (($(this).val() || '').split('.').join(''));
+        var amount = parseFloat(amountStr) || 0;
+        var cost_type = $tr.find('select[name="cost_type_id[]"]').val();
+        if (!currency) {
+            return;
+        }
+        $.ajax({
+            url: "../../../get-currency/" + id + "/" + currency,
+            dataType: "json",
+            success: function (data) {
+                var val = data.data * amount;
+                $tr.find('input[name="idr_rate[]"]').val(numberWithCommas(val));
+                total_nominal();
+                var tax;
+                if (cost_type == 3) {
+                    tax = val * 2 / 100;
+                    $tr.find('input[name="tax[]"]').val(numberWithCommas(tax));
+                } else {
+                    $tr.find('input[name="tax[]"]').val(numberWithCommas(0));
+                }
+            }
+        });
+    });
+
+    $(document).on('change', '#rt-travel-item-pane select[name="cost_type_id[]"]', function () {
+        var cost_type = $(this).val();
+        var $tr = $(this).closest('tr');
+        var $idr = $tr.find('input[name="idr_rate[]"]');
+        var val = (($idr.val() || '').split('.').join(''));
+        if (cost_type == 3) {
+            var tax = parseFloat(val) * 2 / 100;
+            $tr.find('input[name="tax[]"]').val(numberWithCommas(isNaN(tax) ? 0 : tax));
+        } else {
+            $tr.find('input[name="tax[]"]').val(numberWithCommas(0));
+        }
+    });
     
     //$("#trip_type_id").change(function(){
     //    id = $('#trip_type_id').val();
@@ -606,7 +659,7 @@ $(document).ready(function(){
     //    })
     // });
   
-    $("#trip_type_id").change(function(){
+    $(document).on('change', '#rt-travel-item-pane #trip_type_id', function(){
         id = $('#trip_type_id').val();
         if (!id) {
             $('.allowance ').val(numberWithCommas(0));
@@ -637,11 +690,11 @@ $(document).ready(function(){
         })
     });
     
-    $(".change-rate").change(function(){
+    $(document).on('change', '.change-rate', function(){
         total_nominal();
     });
     
-    $(".change-type").change(function(){
+    $(document).on('change', '#rt-travel-item-pane .change-type', function(){
         
         
         var allowance = $('.allowance').val().split(".").join("");
@@ -691,7 +744,7 @@ $(document).ready(function(){
             var idr_7 = 0;
         }
         
-        if ($('.idr_rate_8').val()) {i
+        if ($('.idr_rate_8').val()) {
             var idr_8 = $('.idr_rate_8').val().split(".").join("");    
         } else {
             var idr_8 = 0;
@@ -827,374 +880,6 @@ $(document).ready(function(){
               precision: 0 // ubah ke 2 kalau butuh angka desimal
             });
             $('.currency').maskMoney('mask');
-          });
-          
-            $(".amount0").change(function(){
-                currency = $('.currency0').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount0').val().split(".").join("");
-                cost_type = $('.cost_type_id0').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_main').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax0').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax0').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount1").change(function(){
-                currency = $('.currency1').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount1').val().split(".").join("");
-                cost_type = $('.cost_type_id1').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_1').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax1').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax1').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount2").change(function(){
-                currency = $('.currency2').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount2').val().split(".").join("");
-                cost_type = $('.cost_type_id2').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_2').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax2').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax2').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount3").change(function(){
-                currency = $('.currency3').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount3').val().split(".").join("");
-                cost_type = $('.cost_type_id3').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_3').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax3').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax3').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount4").change(function(){
-                currency = $('.currency4').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount4').val().split(".").join("");
-                cost_type = $('.cost_type_id4').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_4').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax4').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax4').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount5").change(function(){
-                currency = $('.currency5').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount5').val().split(".").join("");
-                cost_type = $('.cost_type_id5').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_5').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax5').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax5').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount6").change(function(){
-                currency = $('.currency6').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount6').val().split(".").join("");
-                cost_type = $('.cost_type_id6').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_6').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax6').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax6').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount7").change(function(){
-                currency = $('.currency7').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount7').val().split(".").join("");
-                cost_type = $('.cost_type_id7').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_7').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax7').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax7').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount8").change(function(){
-                currency = $('.currency8').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount8').val().split(".").join("");
-                cost_type = $('.cost_type_id8').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_8').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax8').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax8').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount9").change(function(){
-                currency = $('.currency9').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount9').val().split(".").join("");
-                cost_type = $('.cost_type_id9').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_9').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax9').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax9').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".amount10").change(function(){
-                currency = $('.currency10').val();
-                id = "{{Request::segment(3)}}";
-                amount = $('.amount10').val().split(".").join("");
-                cost_type = $('.cost_type_id10').val();
-                
-                $.ajax({
-                    url:"../../../get-currency/"+id+"/"+currency,
-                    dataType:"json",
-                    success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_10').val(numberWithCommas(val));
-                        total_nominal();
-                        if(cost_type==3) {
-                            tax = val * 2/100;
-                            $('.tax10').val(numberWithCommas(tax));
-                        } else {
-                            $('.tax10').val(0);
-                        }
-                    }
-                })
-            });
-            
-            $(".cost_type_id1").change(function(){
-                cost_type = $(".cost_type_id1").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_main").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax1').val(numberWithCommas(tax));
-                } else {
-                    $('.tax1').val(0);
-                }
-            });
-            
-            $(".cost_type_id2").change(function(){
-                cost_type = $(".cost_type_id2").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_2").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax2').val(numberWithCommas(tax));
-                } else {
-                    $('.tax2').val(0);
-                }
-            });
-            
-            $(".cost_type_id3").change(function(){
-                
-                cost_type = $(".cost_type_id3").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_3").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax3').val(numberWithCommas(tax));
-                } else {
-                    $('.tax3').val(0);
-                }
-            });
-            
-            $(".cost_type_id4").change(function(){
-                cost_type = $(".cost_type_id4").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_4").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax4').val(numberWithCommas(tax));
-                } else {
-                    $('.tax4').val(0);
-                }
-            });
-            
-            $(".cost_type_id5").change(function(){
-                cost_type = $(".cost_type_id5").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_5").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax5').val(numberWithCommas(tax));
-                } else {
-                    $('.tax5').val(0);
-                }
-            });
-            
-            $(".cost_type_id6").change(function(){
-                cost_type = $(".cost_type_id6").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_6").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax6').val(numberWithCommas(tax));
-                } else {
-                    $('.tax6').val(0);
-                }
-            });
-            
-            $(".cost_type_id7").change(function(){
-                cost_type = $(".cost_type_id7").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_7").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax7').val(numberWithCommas(tax));
-                } else {
-                    $('.tax7').val(0);
-                }
-            });
-            
-            $(".cost_type_id8").change(function(){
-                cost_type = $(".cost_type_id8").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_8").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax8').val(numberWithCommas(tax));
-                } else {
-                    $('.tax8').val(0);
-                }
-            });
-            
-            $(".cost_type_id9").change(function(){
-                cost_type = $(".cost_type_id9").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_9").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax9').val(numberWithCommas(tax));
-                } else {
-                    $('.tax9').val(0);
-                }
-            });
-            
-            $(".cost_type_id10").change(function(){
-                cost_type = $(".cost_type_id10").val();
-                if(cost_type==3) {
-                    val = $(".idr_rate_10").val().split(".").join("");
-                    tax = val * 2/100;
-                    $('.tax10').val(numberWithCommas(tax));
-                } else {
-                    $('.tax10').val(0);
-                }
-            });
-          
-          $(".change-rate").change(function(){
-            total_nominal();  
           });
           
           
@@ -1355,383 +1040,6 @@ $(document).ready(function(){
     });
 
       
-    // EDIT AMOUNT
-    
-    $(".amount0").change(function(){
-        currency = $('.currency0').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount0').val().split(".").join("");
-        cost_type = $('.cost_type_id0').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_main').val(numberWithCommas(val));
-                total_nominal();
-                
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax0').val(numberWithCommas(tax));
-                } else {
-                    $('.tax0').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount1").change(function(){
-        currency = $('.currency1').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount1').val().split(".").join("");
-        cost_type = $('.cost_type_id1').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_1').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax1').val(numberWithCommas(tax));
-                } else {
-                    $('.tax1').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount2").change(function(){
-        currency = $('.currency2').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount2').val().split(".").join("");
-        cost_type = $('.cost_type_id2').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_2').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax2').val(numberWithCommas(tax));
-                } else {
-                    $('.tax2').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount3").change(function(){
-        currency = $('.currency3').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount3').val().split(".").join("");
-        cost_type = $('.cost_type_id3').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_3').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax3').val(numberWithCommas(tax));
-                } else {
-                    $('.tax3').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount4").change(function(){
-        currency = $('.currency4').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount4').val().split(".").join("");
-        cost_type = $('.cost_type_id4').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_4').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax4').val(numberWithCommas(tax));
-                } else {
-                    $('.tax4').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount5").change(function(){
-        currency = $('.currency5').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount5').val().split(".").join("");
-        cost_type = $('.cost_type_id5').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_5').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax5').val(numberWithCommas(tax));
-                } else {
-                    $('.tax5').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount6").change(function(){
-        currency = $('.currency6').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount6').val().split(".").join("");
-        cost_type = $('.cost_type_id6').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_6').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax6').val(numberWithCommas(tax));
-                } else {
-                    $('.tax6').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount7").change(function(){
-        currency = $('.currency7').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount7').val().split(".").join("");
-        cost_type = $('.cost_type_id7').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_7').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax7').val(numberWithCommas(tax));
-                } else {
-                    $('.tax7').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount8").change(function(){
-        currency = $('.currency8').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount8').val().split(".").join("");
-        cost_type = $('.cost_type_id8').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_8').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax8').val(numberWithCommas(tax));
-                } else {
-                    $('.tax8').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount9").change(function(){
-        currency = $('.currency9').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount9').val().split(".").join("");
-        cost_type = $('.cost_type_id9').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_9').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax9').val(numberWithCommas(tax));
-                } else {
-                    $('.tax9').val(0);
-                }
-            }
-        })
-    });
-    
-    $(".amount10").change(function(){
-        currency = $('.currency10').val();
-        id = "{{Request::segment(3)}}";
-        amount = $('.amount10').val().split(".").join("");
-        cost_type = $('.cost_type_id10').val();
-        
-        $.ajax({
-            url:"../../../get-currency/"+id+"/"+currency,
-            dataType:"json",
-            success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_10').val(numberWithCommas(val));
-                total_nominal();
-                if(cost_type==3) {
-                    tax = val * 2/100;
-                    $('.tax10').val(numberWithCommas(tax));
-                } else {
-                    $('.tax10').val(0);
-                }
-            }
-        })
-    });
-    
-    
-    $(".cost_type_id0").change(function(){
-        cost_type = $(".cost_type_id0").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_main").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax0').val(numberWithCommas(tax));
-        } else {
-            $('.tax0').val(0);
-        }
-    });
-    
-    $(".cost_type_id1").change(function(){
-        cost_type = $(".cost_type_id1").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_1").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax1').val(numberWithCommas(tax));
-        } else {
-            $('.tax1').val(0);
-        }
-    });
-    
-    $(".cost_type_id2").change(function(){
-        cost_type = $(".cost_type_id2").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_2").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax2').val(numberWithCommas(tax));
-        } else {
-            $('.tax2').val(0);
-        }
-    });
-    
-    $(".cost_type_id3").change(function(){
-        cost_type = $(".cost_type_id3").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_3").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax3').val(numberWithCommas(tax));
-        } else {
-            $('.tax3').val(0);
-        }
-    });
-    
-    $(".cost_type_id4").change(function(){
-        cost_type = $(".cost_type_id4").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_4").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax4').val(numberWithCommas(tax));
-        } else {
-            $('.tax4').val(0);
-        }
-    });
-    
-    $(".cost_type_id5").change(function(){
-        cost_type = $(".cost_type_id5").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_5").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax5').val(numberWithCommas(tax));
-        } else {
-            $('.tax5').val(0);
-        }
-    });
-    
-    $(".cost_type_id6").change(function(){
-        cost_type = $(".cost_type_id6").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_6").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax6').val(numberWithCommas(tax));
-        } else {
-            $('.tax6').val(0);
-        }
-    });
-    
-    $(".cost_type_id7").change(function(){
-        cost_type = $(".cost_type_id7").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_7").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax7').val(numberWithCommas(tax));
-        } else {
-            $('.tax7').val(0);
-        }
-    });
-    
-    $(".cost_type_id8").change(function(){
-        cost_type = $(".cost_type_id8").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_8").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax8').val(numberWithCommas(tax));
-        } else {
-            $('.tax8').val(0);
-        }
-    });
-    
-    $(".cost_type_id9").change(function(){
-        cost_type = $(".cost_type_id9").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_9").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax9').val(numberWithCommas(tax));
-        } else {
-            $('.tax9').val(0);
-        }
-    });
-    
-    $(".cost_type_id10").change(function(){
-        cost_type = $(".cost_type_id10").val();
-        if(cost_type==3) {
-            val = $(".idr_rate_10").val().split(".").join("");
-            tax = val * 2/100;
-            $('.tax10').val(numberWithCommas(tax));
-        } else {
-            $('.tax10').val(0);
-        }
-    });
     
     
   });
@@ -2036,6 +1344,7 @@ $(document).ready(function(){
 
 
 </script>
+<script src="{{ asset('js/reimbursement-travel-tabs.js') }}"></script>
 
 @endpush
 @endsection

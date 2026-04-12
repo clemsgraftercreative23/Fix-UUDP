@@ -893,7 +893,7 @@ class TravelReimbursementController extends Controller
         ]);
     }
 
-    public function addItem($id_main, $id_travel)
+    public function addItem(Request $request, $id_main, $id_travel)
     {
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id_main'"));
         $travel_type = $data['0']->travel_type;
@@ -915,7 +915,7 @@ class TravelReimbursementController extends Controller
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb' "));
 
-        return view('reimbursement-travel.'.$file.'',[
+        $payload = [
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
@@ -927,7 +927,14 @@ class TravelReimbursementController extends Controller
             "currency" => $currency,
             "data_item" => $item,
             "travel_type" => $travel_type,
-        ]);
+            "is_overseas" => ($travel_type !== 'Domestic'),
+        ];
+
+        if ($request->query('rt_partial') === '1' || $request->header('X-RT-Partial') === '1') {
+            return response()->view('reimbursement-travel.partials.travel-item-pane', $payload);
+        }
+
+        return view('reimbursement-travel.'.$file.'', $payload);
     }
 
     public function addNewItem($id_main)
