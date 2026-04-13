@@ -26,10 +26,11 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         @foreach($data_item as $item)
         <li class="nav-item">
             <div class="travel-tab">
-                <a class="nav-link travel-item-link @if($item->id == Request::segment(4)) active @endif"
-                   href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
-                   data-rt-tab="1"
-                   data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></a>
+                <button type="button"
+                        class="nav-link travel-item-link @if($item->id == Request::segment(4)) active @endif"
+                        data-rt-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
+                        data-rt-tab="1"
+                        data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></button>
                 @if($data['0']->status == 10)
                 <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
                 @endif

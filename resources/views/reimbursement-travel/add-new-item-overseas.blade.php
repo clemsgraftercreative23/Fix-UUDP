@@ -73,6 +73,12 @@
         opacity: 0.55;
         pointer-events: none;
     }
+    button.nav-link.travel-item-link {
+        border: none;
+        cursor: pointer;
+        font: inherit;
+        text-align: inherit;
+    }
     .button-container {
         display: flex;
         flex-wrap: nowrap; /* Pastikan tombol tetap dalam satu baris */
@@ -255,10 +261,10 @@ function rupiah($angka){
                                 @foreach($data_item as $item)
                                 <li class="nav-item">
                                     <div class="travel-tab">
-                                        <a class="nav-link travel-item-link"
-                                           href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
-                                           data-rt-tab="1"
-                                           data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></a>
+                                        <button type="button" class="nav-link travel-item-link"
+                                                data-rt-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
+                                                data-rt-tab="1"
+                                                data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></button>
                                         @if($data['0']->status == 10)
                                         <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
                                         @endif

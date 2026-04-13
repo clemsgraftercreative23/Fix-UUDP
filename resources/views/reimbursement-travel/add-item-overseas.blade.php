@@ -73,6 +73,12 @@
         opacity: 0.55;
         pointer-events: none;
     }
+    button.nav-link.travel-item-link {
+        border: none;
+        cursor: pointer;
+        font: inherit;
+        text-align: inherit;
+    }
     .button-container {
         display: flex;
         flex-wrap: nowrap; /* Pastikan tombol tetap dalam satu baris */

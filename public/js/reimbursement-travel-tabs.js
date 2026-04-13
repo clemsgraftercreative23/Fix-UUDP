@@ -207,7 +207,7 @@
         return;
       }
     }
-    const $activeItem = $pane.find('a.travel-item-link.active span.item-1').first();
+    const $activeItem = $pane.find('.travel-item-link.active span.item-1').first();
     if ($activeItem.length && raw) {
       $activeItem.text(raw);
       return;
@@ -310,7 +310,7 @@
   function refreshTravelTabLabelsFromV2Drafts($pane, mainId) {
     if (!mainId || !$pane || !$pane.length) return;
     const prefix = STORAGE_V2_PREFIX + mainId + ':';
-    $pane.find('a.travel-item-link[data-travel-id]').each(function () {
+    $pane.find('.travel-item-link[data-travel-id]').each(function () {
       const tid = String($(this).attr('data-travel-id') || '');
       if (!isValidTravelTabId(tid)) return;
       try {
@@ -327,9 +327,14 @@
     return String(href || '').replace(/\/(\d+)(\?.*)?$/, '/' + newId + '$2');
   }
 
-  function buildTravelTabHrefFromSample($sampleLink, travelId) {
-    if ($sampleLink && $sampleLink.length) {
-      return replaceLastPathId($sampleLink.attr('href') || '', travelId);
+  function tabItemUrlAttr($el) {
+    if (!$el || !$el.length) return '';
+    return String($el.attr('data-rt-item-url') || $el.attr('href') || '');
+  }
+
+  function buildTravelTabItemUrlFromSample($sampleEl, travelId) {
+    if ($sampleEl && $sampleEl.length) {
+      return replaceLastPathId(tabItemUrlAttr($sampleEl), travelId);
     }
     return '';
   }
@@ -393,11 +398,11 @@
     });
   }
 
-  /** Resolve travel id from link; supports full/relative URLs (add-item and add-item-overseas). */
+  /** Resolve travel id from tab control; supports data-rt-item-url / legacy href (add-item paths). */
   function travelIdFromTabLink($a) {
     let id = String($a.attr('data-travel-id') || '');
     if (isValidTravelTabId(id)) return id;
-    const href = String($a.attr('href') || '');
+    const href = tabItemUrlAttr($a);
     const m = href.match(/add-item(?:-overseas)?\/(\d+)\/(\d+)(?:\/|$|\?|#)/i);
     if (m && isValidTravelTabId(m[2])) return m[2];
     return '';
@@ -414,12 +419,12 @@
       }
     });
     if ($pane && $pane.length) {
-      $pane.find('a.travel-item-link').each(function () {
+      $pane.find('.travel-item-link[data-rt-tab="1"]').each(function () {
         const $a = $(this);
         const id = travelIdFromTabLink($a);
         if (!id) return;
         const date = $a.find('span.item-1').first().text().trim();
-        const href = $a.attr('href') || '';
+        const href = tabItemUrlAttr($a);
         const prev = byId[id];
         byId[id] = {
           id: id,
@@ -461,9 +466,9 @@
     const $ul = $pane.find('.nav-tabs').first();
     if (!$ul.length) return;
 
-    const domTravelTabCount = $pane.find('a.travel-item-link').length;
+    const domTravelTabCount = $pane.find('.travel-item-link[data-rt-tab="1"]').length;
     const domIds = {};
-    $pane.find('a.travel-item-link').each(function () {
+    $pane.find('.travel-item-link[data-rt-tab="1"]').each(function () {
       const tid = travelIdFromTabLink($(this));
       if (isValidTravelTabId(tid)) domIds[tid] = true;
     });
@@ -529,15 +534,15 @@
       const isActive = String(item.id) === String(activeTravelId);
       const liHtml =
         '<li class="nav-item"><div class="travel-tab">' +
-        '<a class="nav-link travel-item-link' +
+        '<button type="button" class="nav-link travel-item-link' +
         (isActive ? ' active' : '') +
-        '" href="' +
+        '" data-rt-item-url="' +
         escapeHtmlRt(href) +
         '" data-rt-tab="1" data-travel-id="' +
         escapeHtmlRt(item.id) +
         '"><span class="item-1">' +
         escapeHtmlRt(label) +
-        '</span></a>' +
+        '</span></button>' +
         delHtml +
         '</div></li>';
       $ul.append(liHtml);
@@ -546,7 +551,7 @@
       const $a = $newItemLi.find('a.nav-link').first();
       const onNewItemPlaceholder = !isValidTravelTabId(activeTravelId);
       if (onNewItemPlaceholder) {
-        $ul.find('a.travel-item-link').removeClass('active');
+        $ul.find('.travel-item-link[data-rt-tab="1"]').removeClass('active');
         $a.addClass('active');
       } else {
         $a.removeClass('active');
@@ -560,9 +565,9 @@
 
   /**
    * Load another travel item via partial HTML; tab bar is re-rendered from merged state after inject.
-   * @param {boolean} pushHistory — set false when handling browser back/forward.
+   * @param {boolean} updateUrl — when true, sync address bar with replaceState (no extra history entries).
    */
-  function loadTravelItemTabPartial($pane, url, newTravelId, pushHistory) {
+  function loadTravelItemTabPartial($pane, url, newTravelId, updateUrl) {
     const $form = $pane.closest('form');
     const mainId = readMainIdAttr($pane);
     $pane.addClass('rt-pane-loading');
@@ -581,8 +586,8 @@
         restorePaneFull($pane);
         window.rtInitTravelItemPane($pane);
         afterPaneHydrated($pane);
-        if (pushHistory !== false && window.history && window.history.pushState) {
-          window.history.pushState({ rtTravelTab: true }, '', url.split('?')[0]);
+        if (updateUrl !== false && window.history && window.history.replaceState) {
+          window.history.replaceState(window.history.state, '', url.split('?')[0]);
         }
         $(document).trigger('rtTravelTabLoaded', [$pane, newTravelId]);
       },
@@ -646,10 +651,10 @@
       syncActiveTravelTabDateFromInput($('#rt-travel-item-pane'));
     });
 
-    $(document).on('click', '#rt-travel-item-pane a.travel-item-link[data-rt-tab="1"]', function (e) {
+    $(document).on('click', '#rt-travel-item-pane .travel-item-link[data-rt-tab="1"]', function (e) {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.which === 2) return;
       e.preventDefault();
-      const url = this.getAttribute('href');
+      const url = this.getAttribute('data-rt-item-url') || this.getAttribute('href');
       if (!url) return;
       const newTravelId = String($(this).attr('data-travel-id') || '');
       if (!isValidTravelTabId(newTravelId)) return;
