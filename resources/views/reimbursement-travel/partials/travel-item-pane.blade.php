@@ -6,6 +6,20 @@ if (!function_exists('rt_travel_pane_rupiah')) {
     }
 }
 $taxFirstExtra = !empty($is_overseas) ? ' tax-input' : '';
+// Some travel rows have no reimbursement_travel_details yet (e.g. new tab); avoid $travel_detail[0] errors.
+$rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
+    ? $travel_detail[0]
+    : (object) [
+        'id' => '',
+        'cost_type_id' => null,
+        'destination' => '',
+        'currency' => '',
+        'amount' => 0,
+        'idr_rate' => 0,
+        'tax' => 0,
+        'payment_type' => '',
+        'evidence' => '',
+    ];
 @endphp
 <div class="nav-tabs-container">
     <ul class="nav nav-tabs">
@@ -105,39 +119,39 @@ $taxFirstExtra = !empty($is_overseas) ? ' tax-input' : '';
             <tbody>
                 <tr class="fieldGroupDetail">
                     <td>
-                        <input type="hidden" name="id_detail[]" value="{{$travel_detail['0']->id}}">
+                        <input type="hidden" name="id_detail[]" value="{{ $rtRow0->id }}">
                         <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
                             <option value="">Select...</option>
                             @foreach ($types as $item)
-                                <option value="{{$item->id}}" @if($travel_detail['0']->cost_type_id == $item->id) selected @endif>{{$item->name}}</option>
+                                <option value="{{$item->id}}" @if($rtRow0->cost_type_id == $item->id) selected @endif>{{$item->name}}</option>
                             @endforeach
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control destination-input" name="destination[]" value="{{$travel_detail['0']->destination}}">
+                        <input type="text" class="form-control destination-input" name="destination[]" value="{{ $rtRow0->destination }}">
                     </td>
                     <td>
                         <select class="form-control currency0 currency-select" name="currency[]" style="width:130%">
                             <option value="">Select...</option>
                             @foreach ($currency as $item)
-                                <option value="{{$item->currency}}" @if($item->currency == $travel_detail['0']->currency) selected @endif>{{$item->currency}}</option>
+                                <option value="{{$item->currency}}" @if($item->currency == $rtRow0->currency) selected @endif>{{$item->currency}}</option>
                             @endforeach
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control currency amount0 change-amount" value="{{ rt_travel_pane_rupiah($travel_detail['0']->amount) }}" name="amount[]">
+                        <input type="text" class="form-control currency amount0 change-amount" value="{{ rt_travel_pane_rupiah($rtRow0->amount) }}" name="amount[]">
                     </td>
                     <td>
-                        <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($travel_detail['0']->idr_rate) }}" name="idr_rate[]" readonly>
+                        <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($rtRow0->idr_rate) }}" name="idr_rate[]" readonly>
                     </td>
                     <td>
-                        <input type="text" class="form-control currency number-format tax0{{ $taxFirstExtra }}" readonly value="{{ rt_travel_pane_rupiah($travel_detail['0']->tax) }}" name="tax[]">
+                        <input type="text" class="form-control currency number-format tax0{{ $taxFirstExtra }}" readonly value="{{ rt_travel_pane_rupiah($rtRow0->tax) }}" name="tax[]">
                     </td>
                     <td>
                         <select class="form-control payment-select" name="payment_type[]" style="width:130%">
                             <option value="">Select...</option>
-                            <option value="BDC" @if($travel_detail['0']->payment_type=='BDC') selected @endif>BDC</option>
-                            <option value="Cash" @if($travel_detail['0']->payment_type=='Cash') selected @endif>Cash</option>
+                            <option value="BDC" @if($rtRow0->payment_type=='BDC') selected @endif>BDC</option>
+                            <option value="Cash" @if($rtRow0->payment_type=='Cash') selected @endif>Cash</option>
                         </select>
                     </td>
                     <td class="file-proof">
@@ -152,16 +166,16 @@ $taxFirstExtra = !empty($is_overseas) ? ' tax-input' : '';
                     </td>
                     <td>
                         @php
-                            $file = $travel_detail[0]->evidence ?? '';
+                            $file = $rtRow0->evidence ?? '';
                             $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
                             $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
                         @endphp
 
                         <div id="preview_1">
-                            @if(in_array($ext, $imageExt))
+                            @if($file !== '' && in_array($ext, $imageExt))
                                 <img src="{{ url('images/file_bukti/'.$file) }}"
                                      style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px;">
-                            @else
+                            @elseif($file !== '')
                                 <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
                                     <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"
                                          style="max-width:75px; max-height:75px; border:2px solid #dc3545; border-radius:5px; margin-top:5px;">

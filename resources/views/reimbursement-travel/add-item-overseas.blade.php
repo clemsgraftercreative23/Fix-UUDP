@@ -258,7 +258,8 @@ function rupiah($angka){
                     <div class="card-body">
                         <div id="rt-travel-item-pane"
                              data-main-id="{{ $data['0']->id }}"
-                             data-travel-id="{{ $data_travel['0']->id }}">
+                             data-travel-id="{{ $data_travel['0']->id }}"
+                             data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
                             @include('reimbursement-travel.partials.travel-item-pane')
                         </div>
                        
@@ -740,33 +741,48 @@ $(document).ready(function(){
     
     var count = "{{count($travel_detail)}}" - 1;
     var ct = "{{count($travel_detail)}}";
-    
-    
-    $(".addMoreDetail").click(function(){
-        $("#action_button").prop("disabled", true);
-        $("#action_button_draft").prop("disabled", true);
-        $(".warning-upload").show();
-        i++;
+
+    window.rtTravelDetailMaxGroup = maxGroup;
+
+    window.rtTravelAppendDetailRow = function (options) {
+        options = options || {};
+        var silent = !!options.silent;
+        var $root = $('#rt-travel-item-pane');
+        if (!$root.length) {
+            $root = $('body');
+        }
+        var currentLen = $root.find('.fieldGroupDetail').length;
+        if (currentLen >= maxGroup) {
+            if (!silent) {
+                alert('Maximum '+maxGroup+' groups are allowed.');
+            }
+            return false;
+        }
+        if (!silent) {
+            $("#action_button").prop("disabled", true);
+            $("#action_button_draft").prop("disabled", true);
+            $(".warning-upload").show();
+            i++;
+        }
         count++;
         ct++;
-        if($('body').find('.fieldGroupDetail').length < maxGroup){
-         
-          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency-select currency'+count+'" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
-          $('body').find('.fieldGroupDetail:last').after(fieldHTML);
-          $(function() {
+        var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency-select currency'+count+'" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+        $root.find('.fieldGroupDetail:last').after(fieldHTML);
+        $(function() {
             $('.currency').maskMoney({
               thousands: '.',
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0 // ubah ke 2 kalau butuh angka desimal
+              precision: 0
             });
             $('.currency').maskMoney('mask');
-          });
-          
-      } else{
-          alert('Maximum '+maxGroup+' groups are allowed.');
-      }
+        });
+        return true;
+    };
+
+    $(".addMoreDetail").click(function(){
+        window.rtTravelAppendDetailRow({});
     });
     
     $("body").on("click",".remove-detail",function(){ 

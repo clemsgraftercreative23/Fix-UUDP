@@ -247,13 +247,18 @@ function rupiah($angka){
                     <div class="card-body">
                         <div id="rt-travel-item-pane"
                              data-main-id="{{ $data['0']->id }}"
-                             data-travel-id="0">
+                             data-travel-id="0"
+                             data-rt-new-item="1"
+                             data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
                         <div class="nav-tabs-container">
                             <ul class="nav nav-tabs">
                                 @foreach($data_item as $item)
                                 <li class="nav-item">
                                     <div class="travel-tab">
-                                        <a class="nav-link travel-item-link" href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"><span class="item-1">{{$item->date}}</span></a>
+                                        <a class="nav-link travel-item-link"
+                                           href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
+                                           data-rt-tab="1"
+                                           data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></a>
                                         @if($data['0']->status == 10)
                                         <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
                                         @endif
@@ -340,7 +345,7 @@ function rupiah($angka){
                                     <tbody>
                                         <tr class="fieldGroupDetail">
                                             <td>
-                                                <input type="hidden" name="id_detail[]" value="{{$travel_detail['0']->id}}">
+                                                <input type="hidden" name="id_detail[]" value="{{ isset($travel_detail[0]) ? $travel_detail[0]->id : '' }}">
                                                 <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
                                                     <option value="">Select...</option>
                                                     @foreach ($types as $item)
@@ -856,36 +861,48 @@ $(document).ready(function(){
     
     var count = "{{count($travel_detail)}}" - 1;
     var ct = 1;
-    
-    
-    $(".addMoreDetail").click(function(){
-        $("#action_button").prop("disabled", true);
-        $("#action_button_draft").prop("disabled", true);
-        $(".warning-upload").show();
-        i++;
+
+    window.rtTravelDetailMaxGroup = maxGroup;
+
+    window.rtTravelAppendDetailRow = function (options) {
+        options = options || {};
+        var silent = !!options.silent;
+        var $root = $('#rt-travel-item-pane');
+        if (!$root.length) {
+            $root = $('body');
+        }
+        var currentLen = $root.find('.fieldGroupDetail').length;
+        if (currentLen >= maxGroup) {
+            if (!silent) {
+                alert('Maximum '+maxGroup+' groups are allowed.');
+            }
+            return false;
+        }
+        if (!silent) {
+            $("#action_button").prop("disabled", true);
+            $("#action_button_draft").prop("disabled", true);
+            $(".warning-upload").show();
+            i++;
+        }
         count++;
         ct++;
-        if($('body').find('.fieldGroupDetail').length < maxGroup){
-         
-          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
-          $('body').find('.fieldGroupDetail:last').after(fieldHTML);
-          $(function() {
+        var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+        $root.find('.fieldGroupDetail:last').after(fieldHTML);
+        $(function() {
             $('.currency').maskMoney({
               thousands: '.',
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0 // ubah ke 2 kalau butuh angka desimal
+              precision: 0
             });
             $('.currency').maskMoney('mask');
-          });
-          
-          
-          
-          
-      } else{
-          alert('Maximum '+maxGroup+' groups are allowed.');
-      }
+        });
+        return true;
+    };
+
+    $(".addMoreDetail").click(function(){
+        window.rtTravelAppendDetailRow({});
     });
     
     $("body").on("click",".remove-detail",function(){ 
@@ -1090,8 +1107,13 @@ $(document).ready(function(){
       mounted() {
         // this.initSelectForm()
         self = this
+        // Jangan sync ke data Vue untuk input di dalam travel pane — mutasi memicu re-render v-for dan tab hilang.
+        var rtSkipVueTravelPane = function (event) {
+          return $(event.target).closest('#rt-travel-item-pane').length > 0;
+        };
         $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.idr-rate-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
             self.changeAmount(0);
@@ -1099,6 +1121,7 @@ $(document).ready(function(){
 
         $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.usd-rate-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.usd_rate = ($(event.target).val());
             self.changeAmount(0);
@@ -1106,6 +1129,7 @@ $(document).ready(function(){
 
         $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.jpy-rate-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.jpy_rate = ($(event.target).val());
             self.changeAmount(0);
@@ -1113,6 +1137,7 @@ $(document).ready(function(){
 
         $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
             self.calculateTotal(0,0)
@@ -1234,6 +1259,7 @@ $(document).ready(function(){
 
               $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
+                if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
                 self.calculateTotal(self.reimburses.length - 1,0)
@@ -1258,6 +1284,7 @@ $(document).ready(function(){
               self.initSelectForm();
               $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
+                if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());
                 self.changeAmount(0);

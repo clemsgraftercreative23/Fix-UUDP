@@ -722,7 +722,12 @@ class TravelReimbursementController extends Controller
             Reimbursement::where('id', $id_main)->update($form_data);
 
             $id_max = DB::select( DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id_max;
-            $travel_type = DB::select( DB::raw("SELECT travel_type FROM reimbursement WHERE id='$id_main'"))['0']->travel_type;
+            $travel_type = Reimbursement::whereKey($id_main)->value('travel_type');
+            if ($travel_type === null) {
+                DB::rollBack();
+
+                return redirect()->back()->withErrors(['Reimbursement tidak ditemukan atau sudah dihapus.']);
+            }
 
             if ($travel_type=='Domestic') {
                 $allowance = DB::select( DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
@@ -909,7 +914,22 @@ class TravelReimbursementController extends Controller
         $hotelCondition = TravelHotelCondition::get();
         $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main'"));
         $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE id='$id_travel'"));
+        $id_travel_int = (int) $id_travel;
+        $data_travel  = $id_travel_int > 0
+            ? DB::select(DB::raw("SELECT * FROM reimbursement_travel WHERE id='$id_travel'"))
+            : [];
+        if ($id_travel_int <= 0 || empty($data_travel)) {
+            $fallback = url('reimbursement-travel/add-item/' . $id_main);
+            if (!empty($item)) {
+                $fallback = url('reimbursement-travel/add-item/' . $id_main . '/' . $item[0]->id);
+            }
+            if ($request->query('rt_partial') === '1' || $request->header('X-RT-Partial') === '1') {
+                $q = strpos($fallback, '?') !== false ? '&' : '?';
+
+                return redirect($fallback . $q . 'rt_partial=1');
+            }
+            return redirect($fallback);
+        }
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = $id_travel;
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
@@ -940,6 +960,9 @@ class TravelReimbursementController extends Controller
     public function addNewItem($id_main)
     {
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id_main'"));
+        if (empty($data)) {
+            return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
+        }
         $travel_type = $data['0']->travel_type;
         if ($travel_type == 'Domestic') {
             $tripTypes = TravelTripType::where('type','LOCAL')->get();   
@@ -954,10 +977,12 @@ class TravelReimbursementController extends Controller
         
         $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main'"));
         $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main'"));
+        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY id ASC"));
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
-        $id_detail = $data_travel['0']->id;
-        $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
+        $id_detail = !empty($data_travel) ? $data_travel[0]->id : 0;
+        $travel_detail = $id_detail > 0
+            ? DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"))
+            : [];
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb'"));
 
         return view('reimbursement-travel.'.$file.'',[
