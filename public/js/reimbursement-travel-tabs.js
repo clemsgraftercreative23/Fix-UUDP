@@ -1,26 +1,32 @@
 /**
- * Travel reimbursement: tab switch without full page reload + sessionStorage draft per tab.
- * Depends on jQuery (layout) and maskMoney (re-init on swapped pane).
+ * Travel reimbursement: AJAX tabs + form draft (localStorage v2 + legacy v1).
+ * Tab bar: localStorage mirrors DOM + drafts; full re-render only after AJAX tab partial — not on initial load (keeps server tabs) nor on debounced draft save.
+ * Depends on jQuery, maskMoney; optional window.rtTravelAppendDetailRow from Blade.
  */
 (function ($) {
   'use strict';
 
-  function storageKey(mainId, travelId) {
-    return 'rtTravelPaneDraft:v1:' + mainId + ':' + travelId;
+  var STORAGE_V1_PREFIX = 'rtTravelPaneDraft:v1:';
+  var STORAGE_V2_PREFIX = 'rtTravelForm:v2:';
+  var LEGACY_TABBAR_REGISTRY_PREFIX = 'rtTravelTabBar:v1:';
+  var ITEMS_STATE_PREFIX = 'rtTravelItemsState:v2:';
+  /** localStorage travel segment for add-new-item pane (data-travel-id="0"); not a real DB id. */
+  var NEW_ITEM_DRAFT_KEY = 'new';
+
+  function storageKeyV1(mainId, travelId) {
+    return STORAGE_V1_PREFIX + mainId + ':' + travelId;
   }
 
-  /** Allow data-travel-id="0" (halaman new item); hindari cek truthy saja. */
-  function hasReimbursementPaneIds(mainId, travelId) {
-    if (mainId === undefined || mainId === null || mainId === '') return false;
-    if (travelId === undefined || travelId === null || travelId === '') return false;
-    return true;
+  function storageKeyV2(mainId, travelId) {
+    return STORAGE_V2_PREFIX + mainId + ':' + travelId;
   }
 
-  /**
-   * Baca id dari atribut DOM, bukan jQuery .data() — .data() di-cache dan tidak
-   * ikut berubah setelah .attr('data-travel-id', ...), sehingga tab kedua/ketiga
-   * bisa dianggap "sudah aktif" dan klik diabaikan.
-   */
+  function isValidTravelTabId(tid) {
+    if (tid === undefined || tid === null || tid === '') return false;
+    const n = parseInt(String(tid), 10);
+    return String(tid) === String(n) && n > 0;
+  }
+
   function readMainIdAttr($pane) {
     const v = $pane.attr('data-main-id');
     return v === undefined ? '' : String(v);
@@ -32,7 +38,17 @@
     return String(v);
   }
 
-  function collectPaneFields($pane) {
+  /** v2 draft key segment: real travel id, or "new" for add-new-item autosave. */
+  function resolveDraftTravelId($pane) {
+    if (!$pane || !$pane.length) return '';
+    const tid = readTravelIdAttr($pane);
+    if (isValidTravelTabId(tid)) return tid;
+    if ($pane.attr('data-rt-new-item') === '1' && readMainIdAttr($pane)) return NEW_ITEM_DRAFT_KEY;
+    return '';
+  }
+
+  /** Legacy flat map (sessionStorage v1). */
+  function collectPaneFieldsFlat($pane) {
     const data = {};
     const counts = {};
     $pane.find('input, select, textarea').each(function () {
@@ -51,7 +67,7 @@
     return data;
   }
 
-  function applyPaneFields($pane, data) {
+  function applyPaneFieldsFlat($pane, data) {
     if (!data || typeof data !== 'object') return;
     const counts = {};
     $pane.find('input, select, textarea').each(function () {
@@ -70,23 +86,179 @@
     });
   }
 
-  function persistCurrentPane($pane) {
-    const mainId = readMainIdAttr($pane);
-    const travelId = readTravelIdAttr($pane);
-    if (!hasReimbursementPaneIds(mainId, travelId)) return;
-    try {
-      sessionStorage.setItem(storageKey(mainId, travelId), JSON.stringify(collectPaneFields($pane)));
-    } catch (e) { /* quota / private mode */ }
+  function collectHeader($pane) {
+    const header = {};
+    const headerCounts = {};
+    $pane.find('input, select, textarea').each(function () {
+      const el = this;
+      if (!el.name) return;
+      if (el.type === 'file' || el.type === 'submit' || el.type === 'button') return;
+      if ($(el).closest('tr.fieldGroupDetail').length) return;
+      const n = el.name;
+      headerCounts[n] = (headerCounts[n] || 0) + 1;
+      const key = n + '\u0000' + headerCounts[n];
+      header[key] = el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value;
+    });
+    return header;
   }
 
-  function restorePane($pane) {
+  function applyHeader($pane, header) {
+    if (!header || typeof header !== 'object') return;
+    const counts = {};
+    $pane.find('input, select, textarea').each(function () {
+      const el = this;
+      if (!el.name) return;
+      if (el.type === 'file' || el.type === 'submit' || el.type === 'button') return;
+      if ($(el).closest('tr.fieldGroupDetail').length) return;
+      const n = el.name;
+      counts[n] = (counts[n] || 0) + 1;
+      const key = n + '\u0000' + counts[n];
+      if (header[key] === undefined) return;
+      if (el.type === 'checkbox') {
+        el.checked = header[key] === '1' || header[key] === true;
+      } else {
+        $(el).val(String(header[key]));
+      }
+    });
+  }
+
+  function collectRows($pane) {
+    const rows = [];
+    $pane.find('tbody tr.fieldGroupDetail').each(function () {
+      const $tr = $(this);
+      rows.push({
+        id_detail: ($tr.find('input[name="id_detail[]"]').val() || '').trim(),
+        cost_type_id: ($tr.find('select[name="cost_type_id[]"]').val() || '').trim(),
+        destination: ($tr.find('input[name="destination[]"]').val() || '').trim(),
+        currency: ($tr.find('select[name="currency[]"]').val() || '').trim(),
+        amount: ($tr.find('input[name="amount[]"]').val() || '').trim(),
+        idr_rate: ($tr.find('input[name="idr_rate[]"]').val() || '').trim(),
+        tax: ($tr.find('input[name="tax[]"]').val() || '').trim(),
+        payment_type: ($tr.find('select[name="payment_type[]"]').val() || '').trim()
+      });
+    });
+    return rows;
+  }
+
+  function applyRow($tr, r) {
+    if (!$tr.length || !r) return;
+    $tr.find('input[name="id_detail[]"]').val(r.id_detail || '');
+    $tr.find('select[name="cost_type_id[]"]').val(r.cost_type_id || '');
+    $tr.find('input[name="destination[]"]').val(r.destination || '');
+    $tr.find('select[name="currency[]"]').val(r.currency || '');
+    $tr.find('input[name="amount[]"]').val(r.amount || '');
+    $tr.find('input[name="idr_rate[]"]').val(r.idr_rate || '');
+    $tr.find('input[name="tax[]"]').val(r.tax || '');
+    $tr.find('select[name="payment_type[]"]').val(r.payment_type || '');
+  }
+
+  function reconcileDetailRows($pane, needCount) {
+    var maxG = typeof window.rtTravelDetailMaxGroup === 'number' ? window.rtTravelDetailMaxGroup : 10;
+    var have = $pane.find('tbody tr.fieldGroupDetail').length;
+    var guard = 0;
+    while (have < needCount && have < maxG && guard < 20) {
+      guard++;
+      if (typeof window.rtTravelAppendDetailRow !== 'function') break;
+      if (!window.rtTravelAppendDetailRow({ silent: true })) break;
+      have = $pane.find('tbody tr.fieldGroupDetail').length;
+    }
+  }
+
+  function collectStateV2($pane) {
+    return {
+      v: 2,
+      savedAt: Date.now(),
+      header: collectHeader($pane),
+      rows: collectRows($pane)
+    };
+  }
+
+  function persistCurrentPane($pane) {
     const mainId = readMainIdAttr($pane);
-    const travelId = readTravelIdAttr($pane);
-    if (!hasReimbursementPaneIds(mainId, travelId)) return;
+    const draftTid = resolveDraftTravelId($pane);
+    if (mainId && draftTid) {
+      try {
+        const state = collectStateV2($pane);
+        localStorage.setItem(storageKeyV2(mainId, draftTid), JSON.stringify(state));
+        try {
+          sessionStorage.removeItem(storageKeyV1(mainId, draftTid));
+        } catch (e2) { /* ignore */ }
+      } catch (e) { /* quota */ }
+    }
+    // Do not call renderTravelTabsFromState here: debounced persist would repeatedly wipe/rebuild the tab bar
+    // and empty merge (href/regex edge cases) could remove all tabs before save. Labels still update from drafts:
+    if (mainId && $pane && $pane.length) {
+      refreshTravelTabLabelsFromV2Drafts($pane, mainId);
+    }
+  }
+
+  /**
+   * Mirror Transaction Date into the tab label immediately (no save).
+   * Prefer matching tab by data-travel-id on the pane; fallback to .active travel tab or "New Item".
+   */
+  function syncActiveTravelTabDateFromInput($pane) {
+    if (!$pane || !$pane.length) return;
+    const raw = ($pane.find('input[name="date"]').first().val() || '').trim();
+    const tid = readTravelIdAttr($pane);
+    if (raw && tid !== '') {
+      const $byTravel = $pane.find('.travel-item-link[data-travel-id="' + tid + '"] span.item-1').first();
+      if ($byTravel.length) {
+        $byTravel.text(raw);
+        return;
+      }
+    }
+    const $activeItem = $pane.find('a.travel-item-link.active span.item-1').first();
+    if ($activeItem.length && raw) {
+      $activeItem.text(raw);
+      return;
+    }
+    const $newTab = $pane.find('a.nav-link.active span.item-new').first();
+    if ($newTab.length) {
+      $newTab.text(raw || 'New Item');
+    }
+  }
+
+  function restorePaneFull($pane) {
+    const mainId = readMainIdAttr($pane);
+    const draftTid = resolveDraftTravelId($pane);
+    if (!mainId || !draftTid) {
+      syncActiveTravelTabDateFromInput($pane);
+      return;
+    }
+
     try {
-      const raw = sessionStorage.getItem(storageKey(mainId, travelId));
-      if (!raw) return;
-      applyPaneFields($pane, JSON.parse(raw));
+      const rawV2 = localStorage.getItem(storageKeyV2(mainId, draftTid));
+      if (rawV2) {
+        const state = JSON.parse(rawV2);
+        if (state && state.v === 2 && Array.isArray(state.rows)) {
+          reconcileDetailRows($pane, state.rows.length);
+          if (state.header) applyHeader($pane, state.header);
+          const $rows = $pane.find('tbody tr.fieldGroupDetail');
+          state.rows.forEach(function (r, idx) {
+            applyRow($rows.eq(idx), r);
+          });
+          syncActiveTravelTabDateFromInput($pane);
+          return;
+        }
+      }
+    } catch (e) { /* fall through */ }
+
+    try {
+      const rawV1 = sessionStorage.getItem(storageKeyV1(mainId, draftTid));
+      if (rawV1) {
+        applyPaneFieldsFlat($pane, JSON.parse(rawV1));
+      }
+    } catch (e2) { /* ignore */ }
+    syncActiveTravelTabDateFromInput($pane);
+  }
+
+  function clearStorageForPane($pane) {
+    const mainId = readMainIdAttr($pane);
+    const draftTid = resolveDraftTravelId($pane);
+    if (!mainId || !draftTid) return;
+    try {
+      localStorage.removeItem(storageKeyV2(mainId, draftTid));
+      sessionStorage.removeItem(storageKeyV1(mainId, draftTid));
     } catch (e) { /* ignore */ }
   }
 
@@ -97,19 +269,330 @@
     $form.attr('action', action.replace(/\/(\d+)(\/?)$/, '/' + newTravelId + '$2'));
   }
 
-  let saveTimer;
+  var saveTimer;
   function schedulePersist() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       const $p = $('#rt-travel-item-pane');
       if ($p.length) persistCurrentPane($p);
-    }, 400);
+    }, 350);
   }
 
   function partialUrl(url) {
     const base = url.split('#')[0];
     const sep = base.indexOf('?') >= 0 ? '&' : '?';
     return base + sep + 'rt_partial=1';
+  }
+
+  function escapeHtmlRt(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function transactionDateFromV2Header(header) {
+    if (!header || typeof header !== 'object') return '';
+    const k = 'date\u00001';
+    if (header[k] !== undefined && header[k] !== '') return String(header[k]);
+    return '';
+  }
+
+  /** Update visible tab dates from v2 localStorage without rebuilding the tab strip (safe before save). */
+  function syncTravelItemsStateFromDom($pane, mainId) {
+    if (!mainId || !$pane || !$pane.length) return;
+    try {
+      writeTravelItemsState(mainId, buildMergedTravelTabItems(mainId, $pane));
+    } catch (e) { /* ignore */ }
+  }
+
+  function refreshTravelTabLabelsFromV2Drafts($pane, mainId) {
+    if (!mainId || !$pane || !$pane.length) return;
+    const prefix = STORAGE_V2_PREFIX + mainId + ':';
+    $pane.find('a.travel-item-link[data-travel-id]').each(function () {
+      const tid = String($(this).attr('data-travel-id') || '');
+      if (!isValidTravelTabId(tid)) return;
+      try {
+        const raw = localStorage.getItem(prefix + tid);
+        if (!raw) return;
+        const st = JSON.parse(raw);
+        const d = transactionDateFromV2Header(st.header);
+        if (d) $(this).find('span.item-1').first().text(d);
+      } catch (e) { /* ignore */ }
+    });
+  }
+
+  function replaceLastPathId(href, newId) {
+    return String(href || '').replace(/\/(\d+)(\?.*)?$/, '/' + newId + '$2');
+  }
+
+  function buildTravelTabHrefFromSample($sampleLink, travelId) {
+    if ($sampleLink && $sampleLink.length) {
+      return replaceLastPathId($sampleLink.attr('href') || '', travelId);
+    }
+    return '';
+  }
+
+  function itemsStateKey(mainId) {
+    return ITEMS_STATE_PREFIX + mainId;
+  }
+
+  function readTravelItemsState(mainId) {
+    if (!mainId) return [];
+    try {
+      let raw = localStorage.getItem(itemsStateKey(mainId));
+      if (!raw) {
+        raw = localStorage.getItem(LEGACY_TABBAR_REGISTRY_PREFIX + mainId);
+        if (raw) {
+          const old = JSON.parse(raw);
+          if (Array.isArray(old)) {
+            const items = old
+              .map(function (e) {
+                if (!e || !e.id) return null;
+                return { id: String(e.id), date: e.label || String(e.id), href: e.href || '' };
+              })
+              .filter(function (e) {
+                return e && isValidTravelTabId(e.id);
+              });
+            writeTravelItemsState(mainId, items);
+            try {
+              localStorage.removeItem(LEGACY_TABBAR_REGISTRY_PREFIX + mainId);
+            } catch (x) { /* ignore */ }
+            return items;
+          }
+        }
+        return [];
+      }
+      const o = JSON.parse(raw);
+      if (o && Array.isArray(o.items)) {
+        return o.items.filter(function (e) {
+          return e && isValidTravelTabId(e.id);
+        });
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeTravelItemsState(mainId, items) {
+    if (!mainId) return;
+    try {
+      localStorage.setItem(itemsStateKey(mainId), JSON.stringify({ v: 2, items: items }));
+    } catch (e) { /* quota */ }
+  }
+
+  function sortTravelTabItems(arr) {
+    return arr.sort(function (a, b) {
+      const da = a.date || '';
+      const db = b.date || '';
+      if (da < db) return -1;
+      if (da > db) return 1;
+      return parseInt(a.id, 10) - parseInt(b.id, 10);
+    });
+  }
+
+  /** Resolve travel id from link; supports full/relative URLs (add-item and add-item-overseas). */
+  function travelIdFromTabLink($a) {
+    let id = String($a.attr('data-travel-id') || '');
+    if (isValidTravelTabId(id)) return id;
+    const href = String($a.attr('href') || '');
+    const m = href.match(/add-item(?:-overseas)?\/(\d+)\/(\d+)(?:\/|$|\?|#)/i);
+    if (m && isValidTravelTabId(m[2])) return m[2];
+    return '';
+  }
+
+  /**
+   * Single source of truth for tab list: persisted items ∪ server DOM (current pane) ∪ v2 draft keys per travel id.
+   */
+  function buildMergedTravelTabItems(mainId, $pane) {
+    const byId = {};
+    readTravelItemsState(mainId).forEach(function (it) {
+      if (it && isValidTravelTabId(it.id)) {
+        byId[it.id] = { id: it.id, date: it.date || it.id, href: it.href || '' };
+      }
+    });
+    if ($pane && $pane.length) {
+      $pane.find('a.travel-item-link').each(function () {
+        const $a = $(this);
+        const id = travelIdFromTabLink($a);
+        if (!id) return;
+        const date = $a.find('span.item-1').first().text().trim();
+        const href = $a.attr('href') || '';
+        const prev = byId[id];
+        byId[id] = {
+          id: id,
+          date: date || (prev && prev.date) || id,
+          href: href || (prev && prev.href) || ''
+        };
+      });
+    }
+    const prefix = STORAGE_V2_PREFIX + mainId + ':';
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || k.indexOf(prefix) !== 0) continue;
+        const tid = k.slice(prefix.length);
+        if (!isValidTravelTabId(tid)) continue;
+        let dlabel = '';
+        try {
+          const st = JSON.parse(localStorage.getItem(k) || '{}');
+          dlabel = transactionDateFromV2Header(st.header) || '';
+        } catch (e1) { /* ignore */ }
+        const prev = byId[tid];
+        const date = dlabel || (prev && prev.date) || tid;
+        const href = (prev && prev.href) || '';
+        byId[tid] = { id: tid, date: date, href: href };
+      }
+    } catch (e2) { /* ignore */ }
+    return sortTravelTabItems(
+      Object.keys(byId).map(function (key) {
+        return byId[key];
+      })
+    );
+  }
+
+  /**
+   * Rebuild all travel tabs from merged state (UI is a projection of state, not incremental DOM patches).
+   */
+  function renderTravelTabsFromState($pane, mainId, activeTravelId) {
+    if (!mainId || !$pane || !$pane.length) return;
+    const $ul = $pane.find('.nav-tabs').first();
+    if (!$ul.length) return;
+
+    const domTravelTabCount = $pane.find('a.travel-item-link').length;
+    const domIds = {};
+    $pane.find('a.travel-item-link').each(function () {
+      const tid = travelIdFromTabLink($(this));
+      if (isValidTravelTabId(tid)) domIds[tid] = true;
+    });
+
+    const items = buildMergedTravelTabItems(mainId, $pane);
+
+    if (domTravelTabCount > 0 && items.length === 0) {
+      return;
+    }
+
+    const $addLi = $pane.find('#action_button_item').closest('li.nav-item').detach();
+    const $newItemLi = $pane
+      .find('a.nav-link')
+      .filter(function () {
+        return (this.getAttribute('href') || '') === '#reimburse-form';
+      })
+      .closest('li.nav-item')
+      .detach();
+    let delTemplate = '';
+    const $delRef = $pane.find('a.tab-close-link').first();
+    if ($delRef.length) {
+      delTemplate = $delRef.attr('href') || '';
+    }
+    const showDelete = $addLi.length > 0;
+
+    writeTravelItemsState(mainId, items);
+
+    $ul.find('li.nav-item').remove();
+
+    let sampleHref = '';
+    for (let j = 0; j < items.length; j++) {
+      if (items[j].href) {
+        sampleHref = items[j].href;
+        break;
+      }
+    }
+
+    const hrefPrefixRaw = String($pane.attr('data-rt-href-prefix') || '').trim();
+    const hrefPrefix = hrefPrefixRaw ? hrefPrefixRaw.replace(/\/?$/, '/') : '';
+
+    items.forEach(function (item) {
+      let href = item.href;
+      if (!href && sampleHref) {
+        href = replaceLastPathId(sampleHref, item.id);
+      }
+      if (!href && hrefPrefix && isValidTravelTabId(item.id)) {
+        href = hrefPrefix + item.id;
+      }
+      if (!href && mainId) {
+        href = String(window.location.pathname || '').replace(/\/[^/]+$/, '/' + item.id);
+      }
+      if (!href) return;
+
+      let delHtml = '';
+      if (showDelete && delTemplate) {
+        const dh = replaceLastPathId(delTemplate, item.id);
+        delHtml =
+          '<a class="tab-close-link" href="' +
+          escapeHtmlRt(dh) +
+          '" onclick="return confirm(\'Hapus tab ini dan semua datanya?\')">x</a>';
+      }
+      const label = item.date || item.id;
+      const isActive = String(item.id) === String(activeTravelId);
+      const liHtml =
+        '<li class="nav-item"><div class="travel-tab">' +
+        '<a class="nav-link travel-item-link' +
+        (isActive ? ' active' : '') +
+        '" href="' +
+        escapeHtmlRt(href) +
+        '" data-rt-tab="1" data-travel-id="' +
+        escapeHtmlRt(item.id) +
+        '"><span class="item-1">' +
+        escapeHtmlRt(label) +
+        '</span></a>' +
+        delHtml +
+        '</div></li>';
+      $ul.append(liHtml);
+    });
+    if ($newItemLi.length) {
+      const $a = $newItemLi.find('a.nav-link').first();
+      const onNewItemPlaceholder = !isValidTravelTabId(activeTravelId);
+      if (onNewItemPlaceholder) {
+        $ul.find('a.travel-item-link').removeClass('active');
+        $a.addClass('active');
+      } else {
+        $a.removeClass('active');
+      }
+      $ul.append($newItemLi);
+    }
+    if ($addLi.length) {
+      $ul.append($addLi);
+    }
+  }
+
+  /**
+   * Load another travel item via partial HTML; tab bar is re-rendered from merged state after inject.
+   * @param {boolean} pushHistory — set false when handling browser back/forward.
+   */
+  function loadTravelItemTabPartial($pane, url, newTravelId, pushHistory) {
+    const $form = $pane.closest('form');
+    const mainId = readMainIdAttr($pane);
+    $pane.addClass('rt-pane-loading');
+    $.ajax({
+      url: partialUrl(url),
+      type: 'GET',
+      cache: false,
+      headers: { 'X-RT-Partial': '1', 'X-Requested-With': 'XMLHttpRequest' },
+      success: function (html) {
+        $pane.html(html);
+        $pane.attr('data-travel-id', newTravelId);
+        if ($form.length) {
+          updateFormTravelAction($form, newTravelId);
+        }
+        renderTravelTabsFromState($pane, mainId, newTravelId);
+        restorePaneFull($pane);
+        window.rtInitTravelItemPane($pane);
+        afterPaneHydrated($pane);
+        if (pushHistory !== false && window.history && window.history.pushState) {
+          window.history.pushState({ rtTravelTab: true }, '', url.split('?')[0]);
+        }
+        $(document).trigger('rtTravelTabLoaded', [$pane, newTravelId]);
+      },
+      error: function () {
+        window.location.href = url.split('?')[0];
+      },
+      complete: function () {
+        $pane.removeClass('rt-pane-loading');
+      }
+    });
   }
 
   function initMaskMoney($pane) {
@@ -145,7 +628,11 @@
     const $pane0 = $('#rt-travel-item-pane');
     if (!$pane0.length) return;
 
-    restorePane($pane0);
+    restorePaneFull($pane0);
+    const main0 = readMainIdAttr($pane0);
+    syncTravelItemsStateFromDom($pane0, main0);
+    refreshTravelTabLabelsFromV2Drafts($pane0, main0);
+    syncActiveTravelTabDateFromInput($pane0);
     window.rtInitTravelItemPane($pane0);
     afterPaneHydrated($pane0);
 
@@ -155,12 +642,17 @@
       schedulePersist();
     });
 
+    $(document).on('input change', '#rt-travel-item-pane input[name="date"]', function () {
+      syncActiveTravelTabDateFromInput($('#rt-travel-item-pane'));
+    });
+
     $(document).on('click', '#rt-travel-item-pane a.travel-item-link[data-rt-tab="1"]', function (e) {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.which === 2) return;
       e.preventDefault();
       const url = this.getAttribute('href');
       if (!url) return;
       const newTravelId = String($(this).attr('data-travel-id') || '');
+      if (!isValidTravelTabId(newTravelId)) return;
       const $pane = $('#rt-travel-item-pane');
       const currentId = readTravelIdAttr($pane);
 
@@ -168,54 +660,45 @@
 
       if (newTravelId === currentId) return;
 
-      const $form = $pane.closest('form');
-      $pane.addClass('rt-pane-loading');
-
-      $.ajax({
-        url: partialUrl(url),
-        type: 'GET',
-        headers: { 'X-RT-Partial': '1', 'X-Requested-With': 'XMLHttpRequest' },
-        success: function (html) {
-          $pane.html(html);
-          $pane.attr('data-travel-id', newTravelId);
-          if ($form.length) {
-            updateFormTravelAction($form, newTravelId);
-          }
-          $pane.find('.travel-item-link').removeClass('active');
-          $pane.find('.travel-item-link[data-travel-id="' + newTravelId + '"]').addClass('active');
-          restorePane($pane);
-          window.rtInitTravelItemPane($pane);
-          afterPaneHydrated($pane);
-          if (window.history && window.history.pushState) {
-            window.history.pushState({ rtTravelTab: true }, '', url.split('?')[0]);
-          }
-          $(document).trigger('rtTravelTabLoaded', [$pane, newTravelId]);
-        },
-        error: function () {
-          window.location.href = url.split('?')[0];
-        },
-        complete: function () {
-          $pane.removeClass('rt-pane-loading');
-        }
-      });
+      loadTravelItemTabPartial($pane, url, newTravelId, true);
     });
 
     window.addEventListener('popstate', function () {
-      if (window.location.pathname.indexOf('reimbursement-travel/add-item') !== -1) {
+      const path = window.location.pathname;
+      if (path.indexOf('reimbursement-travel/add-item') === -1) return;
+      const m = path.match(/\/add-item\/(\d+)\/(\d+)(?:\/|$)/);
+      if (!m) {
         window.location.reload();
+        return;
       }
+      const mainFromUrl = m[1];
+      const travelFromUrl = m[2];
+      if (!isValidTravelTabId(travelFromUrl)) {
+        window.location.replace(path.replace(/\/[^/]+$/, ''));
+        return;
+      }
+      const $pane = $('#rt-travel-item-pane');
+      if (!$pane.length) return;
+      if (String(readMainIdAttr($pane)) !== String(mainFromUrl)) {
+        window.location.reload();
+        return;
+      }
+      if (String(readTravelIdAttr($pane)) === String(travelFromUrl)) return;
+      persistCurrentPane($pane);
+      const baseUrl = path + (window.location.search || '');
+      loadTravelItemTabPartial($pane, baseUrl.split('?')[0], travelFromUrl, false);
     });
 
     $('form').on('submit', function () {
       const $p = $('#rt-travel-item-pane');
       if (!$p.length) return;
-      try {
-        const mainId = readMainIdAttr($p);
-        const travelId = readTravelIdAttr($p);
-        if (hasReimbursementPaneIds(mainId, travelId)) {
-          sessionStorage.removeItem(storageKey(mainId, travelId));
-        }
-      } catch (err) { /* ignore */ }
+      clearStorageForPane($p);
+      const mid = readMainIdAttr($p);
+      if (mid) {
+        try {
+          localStorage.removeItem(itemsStateKey(mid));
+        } catch (e) { /* ignore */ }
+      }
     });
   });
 })(jQuery);
