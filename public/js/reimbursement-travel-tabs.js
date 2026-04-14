@@ -620,6 +620,31 @@
     initMaskMoney($pane);
   };
 
+  /** Sembunyikan teks "upload file" jika sudah ada preview / file terpilih (termasuk setelah partial AJAX). */
+  function rtTravelSyncFileUploadWarning($pane) {
+    if (!$pane || !$pane.length) {
+      $pane = $('#rt-travel-item-pane');
+    }
+    if (!$pane || !$pane.length) return;
+    var $warn = $pane.find('.warning-upload');
+    if (!$warn.length) return;
+    var hasPreview =
+      $pane.find('[id^="preview_"] img').length > 0 ||
+      $pane.find('[id^="preview_"] a').length > 0;
+    var hasPending = false;
+    $pane.find('input.file-input[type="file"], input.camera-input[type="file"]').each(function () {
+      if (this.files && this.files.length) {
+        hasPending = true;
+        return false;
+      }
+    });
+    if (hasPreview || hasPending) {
+      $warn.hide();
+    }
+  }
+
+  window.rtTravelSyncFileUploadWarning = rtTravelSyncFileUploadWarning;
+
   function afterPaneHydrated($pane) {
     if (typeof window.rtCalculateTimeDifference === 'function') {
       window.rtCalculateTimeDifference();
@@ -627,6 +652,7 @@
     if (typeof window.rtTotalNominalTravel === 'function') {
       window.rtTotalNominalTravel();
     }
+    rtTravelSyncFileUploadWarning($pane);
   }
 
   $(function () {

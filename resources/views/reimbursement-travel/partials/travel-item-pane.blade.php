@@ -39,7 +39,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         @endforeach
         @if($data['0']->status==10)
         <li class="nav-item">
-            <button type="submit" class="nav-link" name="save_item" id="action_button_item"><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
+            <button type="submit" class="nav-link" name="save_item" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
         </li>
         @endif
     </ul>
@@ -275,7 +275,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         <input type="text" readonly class="form-control total-nominal" name="nominal_pengajuan" value="{{ rt_travel_pane_rupiah($data_travel['0']->total) }}">
     </div>
     <div class="col-md-9">
-        <br><span style="color:#62d49e; float: right;" class="warning-upload">
+        <br><span style="color:#62d49e; float: right; display: none;" class="warning-upload">
         The button is disabled until a file is uploaded.</span>
     </div>
 </div>
@@ -291,7 +291,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
     @endif
 
     @if($data['0']->status==10)
-        <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft">Draft</button>&nbsp;
+        <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" formnovalidate>Draft</button>&nbsp;
         <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
     @endif
 

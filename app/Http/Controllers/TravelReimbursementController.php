@@ -16,6 +16,7 @@ use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use DB;
+use Illuminate\Support\Facades\Validator;
 use Redirect;
 
 class TravelReimbursementController extends Controller
@@ -66,6 +67,98 @@ class TravelReimbursementController extends Controller
 
         return $value;
     }
+
+    /** Draft / tambah tab baru: boleh data belum lengkap. */
+    private function travelItemAllowIncompleteForm(): bool
+    {
+        return isset($_POST['save_draft']) || isset($_POST['save_item']);
+    }
+
+    /** Validasi form item travel (simpan/update); cegah field kosong yang memicu error DB. */
+    private function validateTravelReimbursementItemRequest(Request $request, bool $allowIncomplete): void
+    {
+        $base = [
+            'travel_type' => 'nullable|string|max:32',
+            'remark' => 'nullable|string|max:500',
+        ];
+
+        if ($allowIncomplete) {
+            $rules = array_merge($base, [
+                'date' => 'nullable|date',
+                'purpose' => 'nullable|string|max:500',
+                'reimbursement_department_id' => 'nullable|integer',
+                'currency' => 'nullable|array',
+                'cost_type_id' => 'nullable|array',
+                'nominal_pengajuan' => 'nullable|string|max:80',
+                'allowance' => 'nullable|string|max:80',
+                'trip_type_id' => 'nullable',
+                'hotel_condition_id' => 'nullable',
+                'start_time' => 'nullable|string|max:32',
+                'end_time' => 'nullable|string|max:32',
+            ]);
+        } else {
+            $rules = array_merge($base, [
+                'date' => 'required|date',
+                'purpose' => 'required|string|max:500',
+                'reimbursement_department_id' => 'required|integer',
+                'currency' => 'required|array|min:1',
+                'cost_type_id' => 'required|array',
+                // Readonly / dihitung JS — boleh kosong sesaat, dicek di baris detail
+                'nominal_pengajuan' => 'nullable|string|max:80',
+                'allowance' => 'nullable|string|max:80',
+                'trip_type_id' => 'nullable',
+                'hotel_condition_id' => 'nullable',
+                'start_time' => 'nullable|string|max:32',
+                'end_time' => 'nullable|string|max:32',
+            ]);
+        }
+
+        $messages = [
+            'date.required' => 'Tanggal transaksi wajib diisi.',
+            'purpose.required' => 'Purpose wajib diisi.',
+            'reimbursement_department_id.required' => 'Department wajib dipilih.',
+            'currency.required' => 'Rincian biaya (kolom currency) wajib ada.',
+            'currency.min' => 'Minimal satu baris rincian biaya.',
+            'cost_type_id.required' => 'Rincian biaya wajib diisi.',
+        ];
+
+        $validator = Validator::make($request->all(), $rules, $messages);
+
+        if (!$allowIncomplete) {
+            $validator->after(function ($v) use ($request) {
+                $costTypes = (array) $request->input('cost_type_id', []);
+                $hasDetail = false;
+                foreach ($costTypes as $idx => $ct) {
+                    if (trim((string) $ct) === '') {
+                        continue;
+                    }
+                    $hasDetail = true;
+                    $labels = [
+                        'destination' => 'Remarks / tujuan biaya',
+                        'currency' => 'Mata uang',
+                        'payment_type' => 'Tipe pembayaran',
+                        'idr_rate' => 'IDR rate',
+                        'amount' => 'Jumlah',
+                    ];
+                    foreach ($labels as $field => $label) {
+                        $arr = (array) $request->input($field, []);
+                        if (!array_key_exists($idx, $arr) || trim((string) $arr[$idx]) === '') {
+                            $v->errors()->add(
+                                $field . '.' . $idx,
+                                $label . ' pada baris ' . ($idx + 1) . ' wajib diisi.'
+                            );
+                        }
+                    }
+                }
+                if (!$hasDetail) {
+                    $v->errors()->add('cost_type_id', 'Minimal satu baris rincian biaya (pilih cost type) harus diisi lengkap.');
+                }
+            });
+        }
+
+        $validator->validate();
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -591,64 +684,10 @@ class TravelReimbursementController extends Controller
 
 
         try {
-            // $total = 0;
-            // foreach ($request->reimburse as $key => $value) {
-            //     $total += (int) str_replace(".","",$value['total']);
-            // }            
-            
-            // foreach ($request->reimburse as $key => $value) {
-            //     $payload = [
-            //         'reimbursement_id' => $id_main,
-            //         'date' => $value['date'],
-            //         'purpose' => $value['purpose'],
-            //         'trip_type_id' => $value['trip_type_id'],
-            //         'hotel_condition_id' => $value['hotel_condition_id'],
-            //         'start_time' => $value['start_time'],
-            //         'end_time' => $value['end_time'],
-            //         'allowance' => str_replace(".","",$value['allowance']),
-            //         'total' => str_replace(".",'',$value['total']),
-            //     ];
-    
-            //     $dt = ReimbursementTravel::create($payload);
-            //     foreach ($value['detail'] as $k => $v) {
-            //         if (isset($v['cost_type_id'])) {
-                        
-            //         $payloadDetail = [
-            //             'reimbursement_id' => $id_main,
-            //             'reimbursement_travel_id' => $dt->id,
-            //             'destination' => $v['destination'],
-            //             'payment_type' => $v['payment_type'],
-            //             'cost_type_id' => $v['cost_type_id'],
-            //             'currency' => !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR',
-            //             'amount' => str_replace(".","",$v['amount']),
-            //             'idr_rate' => str_replace(".","",$v['idr_rate']),
-            //             'tax' => str_replace(".","",$v['tax']),
-            //         ];
-                    
-            //         if(isset($v['proof'])) {
-            //             $image = $request->file('reimburse.'.$key.'.detail.'.$k.'.proof');
-            //             $new_name = rand() . '.' . $image->getClientOriginalExtension();
-            //             $image->move(public_path('images/file_bukti'), $new_name);
-            //             $payloadDetail['evidence'] = $new_name;
-            //         }
-        
-            //         if(isset($v['file'])) {
-            //             $image = $request->file('reimburse.'.$key.'.detail.'.$k.'.file');
-            //             $new_name = rand() . '.' . $image->getClientOriginalExtension();
-            //             $image->move(public_path('images/file_bukti'), $new_name);
-            //             $payloadDetail['evidence'] = $new_name;
-            //         }
-            //         $da = ReimbursementTravelDetail::create($payloadDetail);
-            //         }
-            //     }
-            // }
+            $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
 
             $remark = $request->remark;
             $reimbursement_department_id = $request->reimbursement_department_id;
-            
-            if(empty($request->currency)) {
-              return response()->json(['status' => 'currency_empty']);  
-            }
             
             //Update table reimbursement
             
@@ -677,36 +716,46 @@ class TravelReimbursementController extends Controller
             DB::table('reimbursement_travel')->insert($form_travel);
 
             $id_detail = DB::select( DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id_max;
-                
-            $count_ = count($request->currency);
-            
+
+            $currencies = is_array($request->currency) ? $request->currency : [];
+            $count_ = count($currencies);
+
             for ($i=0; $i < $count_; $i++) {
                 $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
                 if ($costTypeId === '') {
                     continue;
                 }
-              
-                if(empty($request->proof[$i]) && empty($request->file[$i])) {
-                    $id_detail_ = $request->id_detail[$i];
-                    $evidence  = DB::select( DB::raw("SELECT evidence FROM reimbursement_travel_details WHERE id='$id_detail_'"))['0']->evidence;  
-                } else if(empty($request->proof[$i]) && !empty($request->file[$i])) {
+
+                $evidence = '';
+                if (empty($request->proof[$i]) && empty($request->file[$i])) {
+                    $id_detail_ = $request->id_detail[$i] ?? '';
+                    if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                        $rowEv = DB::select(
+                            'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                            [(int) $id_detail_]
+                        );
+                        $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
+                    }
+                } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                     $image = $request->file[$i];
                     $evidence = rand() . '.' . $image->getClientOriginalExtension();
                     $image->move(public_path('images/file_bukti'), $evidence);
-                    
-                } else if(empty($request->file[$i]) && !empty($request->proof[$i])) {
+                } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                     $image = $request->proof[$i];
                     $evidence = rand() . '.' . $image->getClientOriginalExtension();
                     $image->move(public_path('images/file_bukti'), $evidence);
-                } 
-              
+                }
+
                 $new = new ReimbursementTravelDetail;
                 $new->reimbursement_id = $id_main;
                 $new->reimbursement_travel_id = $id_detail;
                 $new->cost_type_id = (int) $costTypeId;
-                $new->idr_rate = str_replace(".", "", $request->idr_rate[$i]);
-                $new->amount = str_replace(".", "", $request->amount[$i]);
-                $new->tax = str_replace(".", "", $request->tax[$i]);
+                $new->destination = $request->destination[$i] ?? '';
+                $new->payment_type = $request->payment_type[$i] ?? '';
+                $new->currency = $request->currency[$i] ?? '';
+                $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
+                $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
+                $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
                 $new->evidence = $evidence;
                 $new->status = 1;
                 $new->save();
@@ -1179,26 +1228,33 @@ class TravelReimbursementController extends Controller
     
     public function updateInquiry(Request $request, $id)
     {
-        
+        $request->validate([
+            'currency_rate' => 'required|array|min:1',
+            'rate' => 'required|array|min:1',
+            'currency_rate.*' => 'required|string|max:32',
+            'rate.*' => 'required|string|max:80',
+        ], [
+            'currency_rate.required' => 'Minimal satu baris kurs (currency rate) wajib diisi.',
+            'rate.required' => 'Nilai kurs wajib diisi.',
+        ]);
+
+        $this->validateTravelReimbursementItemRequest($request, false);
+
         $remark = $request->remark;
         $reimbursement_department_id = $request->reimbursement_department_id;
-        
-        if(empty($request->currency)) {
-          return response()->json(['status' => 'currency_empty']);  
-        }
-        
+
         //Update table reimbursement
-        
+
         $form_data = array(
             'remark'        =>  $request->remark,
             'reimbursement_department_id'        =>  $request->reimbursement_department_id,
             'date'        =>  $request->date,
-        ); 
-        
+        );
+
         Reimbursement::whereId($id)->update($form_data);
-        
+
         //Update table travel_trip_rates
-        
+
         $count = count($request->currency_rate);
         
         $delete  = DB::select( DB::raw("DELETE FROM travel_trip_rates WHERE reimbursement_id = '$id'"));
@@ -1229,56 +1285,63 @@ class TravelReimbursementController extends Controller
         );
         
         ReimbursementTravel::where('reimbursement_id', $id)->update($form_data);
-        
+
         //Update table  reimbursement_travel_details
-        
-        $count_ = count($request->currency);
-        
+
+        $currencies = is_array($request->currency) ? $request->currency : [];
+        $count_ = count($currencies);
+
         $id_detail  = DB::select( DB::raw("SELECT id FROM reimbursement_travel WHERE reimbursement_id = '$id'"))['0']->id;
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
-        
+
         for ($i=0; $i < $count_; $i++) {
             $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
             if ($costTypeId === '') {
                 continue;
             }
-          
-            if(empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i];
-                $evidence  = DB::select( DB::raw("SELECT evidence FROM reimbursement_travel_details WHERE id='$id_detail_'"))['0']->evidence;  
-            } else if(empty($request->proof[$i]) && !empty($request->file[$i])) {
+
+            $evidence = '';
+            if (empty($request->proof[$i]) && empty($request->file[$i])) {
+                $id_detail_ = $request->id_detail[$i] ?? '';
+                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                    $rowEv = DB::select(
+                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                        [(int) $id_detail_]
+                    );
+                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
+                }
+            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                 $image = $request->file[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-                
-            } else if(empty($request->file[$i]) && !empty($request->proof[$i])) {
+            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                 $image = $request->proof[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-            } 
-          
+            }
+
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id;
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
-            $new->destination = $request->destination[$i];
-            $new->payment_type = $request->payment_type[$i];
-            $new->currency = $request->currency[$i];
-            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i]);
-            $new->amount = str_replace(".", "", $request->amount[$i]);
-            $new->tax = str_replace(".", "", $request->tax[$i]);
+            $new->destination = $request->destination[$i] ?? '';
+            $new->payment_type = $request->payment_type[$i] ?? '';
+            $new->currency = $request->currency[$i] ?? '';
+            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
+            $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
+            $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
             $new->evidence = $evidence;
             $new->status = 1;
             $new->save();
         }
-        
+
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
-        
+
         $form_data = array(
             'status'        =>  0,
             'nominal_pengajuan' =>  str_replace(".", "", $request->nominal_pengajuan),
         );
-        
+
         Reimbursement::where('id', $id)->update($form_data);
 
 
@@ -1286,12 +1349,12 @@ class TravelReimbursementController extends Controller
         $travel_type = DB::select( DB::raw("SELECT travel_type FROM reimbursement WHERE id='$id'"))['0']->travel_type;
 
         if ($travel_type=='Domestic') {
-            $allowance = DB::select( DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
+            $allowance = DB::select( DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$id'"))['0']->total;
         } else {
             // $allowance_ = DB::select( DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
             // $rate = DB::select( DB::raw("SELECT rate FROM travel_trip_rates WHERE reimbursement_id='$id' AND currency='USD'"))['0']->rate;
             // $allowance = $allowance_ * $rate; 
-            $allowance = DB::select( DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
+            $allowance = DB::select( DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$id'"))['0']->total;
         }
 
         $total_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id' AND payment_type='BDC'"))['0']->total;
@@ -1432,25 +1495,22 @@ class TravelReimbursementController extends Controller
           	
             
         }
-        
+
+        $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
 
         $remark = $request->remark;
         $reimbursement_department_id = $request->reimbursement_department_id;
-        
-        if(empty($request->currency)) {
-          return response()->json(['status' => 'currency_empty']);  
-        }
-        
+
         //Update table reimbursement
-        
+
         $form_data = array(
             'remark'        =>  $request->remark,
             'reimbursement_department_id'        =>  $request->reimbursement_department_id,
             'date'        =>  $request->date,
-        ); 
-        
+        );
+
         Reimbursement::whereId($id_main)->update($form_data);
-        
+
         //Update table  reimbursement_travel
 
         if ($request->travel_type=='Domestic') {
@@ -1458,7 +1518,7 @@ class TravelReimbursementController extends Controller
         } else {
             $allowance = str_replace(".","",$request->allowance);
         }
-        
+
         $form_data = array(
             'purpose'        =>  $request->purpose,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
@@ -1468,60 +1528,67 @@ class TravelReimbursementController extends Controller
             'allowance'        =>  str_replace(".", "", $allowance),
             'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
         );
-        
+
         ReimbursementTravel::where('id', $id_travel)->update($form_data);
-        
+
         //Update table  reimbursement_travel_details
-        
-        $count_ = count($request->currency);
-       
+
+        $currencies = is_array($request->currency) ? $request->currency : [];
+        $count_ = count($currencies);
+
         $id_detail = $id_travel;
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
-        
+
         for ($i=0; $i < $count_; $i++) {
             $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
             if ($costTypeId === '') {
                 continue;
             }
-          
-            if(empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i];
-                $evidence  = DB::select( DB::raw("SELECT evidence FROM reimbursement_travel_details WHERE id='$id_detail_'"))['0']->evidence;  
-            } else if(empty($request->proof[$i]) && !empty($request->file[$i])) {
+
+            $evidence = '';
+            if (empty($request->proof[$i]) && empty($request->file[$i])) {
+                $id_detail_ = $request->id_detail[$i] ?? '';
+                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                    $rowEv = DB::select(
+                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                        [(int) $id_detail_]
+                    );
+                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
+                }
+            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                 $image = $request->file[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-                
-            } else if(empty($request->file[$i]) && !empty($request->proof[$i])) {
+            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                 $image = $request->proof[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-            } 
-          
+            }
+
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
-            $new->destination = $request->destination[$i];
-            $new->payment_type = $request->payment_type[$i];
-            $new->currency = $request->currency[$i];
-            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i]);
-            $new->amount = str_replace(".", "", $request->amount[$i]);
-            $new->tax = str_replace(".", "", $request->tax[$i]);
+            $new->destination = $request->destination[$i] ?? '';
+            $new->payment_type = $request->payment_type[$i] ?? '';
+            $new->currency = $request->currency[$i] ?? '';
+            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
+            $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
+            $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
             $new->evidence = $evidence;
             $new->status = 1;
             $new->save();
         }
-        
+
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
 
         $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
-        
+
         $form_data = array(
             'status'        =>  $status,
             'nominal_pengajuan' =>  str_replace(".", "", $total),
         );
-        
+
         Reimbursement::where('id', $id_main)->update($form_data);
 
 
@@ -1653,24 +1720,22 @@ class TravelReimbursementController extends Controller
             $status = 9;  
             $return = back()->with(['success' => "Reimbursement Successfully Updated"]);
         }
-        
+
+        $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
+
         $remark = $request->remark;
         $reimbursement_department_id = $request->reimbursement_department_id;
-        
-        if(empty($request->currency)) {
-          return response()->json(['status' => 'currency_empty']);  
-        }
-        
+
         //Update table reimbursement
-        
+
         $form_data = array(
             'remark'        =>  $request->remark,
             'reimbursement_department_id'        =>  $request->reimbursement_department_id,
             'date'        =>  $request->date,
-        ); 
-        
+        );
+
         Reimbursement::whereId($id_main)->update($form_data);
-        
+
         //Update table  reimbursement_travel
 
         if ($request->travel_type=='Domestic') {
@@ -1678,7 +1743,7 @@ class TravelReimbursementController extends Controller
         } else {
             $allowance = str_replace(".","",$request->allowance);
         }
-        
+
         $form_data = array(
             'purpose'        =>  $request->purpose,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
@@ -1688,61 +1753,67 @@ class TravelReimbursementController extends Controller
             'allowance'        =>  str_replace(".", "", $allowance),
             'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
         );
-      
-        
+
         ReimbursementTravel::where('id', $id_travel)->update($form_data);
-        
+
         //Update table  reimbursement_travel_details
-        
-        $count_ = count($request->currency);
-       
+
+        $currencies = is_array($request->currency) ? $request->currency : [];
+        $count_ = count($currencies);
+
         $id_detail = $id_travel;
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
-        
+
         for ($i=0; $i < $count_; $i++) {
             $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
             if ($costTypeId === '') {
                 continue;
             }
-          
-            if(empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i];
-                $evidence  = DB::select( DB::raw("SELECT evidence FROM reimbursement_travel_details WHERE id='$id_detail_'"))['0']->evidence;  
-            } else if(empty($request->proof[$i]) && !empty($request->file[$i])) {
+
+            $evidence = '';
+            if (empty($request->proof[$i]) && empty($request->file[$i])) {
+                $id_detail_ = $request->id_detail[$i] ?? '';
+                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                    $rowEv = DB::select(
+                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                        [(int) $id_detail_]
+                    );
+                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
+                }
+            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                 $image = $request->file[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-                
-            } else if(empty($request->file[$i]) && !empty($request->proof[$i])) {
+            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                 $image = $request->proof[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-            } 
-          
+            }
+
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
-            $new->destination = $request->destination[$i];
-            $new->payment_type = $request->payment_type[$i];
-            $new->currency = $request->currency[$i];
-            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i]);
-            $new->amount = str_replace(".", "", $request->amount[$i]);
-            $new->tax = str_replace(".", "", $request->tax[$i]);
+            $new->destination = $request->destination[$i] ?? '';
+            $new->payment_type = $request->payment_type[$i] ?? '';
+            $new->currency = $request->currency[$i] ?? '';
+            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
+            $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
+            $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
             $new->evidence = $evidence;
             $new->status = 1;
             $new->save();
         }
-        
+
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
 
         $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
-        
+
         $form_data = array(
             'status'        =>  $status,
             'nominal_pengajuan' =>  str_replace(".", "", $total),
         );
-        
+
         Reimbursement::where('id', $id_main)->update($form_data);
 
 
@@ -1871,23 +1942,21 @@ class TravelReimbursementController extends Controller
             $status = 3;
         }
 
+        $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
+
         $remark = $request->remark;
         $reimbursement_department_id = $request->reimbursement_department_id;
-        
-        if(empty($request->currency)) {
-          return response()->json(['status' => 'currency_empty']);  
-        }
-        
+
         //Update table reimbursement
-        
+
         $form_data = array(
             'remark'        =>  $request->remark,
             'reimbursement_department_id'        =>  $request->reimbursement_department_id,
             'date'        =>  $request->date,
-        ); 
-        
+        );
+
         Reimbursement::whereId($id_main)->update($form_data);
-        
+
         //Update table  reimbursement_travel
 
         if ($request->travel_type=='Domestic') {
@@ -1895,7 +1964,7 @@ class TravelReimbursementController extends Controller
         } else {
             $allowance = str_replace(".","",$request->allowance);
         }
-        
+
         $form_data = array(
             'purpose'        =>  $request->purpose,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
@@ -1905,60 +1974,67 @@ class TravelReimbursementController extends Controller
             'allowance'        =>  str_replace(".", "", $allowance),
             'total'        =>  str_replace(".", "", $request->nominal_pengajuan),
         );
-        
+
         ReimbursementTravel::where('id', $id_travel)->update($form_data);
-        
+
         //Update table  reimbursement_travel_details
-        
-        $count_ = count($request->currency);
-       
+
+        $currencies = is_array($request->currency) ? $request->currency : [];
+        $count_ = count($currencies);
+
         $id_detail = $id_travel;
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
-        
+
         for ($i=0; $i < $count_; $i++) {
             $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
             if ($costTypeId === '') {
                 continue;
             }
-          
-            if(empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i];
-                $evidence  = DB::select( DB::raw("SELECT evidence FROM reimbursement_travel_details WHERE id='$id_detail_'"))['0']->evidence;  
-            } else if(empty($request->proof[$i]) && !empty($request->file[$i])) {
+
+            $evidence = '';
+            if (empty($request->proof[$i]) && empty($request->file[$i])) {
+                $id_detail_ = $request->id_detail[$i] ?? '';
+                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                    $rowEv = DB::select(
+                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                        [(int) $id_detail_]
+                    );
+                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
+                }
+            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                 $image = $request->file[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-                
-            } else if(empty($request->file[$i]) && !empty($request->proof[$i])) {
+            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                 $image = $request->proof[$i];
                 $evidence = rand() . '.' . $image->getClientOriginalExtension();
                 $image->move(public_path('images/file_bukti'), $evidence);
-            } 
-          
+            }
+
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
-            $new->destination = $request->destination[$i];
-            $new->payment_type = $request->payment_type[$i];
-            $new->currency = $request->currency[$i];
-            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i]);
-            $new->amount = str_replace(".", "", $request->amount[$i]);
-            $new->tax = str_replace(".", "", $request->tax[$i]);
+            $new->destination = $request->destination[$i] ?? '';
+            $new->payment_type = $request->payment_type[$i] ?? '';
+            $new->currency = $request->currency[$i] ?? '';
+            $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
+            $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
+            $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
             $new->evidence = $evidence;
             $new->status = 1;
             $new->save();
         }
-        
+
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
 
         $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
-        
+
         $form_data = array(
             'status'        =>  $status,
             'nominal_pengajuan' =>  str_replace(".", "", $total),
         );
-        
+
         Reimbursement::where('id', $id_main)->update($form_data);
 
 
