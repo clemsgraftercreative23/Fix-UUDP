@@ -329,8 +329,46 @@
     });
   }
 
+  /** Pisahkan `#fragment` agar segmen path terakhir bisa diganti dengan aman. */
+  function splitUrlBaseAndHash(href) {
+    const s = String(href || '');
+    const i = s.indexOf('#');
+    if (i < 0) {
+      return { base: s, hash: '' };
+    }
+    return { base: s.slice(0, i), hash: s.slice(i) };
+  }
+
+  /**
+   * Ganti segmen angka terakhir di path (mis. travel id pada add-item/.../TRAVEL).
+   * Normalisasi trailing slash + hash; callback replace menghindari ambiguitas `$2` di String.replace.
+   */
   function replaceLastPathId(href, newId) {
-    return String(href || '').replace(/\/(\d+)(\?.*)?$/, '/' + newId + '$2');
+    const parts = splitUrlBaseAndHash(href);
+    let base = parts.base.replace(/\/+$/, '');
+    const replaced = base.replace(/\/(\d+)(\?.*)?$/, function (_m, _digits, query) {
+      return '/' + newId + (query || '');
+    });
+    return replaced + parts.hash;
+  }
+
+  /**
+   * URL hapus tab: .../delete-item/{id_main}/{id_travel} — selalu ganti id_travel (bukan hanya "digit terakhir di string").
+   * Mencegah semua tab memakai href yang sama bila replaceLastPathId tidak match (mis. trailing slash / hash).
+   */
+  function replaceTravelDeleteTabHref(href, newTravelId) {
+    const parts = splitUrlBaseAndHash(href);
+    const base = parts.base.replace(/\/+$/, '');
+    const m = base.match(/^(.*\/delete-item\/\d+)\/(\d+)((?:\?.*)?)$/);
+    let out;
+    if (m) {
+      out = m[1] + '/' + newTravelId + (m[3] || '');
+    } else {
+      out = base.replace(/\/(\d+)(\?.*)?$/, function (_m, _digits, query) {
+        return '/' + newTravelId + (query || '');
+      });
+    }
+    return out + parts.hash;
   }
 
   /**
@@ -631,7 +669,7 @@
 
       let delHtml = '';
       if (!isNewTab && showDelete && delTemplate) {
-        const dh = replaceLastPathId(delTemplate, item.id);
+        const dh = replaceTravelDeleteTabHref(delTemplate, item.id);
         delHtml =
           '<a class="tab-close-link" href="' +
           escapeHtmlRt(dh) +
