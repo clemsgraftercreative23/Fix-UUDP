@@ -252,9 +252,11 @@ function rupiah($angka){
                 <div class="card">
                     <div class="card-body">
                         <div id="rt-travel-item-pane"
+                             v-once
                              data-main-id="{{ $data['0']->id }}"
                              data-travel-id="0"
                              data-rt-new-item="1"
+                             data-rt-new-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id) !!}"
                              data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
                         <div class="nav-tabs-container">
                             <ul class="nav nav-tabs">

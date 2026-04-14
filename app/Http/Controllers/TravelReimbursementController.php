@@ -961,7 +961,7 @@ class TravelReimbursementController extends Controller
         
         $types = TravelType::get();
         $hotelCondition = TravelHotelCondition::get();
-        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main'"));
+        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
         $id_reimb = $data['0']->id;
         $id_travel_int = (int) $id_travel;
         $data_travel  = $id_travel_int > 0
@@ -1024,9 +1024,9 @@ class TravelReimbursementController extends Controller
         $hotelCondition = TravelHotelCondition::get();
         
         
-        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main'"));
+        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
         $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY id ASC"));
+        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = !empty($data_travel) ? $data_travel[0]->id : 0;
         $travel_detail = $id_detail > 0
@@ -1173,9 +1173,9 @@ class TravelReimbursementController extends Controller
         $hotelCondition = TravelHotelCondition::get();
         
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id'"));
-        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id'"));
+        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id' ORDER BY date ASC, id ASC"));
         $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id'"));
+        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id' ORDER BY date ASC, id ASC"));
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id'"));
         $id_detail = $data_travel['0']->id;
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
@@ -1205,7 +1205,7 @@ class TravelReimbursementController extends Controller
         
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id'"));
         $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id'"));
+        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id' ORDER BY date ASC, id ASC"));
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id'"));
         $id_detail = $data_travel['0']->id;
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));

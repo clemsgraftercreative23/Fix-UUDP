@@ -27,6 +27,11 @@
     return String(tid) === String(n) && n > 0;
   }
 
+  /** Tab "item baru" (belum simpan DB) pada halaman add-new-item — id sintetis di state/localStorage. */
+  function isDraftNewTravelItemId(tid) {
+    return String(tid || '') === NEW_ITEM_DRAFT_KEY;
+  }
+
   function readMainIdAttr($pane) {
     const v = $pane.attr('data-main-id');
     return v === undefined ? '' : String(v);
@@ -201,7 +206,8 @@
     const raw = ($pane.find('input[name="date"]').first().val() || '').trim();
     const tid = readTravelIdAttr($pane);
     if (raw && tid !== '') {
-      const $byTravel = $pane.find('.travel-item-link[data-travel-id="' + tid + '"] span.item-1').first();
+      const tabId = tid === '0' ? NEW_ITEM_DRAFT_KEY : tid;
+      const $byTravel = $pane.find('.travel-item-link[data-travel-id="' + tabId + '"] span.item-1').first();
       if ($byTravel.length) {
         $byTravel.text(raw);
         return;
@@ -312,7 +318,7 @@
     const prefix = STORAGE_V2_PREFIX + mainId + ':';
     $pane.find('.travel-item-link[data-travel-id]').each(function () {
       const tid = String($(this).attr('data-travel-id') || '');
-      if (!isValidTravelTabId(tid)) return;
+      if (!isValidTravelTabId(tid) && !isDraftNewTravelItemId(tid)) return;
       try {
         const raw = localStorage.getItem(prefix + tid);
         if (!raw) return;
@@ -325,6 +331,30 @@
 
   function replaceLastPathId(href, newId) {
     return String(href || '').replace(/\/(\d+)(\?.*)?$/, '/' + newId + '$2');
+  }
+
+  /**
+   * Partial load URL when href cannot be derived from state/DOM (never drop a tab for missing href).
+   * Prefer data-rt-href-prefix; else replace last path segment; else rebuild from pathname pattern.
+   */
+  function travelTabPartialFallbackHref(mainId, travelId, hrefPrefixRaw) {
+    const mid = String(mainId || '');
+    const tid = String(travelId || '');
+    if (!isValidTravelTabId(tid) || !mid) return '';
+    const raw = String(hrefPrefixRaw || '').trim();
+    if (raw) {
+      return raw.replace(/\/?$/, '/') + tid;
+    }
+    const path = String(window.location.pathname || '').replace(/\/+$/, '');
+    const replaced = replaceLastPathId(path, tid);
+    if (replaced && replaced !== path) {
+      return replaced;
+    }
+    const m = path.match(/^(.*\/reimbursement-travel\/)(?:add-item(?:-overseas)?)\/\d+\/\d+$/i);
+    if (m && m[1]) {
+      return m[1] + 'add-item/' + mid + '/' + tid;
+    }
+    return '';
   }
 
   function tabItemUrlAttr($el) {
@@ -352,14 +382,16 @@
         if (raw) {
           const old = JSON.parse(raw);
           if (Array.isArray(old)) {
-            const items = old
-              .map(function (e) {
-                if (!e || !e.id) return null;
-                return { id: String(e.id), date: e.label || String(e.id), href: e.href || '' };
-              })
-              .filter(function (e) {
-                return e && isValidTravelTabId(e.id);
-              });
+            const items = sortTravelTabItems(
+              old
+                .map(function (e) {
+                  if (!e || !e.id) return null;
+                  return { id: String(e.id), date: e.label || String(e.id), href: e.href || '' };
+                })
+                .filter(function (e) {
+                  return e && (isValidTravelTabId(e.id) || isDraftNewTravelItemId(e.id));
+                })
+            );
             writeTravelItemsState(mainId, items);
             try {
               localStorage.removeItem(LEGACY_TABBAR_REGISTRY_PREFIX + mainId);
@@ -371,9 +403,11 @@
       }
       const o = JSON.parse(raw);
       if (o && Array.isArray(o.items)) {
-        return o.items.filter(function (e) {
-          return e && isValidTravelTabId(e.id);
-        });
+        return sortTravelTabItems(
+          o.items.filter(function (e) {
+            return e && (isValidTravelTabId(e.id) || isDraftNewTravelItemId(e.id));
+          })
+        );
       }
       return [];
     } catch (e) {
@@ -388,19 +422,44 @@
     } catch (e) { /* quota */ }
   }
 
+  /** Nilai numerik untuk urut tanggal (utamakan YYYY-MM-DD; fallback Date.parse untuk label lain). */
+  function travelTabDateSortKey(dateStr) {
+    const s = String(dateStr || '').trim();
+    if (!s) return 0;
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+      const t = Date.UTC(parseInt(iso[1], 10), parseInt(iso[2], 10) - 1, parseInt(iso[3], 10));
+      return isNaN(t) ? 0 : t;
+    }
+    const p = Date.parse(s);
+    return isNaN(p) ? 0 : p;
+  }
+
+  /** Urut tab: tanggal paling awal → akhir; tie-break by travel id. Tidak memutasi array asal. */
   function sortTravelTabItems(arr) {
-    return arr.sort(function (a, b) {
-      const da = a.date || '';
-      const db = b.date || '';
-      if (da < db) return -1;
-      if (da > db) return 1;
-      return parseInt(a.id, 10) - parseInt(b.id, 10);
+    if (!Array.isArray(arr) || !arr.length) {
+      return arr || [];
+    }
+    const copy = arr.slice();
+    copy.sort(function (a, b) {
+      const ka = travelTabDateSortKey(a && a.date);
+      const kb = travelTabDateSortKey(b && b.date);
+      if (ka !== kb) return ka - kb;
+      const idKey = function (id) {
+        const s = String(id);
+        if (isDraftNewTravelItemId(s)) return 9007199254740992;
+        const n = parseInt(s, 10);
+        return isNaN(n) ? 0 : n;
+      };
+      return idKey(a && a.id) - idKey(b && b.id);
     });
+    return copy;
   }
 
   /** Resolve travel id from tab control; supports data-rt-item-url / legacy href (add-item paths). */
   function travelIdFromTabLink($a) {
     let id = String($a.attr('data-travel-id') || '');
+    if (isDraftNewTravelItemId(id)) return NEW_ITEM_DRAFT_KEY;
     if (isValidTravelTabId(id)) return id;
     const href = tabItemUrlAttr($a);
     const m = href.match(/add-item(?:-overseas)?\/(\d+)\/(\d+)(?:\/|$|\?|#)/i);
@@ -409,53 +468,86 @@
   }
 
   /**
-   * Single source of truth for tab list: persisted items ∪ server DOM (current pane) ∪ v2 draft keys per travel id.
+   * Single source of truth for tab list: union of persisted items, DOM tabs, and v2 draft keys (never drop an id).
    */
   function buildMergedTravelTabItems(mainId, $pane) {
-    const byId = {};
-    readTravelItemsState(mainId).forEach(function (it) {
-      if (it && isValidTravelTabId(it.id)) {
-        byId[it.id] = { id: it.id, date: it.date || it.id, href: it.href || '' };
+    const idSet = {};
+    function rememberId(id) {
+      const sid = String(id || '');
+      if (isDraftNewTravelItemId(sid)) {
+        if ($pane && $pane.length && $pane.attr('data-rt-new-item') === '1') {
+          idSet[sid] = true;
+        }
+        return;
       }
+      if (isValidTravelTabId(sid)) idSet[sid] = true;
+    }
+
+    const persisted = readTravelItemsState(mainId);
+    if ($pane && $pane.length && $pane.attr('data-rt-new-item') === '1') {
+      idSet[NEW_ITEM_DRAFT_KEY] = true;
+    }
+
+    persisted.forEach(function (it) {
+      if (it && (isValidTravelTabId(it.id) || isDraftNewTravelItemId(it.id))) rememberId(it.id);
     });
+
     if ($pane && $pane.length) {
-      $pane.find('.travel-item-link[data-rt-tab="1"]').each(function () {
-        const $a = $(this);
-        const id = travelIdFromTabLink($a);
-        if (!id) return;
-        const date = $a.find('span.item-1').first().text().trim();
-        const href = tabItemUrlAttr($a);
-        const prev = byId[id];
-        byId[id] = {
-          id: id,
-          date: date || (prev && prev.date) || id,
-          href: href || (prev && prev.href) || ''
-        };
+      $pane.find('.travel-item-link').each(function () {
+        const $btn = $(this);
+        if ($btn.attr('data-rt-tab') !== '1' && !$btn.attr('data-travel-id')) return;
+        rememberId(travelIdFromTabLink($btn));
       });
     }
-    const prefix = STORAGE_V2_PREFIX + mainId + ':';
+
+    const v2Prefix = STORAGE_V2_PREFIX + mainId + ':';
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k || k.indexOf(prefix) !== 0) continue;
-        const tid = k.slice(prefix.length);
-        if (!isValidTravelTabId(tid)) continue;
-        let dlabel = '';
-        try {
-          const st = JSON.parse(localStorage.getItem(k) || '{}');
-          dlabel = transactionDateFromV2Header(st.header) || '';
-        } catch (e1) { /* ignore */ }
-        const prev = byId[tid];
-        const date = dlabel || (prev && prev.date) || tid;
-        const href = (prev && prev.href) || '';
-        byId[tid] = { id: tid, date: date, href: href };
+        if (!k || k.indexOf(v2Prefix) !== 0) continue;
+        rememberId(k.slice(v2Prefix.length));
       }
     } catch (e2) { /* ignore */ }
-    return sortTravelTabItems(
-      Object.keys(byId).map(function (key) {
-        return byId[key];
-      })
-    );
+
+    const fromPersist = {};
+    persisted.forEach(function (it) {
+      if (it && (isValidTravelTabId(it.id) || isDraftNewTravelItemId(it.id))) {
+        fromPersist[String(it.id)] = {
+          id: String(it.id),
+          date: it.date || String(it.id),
+          href: it.href || ''
+        };
+      }
+    });
+
+    const items = Object.keys(idSet).map(function (id) {
+      const base = fromPersist[id] || { id: id, date: id, href: '' };
+      let date = base.date || id;
+      let href = base.href || '';
+
+      if ($pane && $pane.length) {
+        const $el = $pane.find('.travel-item-link[data-travel-id="' + id + '"]').first();
+        if ($el.length) {
+          const domDate = $el.find('span.item-1').first().text().trim();
+          if (domDate) date = domDate;
+          const h = tabItemUrlAttr($el);
+          if (h) href = h;
+        }
+      }
+
+      try {
+        const raw = localStorage.getItem(v2Prefix + id);
+        if (raw) {
+          const st = JSON.parse(raw);
+          const dlabel = transactionDateFromV2Header(st.header) || '';
+          if (dlabel) date = dlabel;
+        }
+      } catch (e1) { /* ignore */ }
+
+      return { id: id, date: date || id, href: href };
+    });
+
+    return sortTravelTabItems(items);
   }
 
   /**
@@ -466,14 +558,17 @@
     const $ul = $pane.find('.nav-tabs').first();
     if (!$ul.length) return;
 
-    const domTravelTabCount = $pane.find('.travel-item-link[data-rt-tab="1"]').length;
+    const domTravelTabCount = $pane.find('.travel-item-link[data-rt-tab="1"], .travel-item-link[data-travel-id]').length;
     const domIds = {};
-    $pane.find('.travel-item-link[data-rt-tab="1"]').each(function () {
+    $pane.find('.travel-item-link[data-rt-tab="1"], .travel-item-link[data-travel-id]').each(function () {
       const tid = travelIdFromTabLink($(this));
-      if (isValidTravelTabId(tid)) domIds[tid] = true;
+      if (isValidTravelTabId(tid) || isDraftNewTravelItemId(tid)) domIds[tid] = true;
     });
 
     const items = buildMergedTravelTabItems(mainId, $pane);
+    const hasDraftNewTab = items.some(function (it) {
+      return it && isDraftNewTravelItemId(it.id);
+    });
 
     if (domTravelTabCount > 0 && items.length === 0) {
       return;
@@ -500,7 +595,7 @@
 
     let sampleHref = '';
     for (let j = 0; j < items.length; j++) {
-      if (items[j].href) {
+      if (items[j].href && !isDraftNewTravelItemId(items[j].id)) {
         sampleHref = items[j].href;
         break;
       }
@@ -508,30 +603,44 @@
 
     const hrefPrefixRaw = String($pane.attr('data-rt-href-prefix') || '').trim();
     const hrefPrefix = hrefPrefixRaw ? hrefPrefixRaw.replace(/\/?$/, '/') : '';
+    const dataRtNewItemUrl = String($pane.attr('data-rt-new-item-url') || '').trim();
 
     items.forEach(function (item) {
+      const isNewTab = isDraftNewTravelItemId(item.id);
       let href = item.href;
-      if (!href && sampleHref) {
+      if (isNewTab) {
+        href = dataRtNewItemUrl;
+      }
+      if (!isNewTab && !href && sampleHref) {
         href = replaceLastPathId(sampleHref, item.id);
       }
-      if (!href && hrefPrefix && isValidTravelTabId(item.id)) {
+      if (!isNewTab && !href && hrefPrefix && isValidTravelTabId(item.id)) {
         href = hrefPrefix + item.id;
       }
-      if (!href && mainId) {
+      if (!isNewTab && !href && mainId) {
         href = String(window.location.pathname || '').replace(/\/[^/]+$/, '/' + item.id);
+      }
+      // Jangan drop tab: selalu ada URL partial jika id & main valid (hindari tab hilang saat href kosong di state).
+      if (!isNewTab && !href && isValidTravelTabId(item.id) && hrefPrefixRaw) {
+        href = String(hrefPrefixRaw).replace(/\/?$/, '/') + item.id;
+      }
+      if (!isNewTab && !href && isValidTravelTabId(item.id)) {
+        href = travelTabPartialFallbackHref(mainId, item.id, hrefPrefixRaw);
       }
       if (!href) return;
 
       let delHtml = '';
-      if (showDelete && delTemplate) {
+      if (!isNewTab && showDelete && delTemplate) {
         const dh = replaceLastPathId(delTemplate, item.id);
         delHtml =
           '<a class="tab-close-link" href="' +
           escapeHtmlRt(dh) +
           '" onclick="return confirm(\'Hapus tab ini dan semua datanya?\')">x</a>';
       }
-      const label = item.date || item.id;
-      const isActive = String(item.id) === String(activeTravelId);
+      const label = isNewTab ? (item.date && !isDraftNewTravelItemId(item.date) ? item.date : 'New Item') : item.date || item.id;
+      const isActive = isNewTab
+        ? String(activeTravelId) === '0' || String(activeTravelId) === NEW_ITEM_DRAFT_KEY
+        : String(item.id) === String(activeTravelId);
       const liHtml =
         '<li class="nav-item"><div class="travel-tab">' +
         '<button type="button" class="nav-link travel-item-link' +
@@ -547,7 +656,7 @@
         '</div></li>';
       $ul.append(liHtml);
     });
-    if ($newItemLi.length) {
+    if ($newItemLi.length && !hasDraftNewTab) {
       const $a = $newItemLi.find('a.nav-link').first();
       const onNewItemPlaceholder = !isValidTravelTabId(activeTravelId);
       if (onNewItemPlaceholder) {
@@ -582,6 +691,7 @@
         if ($form.length) {
           updateFormTravelAction($form, newTravelId);
         }
+        refreshTravelTabLabelsFromV2Drafts($pane, mainId);
         renderTravelTabsFromState($pane, mainId, newTravelId);
         restorePaneFull($pane);
         window.rtInitTravelItemPane($pane);
@@ -664,6 +774,7 @@
     syncTravelItemsStateFromDom($pane0, main0);
     refreshTravelTabLabelsFromV2Drafts($pane0, main0);
     syncActiveTravelTabDateFromInput($pane0);
+    renderTravelTabsFromState($pane0, main0, readTravelIdAttr($pane0));
     window.rtInitTravelItemPane($pane0);
     afterPaneHydrated($pane0);
 
@@ -680,12 +791,22 @@
     $(document).on('click', '#rt-travel-item-pane .travel-item-link[data-rt-tab="1"]', function (e) {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.which === 2) return;
       e.preventDefault();
-      const url = this.getAttribute('data-rt-item-url') || this.getAttribute('href');
-      if (!url) return;
       const newTravelId = String($(this).attr('data-travel-id') || '');
-      if (!isValidTravelTabId(newTravelId)) return;
       const $pane = $('#rt-travel-item-pane');
       const currentId = readTravelIdAttr($pane);
+
+      if (isDraftNewTravelItemId(newTravelId)) {
+        persistCurrentPane($pane);
+        const back = String($pane.attr('data-rt-new-item-url') || '').trim();
+        if (back) {
+          window.location.href = back.split('#')[0];
+        }
+        return;
+      }
+
+      const url = this.getAttribute('data-rt-item-url') || this.getAttribute('href');
+      if (!url) return;
+      if (!isValidTravelTabId(newTravelId)) return;
 
       persistCurrentPane($pane);
 
