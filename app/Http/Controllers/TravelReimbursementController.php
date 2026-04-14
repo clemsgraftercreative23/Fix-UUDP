@@ -1125,7 +1125,14 @@ class TravelReimbursementController extends Controller
                 return redirect()->back()->withErrors(['Tab hanya bisa dihapus saat status draft']);
             }
 
-            $travel = ReimbursementTravel::where('id', $id_travel)->where('reimbursement_id', $id_main)->firstOrFail();
+            $travel = ReimbursementTravel::where('id', $id_travel)->where('reimbursement_id', $id_main)->first();
+            if (!$travel) {
+                DB::rollback();
+
+                return redirect()->back()->withErrors([
+                    'Tab travel tidak ditemukan. Kemungkinan sudah dihapus atau data tab di browser sudah usang — muat ulang halaman lalu coba lagi.',
+                ]);
+            }
 
             $details = ReimbursementTravelDetail::where('reimbursement_travel_id', $travel->id)->get();
             foreach ($details as $detail) {

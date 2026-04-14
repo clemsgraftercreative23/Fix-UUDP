@@ -505,8 +505,22 @@
     return '';
   }
 
+  /** ID travel yang benar-benar ada di DOM (isi server / partial AJAX) — dipakai untuk buang tab hantu dari localStorage. */
+  function collectDomTravelTabIds($pane) {
+    const ids = {};
+    if (!$pane || !$pane.length) return ids;
+    $pane.find('.travel-item-link').each(function () {
+      const $btn = $(this);
+      if ($btn.attr('data-rt-tab') !== '1' && !$btn.attr('data-travel-id')) return;
+      const tid = travelIdFromTabLink($btn);
+      if (isValidTravelTabId(tid)) ids[String(tid)] = true;
+    });
+    return ids;
+  }
+
   /**
    * Single source of truth for tab list: union of persisted items, DOM tabs, and v2 draft keys (never drop an id).
+   * Draft v2 / state lama tidak boleh menambah tab untuk reimbursement_travel yang sudah tidak ada (hindari hapus → ModelNotFound).
    */
   function buildMergedTravelTabItems(mainId, $pane) {
     const idSet = {};
@@ -521,13 +535,19 @@
       if (isValidTravelTabId(sid)) idSet[sid] = true;
     }
 
+    const domTravelIds = collectDomTravelTabIds($pane);
     const persisted = readTravelItemsState(mainId);
     if ($pane && $pane.length && $pane.attr('data-rt-new-item') === '1') {
       idSet[NEW_ITEM_DRAFT_KEY] = true;
     }
 
     persisted.forEach(function (it) {
-      if (it && (isValidTravelTabId(it.id) || isDraftNewTravelItemId(it.id))) rememberId(it.id);
+      if (!it) return;
+      if (isDraftNewTravelItemId(it.id)) {
+        rememberId(it.id);
+        return;
+      }
+      if (isValidTravelTabId(it.id) && domTravelIds[String(it.id)]) rememberId(it.id);
     });
 
     if ($pane && $pane.length) {
@@ -543,7 +563,12 @@
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k || k.indexOf(v2Prefix) !== 0) continue;
-        rememberId(k.slice(v2Prefix.length));
+        const seg = k.slice(v2Prefix.length);
+        if (isDraftNewTravelItemId(seg)) {
+          rememberId(seg);
+          continue;
+        }
+        if (isValidTravelTabId(seg) && domTravelIds[String(seg)]) rememberId(seg);
       }
     } catch (e2) { /* ignore */ }
 
