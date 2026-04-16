@@ -175,7 +175,9 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         <div id="preview_1">
                             @if($file !== '' && in_array($ext, $imageExt))
                                 <img src="{{ url('images/file_bukti/'.$file) }}"
-                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px;">
+                                     class="preview-thumbnail"
+                                     data-preview-src="{{ url('images/file_bukti/'.$file) }}"
+                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px; cursor:pointer;">
                             @elseif($file !== '')
                                 <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
                                     <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"
@@ -249,7 +251,9 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         <div id="preview_{{$n}}">
                             @if(in_array($ext, $imageExt))
                                 <img src="{{ url('images/file_bukti/'.$file) }}"
-                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px;">
+                                     class="preview-thumbnail"
+                                     data-preview-src="{{ url('images/file_bukti/'.$file) }}"
+                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px; cursor:pointer;">
                             @else
                                 <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
                                     <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"

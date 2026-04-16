@@ -50,6 +50,51 @@
             margin-left: 8px;
         }
     }
+
+    .img-lightbox-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 20000;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+
+    .img-lightbox-overlay.active {
+        display: flex;
+    }
+
+    .img-lightbox-content {
+        position: relative;
+        max-width: 95vw;
+        max-height: 90vh;
+    }
+
+    .img-lightbox-content img {
+        max-width: 95vw;
+        max-height: 90vh;
+        border-radius: 8px;
+    }
+
+    .img-lightbox-close {
+        position: absolute;
+        right: -12px;
+        top: -12px;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 999px;
+        background: #fff;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .preview-thumbnail {
+        cursor: pointer !important;
+    }
 </style>
 
 <div class="page-content" id="app">   
@@ -485,7 +530,9 @@
                                 </td>
                                 <td>
                                     <div id="preview_1">
-                                        <img src="{!!url('images/file_bukti/'.$detail['0']->evidence.'')!!}" style="max-width: 75px; max-height: 75px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px;">
+                                        <a href="{!!url('images/file_bukti/'.$detail['0']->evidence.'')!!}" target="_blank" class="preview-link" data-preview-src="{!!url('images/file_bukti/'.$detail['0']->evidence.'')!!}">
+                                            <img src="{!!url('images/file_bukti/'.$detail['0']->evidence.'')!!}" class="preview-thumbnail" data-preview-src="{!!url('images/file_bukti/'.$detail['0']->evidence.'')!!}" onclick="openImageLightbox(this.getAttribute('data-preview-src') || this.src)" style="max-width: 75px; max-height: 75px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px; cursor: pointer;">
+                                        </a>
                                     </div>
                                 </td>
                               
@@ -547,8 +594,10 @@
                                         <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                                     </td>
                                     <td>
-                                        <div id="preview_1">
-                                            <img src="{!!url('images/file_bukti/'.$row->evidence.'')!!}" style="max-width: 75px; max-height: 75px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px;">
+                                        <div id="preview_{{$numb}}">
+                                            <a href="{!!url('images/file_bukti/'.$row->evidence.'')!!}" target="_blank" class="preview-link" data-preview-src="{!!url('images/file_bukti/'.$row->evidence.'')!!}">
+                                                <img src="{!!url('images/file_bukti/'.$row->evidence.'')!!}" class="preview-thumbnail" data-preview-src="{!!url('images/file_bukti/'.$row->evidence.'')!!}" onclick="openImageLightbox(this.getAttribute('data-preview-src') || this.src)" style="max-width: 75px; max-height: 75px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px; cursor: pointer;">
+                                            </a>
                                         </div>
                                     </td>
                                   
@@ -673,8 +722,35 @@
       </div>
   </div>
   </div>
+</div>
 
 <!-- End Modal -->
+
+<!-- Modal Preview Image -->
+<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+      <div class="modal-content" style="background: transparent; border: 0; box-shadow: none;">
+          <div class="modal-header" style="border: 0;">
+              <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 1; font-size: 2rem;">
+                  <span aria-hidden="true">&times;</span>
+              </button>
+          </div>
+          <div class="modal-body text-center pt-0">
+              <img id="previewImageModalSrc" src="" alt="Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+          </div>
+      </div>
+  </div>
+</div>
+<!-- End Modal Preview Image -->
+
+<!-- Custom Lightbox -->
+<div id="imgLightboxOverlay" class="img-lightbox-overlay">
+    <div class="img-lightbox-content">
+        <button type="button" class="img-lightbox-close" aria-label="Close">&times;</button>
+        <img id="imgLightboxImage" src="" alt="Preview Besar">
+    </div>
+</div>
+<!-- End Custom Lightbox -->
   
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
@@ -682,6 +758,12 @@
 
 <script type="text/javascript">
     $(document).ready(function(){
+        window.openImageLightbox = function (src) {
+            if (!src) return;
+            $('#imgLightboxImage').attr('src', src);
+            $('#imgLightboxOverlay').addClass('active');
+        };
+
         $('[data-toggle="tooltip"]').tooltip();   
         
         $('.currency').mask("#.##0", {
@@ -896,6 +978,64 @@
           // Objek untuk menyimpan status upload di setiap row
           let uploadStatus = {};
 
+                    function getPreviewDivFromRow(row) {
+                        return row.find('[id^="preview_"]').first();
+                    }
+
+                    function createPreviewImage(src) {
+                        return $('<a>')
+                            .attr('href', src)
+                            .attr('target', '_blank')
+                            .attr('data-preview-src', src)
+                            .addClass('preview-link')
+                            .append(
+                                $('<img>')
+                                    .attr('src', src)
+                                    .attr('data-preview-src', src)
+                                    .addClass('preview-thumbnail')
+                                    .css({
+                                        maxWidth: '75px',
+                                        maxHeight: '75px',
+                                        border: '2px solid #28a745',
+                                        borderRadius: '5px',
+                                        marginTop: '5px',
+                                        cursor: 'pointer'
+                                    })
+                            );
+                    }
+
+                    function bindExistingPreviewThumbnails() {
+                        $('[id^="preview_"] img').each(function () {
+                            $(this)
+                                .addClass('preview-thumbnail')
+                                .attr('data-preview-src', $(this).attr('src'))
+                                .css('cursor', 'pointer');
+                        });
+                    }
+
+                    bindExistingPreviewThumbnails();
+
+                    $('body').on('click', '.preview-link, .preview-thumbnail, [id^="preview_"] img', function (e) {
+                        var src = $(this).attr('data-preview-src') || $(this).find('img').attr('src') || $(this).attr('src');
+                        if (!src) return;
+                        e.preventDefault();
+                        window.openImageLightbox(src);
+                    });
+
+                    $('body').on('click', '#imgLightboxOverlay, .img-lightbox-close', function (e) {
+                        if ($(e.target).is('#imgLightboxOverlay') || $(e.target).is('.img-lightbox-close')) {
+                            $('#imgLightboxOverlay').removeClass('active');
+                            $('#imgLightboxImage').attr('src', '');
+                        }
+                    });
+
+                    $(document).on('keydown', function (e) {
+                        if (e.key === 'Escape') {
+                            $('#imgLightboxOverlay').removeClass('active');
+                            $('#imgLightboxImage').attr('src', '');
+                        }
+                    });
+
           // Fungsi untuk menangani upload file
           $("body").on("click", ".addFile", function () {
             let btn = $(this);
@@ -914,16 +1054,8 @@
                 $(".warning-upload").hide();
 
                 reader.onload = function (e) {
-                  let previewDiv = row.find("#preview_" + (idx + 1)); // Pastikan id cocok
-                  previewDiv.empty().append(
-                    $('<img>').attr('src', e.target.result).css({
-                      maxWidth: '75px',
-                      maxHeight: '75px',
-                      border: '2px solid #28a745',
-                      borderRadius: '5px',
-                      marginTop: '5px'
-                    })
-                  );
+                                    let previewDiv = getPreviewDivFromRow(row);
+                                    previewDiv.empty().append(createPreviewImage(e.target.result));
 
                   btn.find("i").removeClass("fa-upload").addClass("fa-check");
                 };
@@ -981,16 +1113,9 @@
                                   fileInput[0].files = dataTransfer.files;
 
                                   const imageURL = URL.createObjectURL(file);
-                                  let previewDiv = row.find("#preview_" + (idx + 1));
-                                  previewDiv.empty().append(
-                                      $('<img>').attr('src', imageURL).css({
-                                          maxWidth: '75px',
-                                          maxHeight: '75px',
-                                          border: '2px solid #28a745',
-                                          borderRadius: '5px',
-                                          marginTop: '5px'
-                                      })
-                                  );
+                                  let previewDiv = getPreviewDivFromRow(row);
+                                  previewDiv.empty().append(createPreviewImage(imageURL));
+                                  btn.find("i").removeClass("fa-camera").addClass("fa-check");
 
                                   // stop kamera
                                   stream.getTracks().forEach(track => track.stop());

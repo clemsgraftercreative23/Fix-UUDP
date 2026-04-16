@@ -284,6 +284,23 @@ function rupiah($angka){
 
 <!-- End Modal -->
 
+<!-- Modal Preview Image -->
+<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+      <div class="modal-content" style="background: transparent; border: 0; box-shadow: none;">
+          <div class="modal-header" style="border: 0;">
+              <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 1; font-size: 2rem;">
+                  <span aria-hidden="true">&times;</span>
+              </button>
+          </div>
+          <div class="modal-body text-center pt-0">
+              <img id="previewImageModalSrc" src="" alt="Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+          </div>
+      </div>
+  </div>
+</div>
+<!-- End Modal Preview Image -->
+
 <!-- Modal -->
 <div class="modal fade" id="modalPhoto"  data-backdrop="static" tabindex="-1" role="dialog" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
@@ -801,11 +818,49 @@ $(document).ready(function(){
     // Objek untuk menyimpan status upload di setiap row
       let uploadStatus = {};
 
+            function getPreviewDivFromRow(row) {
+                return row.find('[id^="preview_"]').first();
+            }
+
+            function createPreviewImage(src) {
+                return $('<img>')
+                    .attr('src', src)
+                    .attr('data-preview-src', src)
+                    .addClass('preview-thumbnail')
+                    .css({
+                        maxWidth: '75px',
+                        maxHeight: '75px',
+                        border: '2px solid #28a745',
+                        borderRadius: '5px',
+                        marginTop: '5px',
+                        cursor: 'pointer'
+                    });
+            }
+
+            function bindExistingPreviewThumbnails() {
+                $('[id^="preview_"] img').each(function () {
+                    const src = $(this).attr('src');
+                    if (!src || src.indexOf('flaticon.com') !== -1) return;
+                    $(this)
+                        .addClass('preview-thumbnail')
+                        .attr('data-preview-src', src)
+                        .css('cursor', 'pointer');
+                });
+            }
+
+            bindExistingPreviewThumbnails();
+
+            $('body').on('click', '.preview-thumbnail', function () {
+                var src = $(this).attr('data-preview-src') || $(this).attr('src');
+                if (!src) return;
+                $('#previewImageModalSrc').attr('src', src);
+                $('#previewImageModal').modal('show');
+            });
+
       // Fungsi untuk menangani upload file
       $("body").on("click", ".addFile", function () {
         let btn = $(this);
         let row = btn.closest("tr");
-        let idx = row.index();
         let fileInput = row.find(".file-input");
 
         fileInput.click();
@@ -818,7 +873,7 @@ $(document).ready(function(){
             $("#action_button_draft").prop("disabled", false);
             $(".warning-upload").hide();
 
-            let previewDiv = row.find("#preview_" + (idx + 1));
+            let previewDiv = getPreviewDivFromRow(row);
             previewDiv.empty();
 
             let fileType = file.type;
@@ -827,15 +882,7 @@ $(document).ready(function(){
               // Preview gambar
               var reader = new FileReader();
               reader.onload = function (e) {
-                previewDiv.append(
-                  $('<img>').attr('src', e.target.result).css({
-                    maxWidth: '75px',
-                    maxHeight: '75px',
-                    border: '2px solid #28a745',
-                    borderRadius: '5px',
-                    marginTop: '5px'
-                  })
-                );
+                                previewDiv.append(createPreviewImage(e.target.result));
               };
               reader.readAsDataURL(file);
 
@@ -876,7 +923,6 @@ $(document).ready(function(){
     $("body").on("click", ".addCamera", function () {
         let btn = $(this);
         let row = btn.closest("tr");
-        let idx = row.index();
         let fileInput = row.find(".camera-input");
 
         if (navigator.mediaDevices.getUserMedia) {
@@ -915,16 +961,9 @@ $(document).ready(function(){
                             fileInput[0].files = dataTransfer.files;
 
                             const imageURL = URL.createObjectURL(file);
-                            let previewDiv = row.find("#preview_" + (idx + 1)); 
-                            previewDiv.empty().append(
-                                $('<img>').attr('src', imageURL).css({
-                                    maxWidth: '75px',
-                                    maxHeight: '75px',
-                                    border: '2px solid #28a745',
-                                    borderRadius: '5px',
-                                    marginTop: '5px'
-                                })
-                            );
+                            let previewDiv = getPreviewDivFromRow(row);
+                            previewDiv.empty().append(createPreviewImage(imageURL));
+                            btn.find("i").removeClass("fa-camera").addClass("fa-check");
 
                             stream.getTracks().forEach(track => track.stop());
                             $("#modalPhoto").modal("hide");
