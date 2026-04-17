@@ -788,7 +788,13 @@ $(document).ready(function(){
         }
         count++;
         ct++;
-        var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+        var rowTemplate = $.trim($('#rt-detail-row-template').html() || '');
+        if (!rowTemplate) {
+            return false;
+        }
+        var fieldHTML = rowTemplate
+            .replace(/__IDX__/g, String(count))
+            .replace(/__PREVIEW__/g, String(ct));
         $root.find('.fieldGroupDetail:last').after(fieldHTML);
         $(function() {
             $('.currency').maskMoney({
@@ -807,13 +813,32 @@ $(document).ready(function(){
         window.rtTravelAppendDetailRow({});
     });
     
-    $("body").on("click",".remove-detail",function(){ 
-       $("#action_button").prop("disabled", false);
-       $("#action_button_draft").prop("disabled", false);
-       $(".warning-upload").hide();
-       $(this).parents(".fieldGroupDetail").remove();
-       total_nominal();
-    });
+     $("body").on("click",".remove-detail",function(){ 
+         $("#action_button").prop("disabled", false);
+         $("#action_button_draft").prop("disabled", false);
+         $(".warning-upload").hide();
+
+         var $row = $(this).closest(".fieldGroupDetail");
+         var $tbody = $row.closest("tbody");
+         var rowCount = $tbody.find('.fieldGroupDetail').length;
+
+         if (rowCount <= 1) {
+             $row.find('input[name="id_detail[]"]').val('');
+             $row.find('select[name="cost_type_id[]"]').val('');
+             $row.find('input[name="destination[]"]').val('');
+             $row.find('select[name="currency[]"]').val('');
+             $row.find('input[name="amount[]"]').val('');
+             $row.find('input[name="idr_rate[]"]').val('');
+             $row.find('input[name="tax[]"]').val('0');
+             $row.find('select[name="payment_type[]"]').val('');
+             $row.find('input.file-input[type="file"], input.camera-input[type="file"]').val('');
+             $row.find('[id^="preview_"]').empty();
+         } else {
+             $row.remove();
+         }
+
+         total_nominal();
+     });
     
     // Objek untuk menyimpan status upload di setiap row
       let uploadStatus = {};
@@ -853,7 +878,20 @@ $(document).ready(function(){
             $('body').on('click', '.preview-thumbnail', function () {
                 var src = $(this).attr('data-preview-src') || $(this).attr('src');
                 if (!src) return;
-                $('#previewImageModalSrc').attr('src', src);
+                var safeSrc = src;
+                var isDataOrBlob = /^data:|^blob:/i.test(src);
+                if (!isDataOrBlob) {
+                    var sep = src.indexOf('?') === -1 ? '?' : '&';
+                    safeSrc = src + sep + 'v=' + Date.now();
+                }
+                var $modalImg = $('#previewImageModalSrc');
+                $modalImg.off('error.rtPreview').on('error.rtPreview', function () {
+                    $('#previewImageModal').modal('hide');
+                    if (!isDataOrBlob && src) {
+                        window.open(src, '_blank');
+                    }
+                });
+                $modalImg.attr('src', safeSrc);
                 $('#previewImageModal').modal('show');
             });
 

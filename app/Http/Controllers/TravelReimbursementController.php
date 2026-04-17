@@ -68,6 +68,29 @@ class TravelReimbursementController extends Controller
         return $value;
     }
 
+    /** Simpan file bukti ke public/images/file_bukti dan kembalikan nama file. */
+    private function storeTravelEvidenceFile($file): string
+    {
+        if (!$file) {
+            return '';
+        }
+
+        $targetDir = public_path('images/file_bukti');
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+        }
+
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '') {
+            $ext = 'jpg';
+        }
+
+        $filename = uniqid('bukti_', true) . '.' . $ext;
+        $file->move($targetDir, $filename);
+
+        return $filename;
+    }
+
     /** Draft / tambah tab baru: boleh data belum lengkap. */
     private function travelItemAllowIncompleteForm(): bool
     {
@@ -741,11 +764,18 @@ class TravelReimbursementController extends Controller
 
             $currencies = is_array($request->currency) ? $request->currency : [];
             $count_ = count($currencies);
+            $allowIncomplete = $this->travelItemAllowIncompleteForm();
+            $draftFallbackCostTypeId = (int) (TravelType::min('id') ?: 0);
 
             for ($i=0; $i < $count_; $i++) {
                 $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+                $hasUploadedEvidence = !empty($request->proof[$i]) || !empty($request->file[$i]);
                 if ($costTypeId === '') {
+                    if ($allowIncomplete && $hasUploadedEvidence && $draftFallbackCostTypeId > 0) {
+                        $costTypeId = (string) $draftFallbackCostTypeId;
+                    } else {
                     continue;
+                    }
                 }
 
                 $evidence = '';
@@ -760,12 +790,10 @@ class TravelReimbursementController extends Controller
                     }
                 } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                     $image = $request->file[$i];
-                    $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $evidence);
+                    $evidence = $this->storeTravelEvidenceFile($image);
                 } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                     $image = $request->proof[$i];
-                    $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $evidence);
+                    $evidence = $this->storeTravelEvidenceFile($image);
                 }
 
                 $new = new ReimbursementTravelDetail;
@@ -1565,6 +1593,7 @@ class TravelReimbursementController extends Controller
         }
 
         $form_data = array(
+            'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
@@ -1580,14 +1609,21 @@ class TravelReimbursementController extends Controller
 
         $currencies = is_array($request->currency) ? $request->currency : [];
         $count_ = count($currencies);
+        $allowIncomplete = $this->travelItemAllowIncompleteForm();
+        $draftFallbackCostTypeId = (int) (TravelType::min('id') ?: 0);
 
         $id_detail = $id_travel;
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
 
         for ($i=0; $i < $count_; $i++) {
             $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
+            $hasUploadedEvidence = !empty($request->proof[$i]) || !empty($request->file[$i]);
             if ($costTypeId === '') {
+                if ($allowIncomplete && $hasUploadedEvidence && $draftFallbackCostTypeId > 0) {
+                    $costTypeId = (string) $draftFallbackCostTypeId;
+                } else {
                 continue;
+                }
             }
 
             $evidence = '';
@@ -1602,12 +1638,10 @@ class TravelReimbursementController extends Controller
                 }
             } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
                 $image = $request->file[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
+                $evidence = $this->storeTravelEvidenceFile($image);
             } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
                 $image = $request->proof[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
+                $evidence = $this->storeTravelEvidenceFile($image);
             }
 
             $new = new ReimbursementTravelDetail;
@@ -1790,6 +1824,7 @@ class TravelReimbursementController extends Controller
         }
 
         $form_data = array(
+            'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
@@ -2011,6 +2046,7 @@ class TravelReimbursementController extends Controller
         }
 
         $form_data = array(
+            'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),

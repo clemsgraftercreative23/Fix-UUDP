@@ -131,6 +131,16 @@
     const rows = [];
     $pane.find('tbody tr.fieldGroupDetail').each(function () {
       const $tr = $(this);
+      let tempFile = null;
+      try {
+        const rawTemp = $tr.attr('data-rt-temp-file') || '';
+        if (rawTemp) {
+          const parsed = JSON.parse(rawTemp);
+          if (parsed && typeof parsed === 'object' && parsed.data_url) {
+            tempFile = parsed;
+          }
+        }
+      } catch (e) { /* ignore */ }
       rows.push({
         id_detail: ($tr.find('input[name="id_detail[]"]').val() || '').trim(),
         cost_type_id: ($tr.find('select[name="cost_type_id[]"]').val() || '').trim(),
@@ -139,7 +149,8 @@
         amount: ($tr.find('input[name="amount[]"]').val() || '').trim(),
         idr_rate: ($tr.find('input[name="idr_rate[]"]').val() || '').trim(),
         tax: ($tr.find('input[name="tax[]"]').val() || '').trim(),
-        payment_type: ($tr.find('select[name="payment_type[]"]').val() || '').trim()
+        payment_type: ($tr.find('select[name="payment_type[]"]').val() || '').trim(),
+        temp_file: tempFile
       });
     });
     return rows;
@@ -155,6 +166,71 @@
     $tr.find('input[name="idr_rate[]"]').val(r.idr_rate || '');
     $tr.find('input[name="tax[]"]').val(r.tax || '');
     $tr.find('select[name="payment_type[]"]').val(r.payment_type || '');
+    if (r.temp_file && r.temp_file.data_url) {
+      try {
+        $tr.attr('data-rt-temp-file', JSON.stringify(r.temp_file));
+      } catch (e) { /* ignore */ }
+    } else {
+      $tr.removeAttr('data-rt-temp-file');
+    }
+  }
+
+  function dataUrlToFile(dataUrl, fileName, mimeType) {
+    try {
+      if (!dataUrl || dataUrl.indexOf('data:') !== 0) return null;
+      const arr = dataUrl.split(',');
+      if (arr.length < 2) return null;
+      const mime = mimeType || ((arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream');
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const fname = fileName || ('draft_' + Date.now() + '.bin');
+      return new File([u8arr], fname, { type: mime });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function restoreTempFileForRow($tr, rowState) {
+    if (!$tr || !$tr.length || !rowState || !rowState.temp_file || !rowState.temp_file.data_url) return;
+
+    const tf = rowState.temp_file;
+    const file = dataUrlToFile(tf.data_url, tf.file_name || 'draft_upload', tf.file_type || 'application/octet-stream');
+    if (!file) return;
+
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+
+    const targetInput = (tf.source === 'camera')
+      ? $tr.find('input.camera-input[type="file"]').first()
+      : $tr.find('input.file-input[type="file"]').first();
+
+    if (targetInput.length) {
+      targetInput[0].files = dataTransfer.files;
+    }
+
+    const $preview = $tr.find('[id^="preview_"]').first();
+    if ($preview.length) {
+      $preview.empty();
+      if ((tf.file_type || '').indexOf('image/') === 0) {
+        const $img = $('<img>')
+          .attr('src', tf.data_url)
+          .attr('data-preview-src', tf.data_url)
+          .addClass('preview-thumbnail')
+          .css({
+            maxWidth: '75px',
+            maxHeight: '75px',
+            border: '2px solid #28a745',
+            borderRadius: '5px',
+            marginTop: '5px',
+            cursor: 'pointer'
+          });
+        $preview.append($img);
+      }
+    }
   }
 
   function reconcileDetailRows($pane, needCount) {
@@ -241,7 +317,9 @@
           if (state.header) applyHeader($pane, state.header);
           const $rows = $pane.find('tbody tr.fieldGroupDetail');
           state.rows.forEach(function (r, idx) {
-            applyRow($rows.eq(idx), r);
+            const $row = $rows.eq(idx);
+            applyRow($row, r);
+            restoreTempFileForRow($row, r);
           });
           syncActiveTravelTabDateFromInput($pane);
           return;
@@ -266,6 +344,20 @@
       localStorage.removeItem(storageKeyV2(mainId, draftTid));
       sessionStorage.removeItem(storageKeyV1(mainId, draftTid));
     } catch (e) { /* ignore */ }
+  }
+
+  function clearStorageForNewItem(mainId) {
+    if (!mainId) return;
+    try {
+      localStorage.removeItem(storageKeyV2(mainId, NEW_ITEM_DRAFT_KEY));
+      sessionStorage.removeItem(storageKeyV1(mainId, NEW_ITEM_DRAFT_KEY));
+    } catch (e) { /* ignore */ }
+    try {
+      const items = readTravelItemsState(mainId).filter(function (it) {
+        return it && !isDraftNewTravelItemId(it.id);
+      });
+      writeTravelItemsState(mainId, items);
+    } catch (e2) { /* ignore */ }
   }
 
   function updateFormTravelAction($form, newTravelId) {
@@ -693,7 +785,9 @@
       if (!href) return;
 
       let delHtml = '';
-      if (!isNewTab && showDelete && delTemplate) {
+      if (showDelete && isNewTab) {
+        delHtml = '<a class="tab-close-link js-rt-remove-new-item" href="#" title="Hapus New Item">x</a>';
+      } else if (!isNewTab && showDelete && delTemplate) {
         const dh = replaceTravelDeleteTabHref(delTemplate, item.id);
         delHtml =
           '<a class="tab-close-link" href="' +
@@ -847,6 +941,48 @@
       schedulePersist();
     });
 
+    $(document).on('change', '#rt-travel-item-pane input.file-input[type="file"], #rt-travel-item-pane input.camera-input[type="file"]', function () {
+      const $input = $(this);
+      const $row = $input.closest('tr.fieldGroupDetail');
+      if (!$row.length) return;
+
+      const file = (this.files && this.files.length) ? this.files[0] : null;
+      if (!file) {
+        $row.removeAttr('data-rt-temp-file');
+        schedulePersist();
+        return;
+      }
+
+      if (!/^image\//i.test(file.type || '')) {
+        const minimal = {
+          source: $input.hasClass('camera-input') ? 'camera' : 'file',
+          file_name: file.name || 'upload',
+          file_type: file.type || 'application/octet-stream',
+          data_url: ''
+        };
+        try {
+          $row.attr('data-rt-temp-file', JSON.stringify(minimal));
+        } catch (e0) { /* ignore */ }
+        schedulePersist();
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        const payload = {
+          source: $input.hasClass('camera-input') ? 'camera' : 'file',
+          file_name: file.name || 'upload',
+          file_type: file.type || 'image/jpeg',
+          data_url: ev && ev.target ? (ev.target.result || '') : ''
+        };
+        try {
+          $row.attr('data-rt-temp-file', JSON.stringify(payload));
+        } catch (e1) { /* quota / attr too long */ }
+        schedulePersist();
+      };
+      reader.readAsDataURL(file);
+    });
+
     $(document).on('input change', '#rt-travel-item-pane input[name="date"]', function () {
       syncActiveTravelTabDateFromInput($('#rt-travel-item-pane'));
     });
@@ -876,6 +1012,25 @@
       if (newTravelId === currentId) return;
 
       loadTravelItemTabPartial($pane, url, newTravelId, true);
+    });
+
+    $(document).on('click', '#rt-travel-item-pane .js-rt-remove-new-item', function (e) {
+      e.preventDefault();
+      const $pane = $('#rt-travel-item-pane');
+      if (!$pane.length) return;
+
+      const mainId = readMainIdAttr($pane);
+      clearStorageForNewItem(mainId);
+
+      const back = String($pane.attr('data-rt-new-item-url') || '').trim();
+      const isOnNewPane = $pane.attr('data-rt-new-item') === '1' || !isValidTravelTabId(readTravelIdAttr($pane));
+
+      if (isOnNewPane && back) {
+        window.location.href = back.split('#')[0];
+        return;
+      }
+
+      renderTravelTabsFromState($pane, mainId, readTravelIdAttr($pane));
     });
 
     window.addEventListener('popstate', function () {
