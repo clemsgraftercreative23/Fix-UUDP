@@ -159,6 +159,7 @@
                               <th>Total Inquiry</th>
                               <th>Payment Type</th>
                               <th>Status Inquiry</th>
+                              <th>Action</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -2600,8 +2601,12 @@ $("body").on("click",".remove-item",function(){
                         name: 'payment_type'
                       },
                       {
-                        data: 'action',
-                        name: 'action'
+                                                data: 'status_label',
+                                                name: 'status_label'
+                                            },
+                                            {
+                                                data: 'action',
+                                                name: 'action'
                       },
 
                 ],

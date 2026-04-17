@@ -102,7 +102,15 @@
     <div class="row">
         <div class="col-lg-12">
             <div class="card">
-                <a href="{!!url('reimbursement-entertaiment')!!}" class="btn btn-primary" style="float:left;"><i class="fa    fa-arrow-circle-left"></i> Back </a>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <a href="{!!url('reimbursement-entertaiment')!!}" class="btn btn-primary" style="float:left;"><i class="fa fa-arrow-circle-left"></i> Back </a>
+                    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target=".bd-example-modal-lg">
+                        <i class="fa fa-plus-circle" aria-hidden="true"></i> Create Inquiry
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
             </div>
         </div>
     </div>

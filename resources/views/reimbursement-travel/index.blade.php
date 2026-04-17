@@ -145,6 +145,7 @@
                               <th>Inquiry By</th>
                               <th>Total Inquiry</th>
                               <th>Status Inquiry</th>
+                              <th>Action</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -650,6 +651,10 @@ $(document).ready(function(){
                       {
                         data: 'nominal_pengajuan',
                         name: 'nominal_pengajuan'
+                      },
+                      {
+                        data: 'status_label',
+                        name: 'status_label'
                       },
                       {
                         data: 'action',

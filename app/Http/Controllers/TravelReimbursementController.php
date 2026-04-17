@@ -215,7 +215,7 @@ class TravelReimbursementController extends Controller
             $data = $data->orderBy('reimbursement.id', 'DESC');
             
             return datatables()->of($data)  
-            ->addColumn('action', function ($data) {
+            ->addColumn('status_label', function ($data) {
                 if($data->status == 0 ){
                 $button = '<button" class="edit view btn btn-secondary  btn-sm">PENDING</button>';
                 }elseif ($data->status == 1) {
@@ -245,10 +245,32 @@ class TravelReimbursementController extends Controller
                 } else {
                   $button = '';
                 }
-              
-                $button .= '&nbsp;&nbsp;';
 
                 return $button;
+
+            })
+            ->addColumn('action', function ($data) {
+                $buttons = '<div style="display:flex; gap:4px; align-items:center;">';
+
+                // Show button (always visible)
+                $buttons .= '<a href="' . route('reimbursement-travel.show', $data->id) . '" class="btn btn-info btn-sm" title="Detail" aria-label="Detail"><i class="fa fa-eye"></i></a>';
+
+                // Edit button (always visible)
+                $buttons .= '<a href="' . route('reimbursement-travel.edit', $data->id) . '" class="btn btn-primary btn-sm" title="Edit" aria-label="Edit"><i class="fa fa-edit"></i></a>';
+
+                // Delete button (only for status 0 or 10)
+                if (in_array((int) $data->status, [0, 10], true)) {
+                    $buttons .= '<form method="POST" action="' . route('reimbursement-travel.destroy', $data->id) . '" style="display:inline-block; margin:0;" onsubmit="return confirm(\'Yakin ingin menghapus pengajuan ini?\')">'
+                        . csrf_field()
+                        . method_field('DELETE')
+                        . '<button type="submit" class="btn btn-danger btn-sm" title="Delete" aria-label="Delete"><i class="fa fa-trash"></i></button></form>';
+                } else {
+                    $buttons .= '<span>-</span>';
+                }
+
+                $buttons .= '</div>';
+              
+                return $buttons;
 
             })
             ->addColumn('checkbox', function ($data) {
@@ -266,9 +288,9 @@ class TravelReimbursementController extends Controller
                 return $button;
             })
             ->editColumn('no_reimbursement', function ($data) {
-                return "<a href='".route('reimbursement-travel.show',$data->id)."'>".$data->no_reimbursement."</a>";
+                return $data->no_reimbursement;
             })
-            ->rawColumns(['action', 'checkbox' ,'nominal_pengajuan','no_reimbursement'])
+            ->rawColumns(['status_label', 'action', 'checkbox', 'nominal_pengajuan'])
             ->make(true);
         }
         
@@ -1169,6 +1191,22 @@ class TravelReimbursementController extends Controller
         } catch (\Throwable $e) {
             DB::rollback();
             return redirect()->back()->withErrors(['Error ' . $e->getMessage()]);
+        }
+    }
+
+    public function edit($id)
+    {
+        // Determine if travel is Domestic or International and redirect to appropriate edit method
+        $reimbursement = Reimbursement::find($id);
+        
+        if (!$reimbursement) {
+            return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
+        }
+        
+        if ($reimbursement->travel_type === 'Domestic') {
+            return $this->editInquiry($id);
+        } else {
+            return $this->editOverseas($id);
         }
     }
 
@@ -2551,6 +2589,41 @@ class TravelReimbursementController extends Controller
     {
         $data  = DB::select( DB::raw("SELECT rate FROM travel_trip_rates WHERE reimbursement_id='$id' AND currency='USD'"))['0']->rate;
         return response()->json(['data' => $data]);
+    }
+
+    public function destroy($id)
+    {
+        $data = Reimbursement::where('id', $id)
+            ->where('reimbursement_type', 2)
+            ->first();
+
+        if (!$data) {
+            return redirect()->back()->withErrors(['Data reimbursement travel tidak ditemukan']);
+        }
+
+        $isOwner = (int) $data->id_user === (int) auth()->id();
+        $isSuperadmin = auth()->user()->jabatan === 'superadmin';
+        if (!$isOwner && !$isSuperadmin) {
+            return redirect()->back()->withErrors(['Anda tidak memiliki akses untuk menghapus data ini']);
+        }
+
+        if (!in_array((int) $data->status, [0, 10], true)) {
+            return redirect()->back()->withErrors(['Hanya pengajuan dengan status pending atau draft yang dapat dihapus']);
+        }
+
+        DB::beginTransaction();
+        try {
+            ReimbursementTravelDetail::where('reimbursement_id', $id)->delete();
+            ReimbursementTravel::where('reimbursement_id', $id)->delete();
+            TravelTripRate::where('reimbursement_id', $id)->delete();
+            $data->delete();
+            DB::commit();
+
+            return redirect('reimbursement-travel')->with(['success' => 'Pengajuan berhasil dihapus']);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['Gagal menghapus pengajuan: ' . $e->getMessage()]);
+        }
     }
 
     public function approveMultiple($id)
