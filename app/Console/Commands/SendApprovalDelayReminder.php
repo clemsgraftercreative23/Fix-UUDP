@@ -31,7 +31,7 @@ class SendApprovalDelayReminder extends Command
      */
     public function handle()
     {
-        $threshold = Carbon::now()->subMinutes(5);
+        $threshold = Carbon::now()->subHours(12);
         $dryRun = (bool) $this->option('dry-run');
         $baseUrlOption = $this->option('base-url');
         $baseUrl = is_string($baseUrlOption) && trim($baseUrlOption) !== ''
