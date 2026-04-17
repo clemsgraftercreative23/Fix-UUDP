@@ -299,7 +299,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
     @endif
 
-    @if(auth()->user()->jabatan == 'Finance' && $data['0']->status==1)
+    @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor') && $data['0']->status==1)
         <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
     @endif
 

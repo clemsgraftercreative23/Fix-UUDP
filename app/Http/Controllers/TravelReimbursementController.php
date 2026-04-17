@@ -312,7 +312,7 @@ class TravelReimbursementController extends Controller
         {
             $id_user = auth()->user()->id;           
             
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',2)->where('reimbursement.status', '!=',10);
@@ -1981,7 +1981,7 @@ class TravelReimbursementController extends Controller
     {
         if (auth()->user()->jabatan=='Direktur Operasional') {
             $status = 1;
-        } else if (auth()->user()->jabatan=='Finance') {
+        } else if (auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor') {
             $status = 2;
         } else {
             $status = 3;
@@ -2197,7 +2197,7 @@ class TravelReimbursementController extends Controller
             }
         }
 
-        if (auth()->user()->jabatan=='Finance') {
+        if (auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor') {
             $curl = \Curl::to('https://api.fonnte.com/send')
             ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
             ->withData([
@@ -2652,7 +2652,7 @@ class TravelReimbursementController extends Controller
         $bulkStatus = (int) $rows->first()->status;
 
         $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
-            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'superadmin'))
+            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
             || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
@@ -2661,7 +2661,7 @@ class TravelReimbursementController extends Controller
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
             $status = 1;
             Reimbursement::whereIn('id', $idsArray)->where('status', 0)->update(['status' => $status, 'mengetahui_op' => $user->name]);
-        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
         } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
@@ -2722,7 +2722,7 @@ class TravelReimbursementController extends Controller
                     }
                 } 
 
-                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'superadmin')) {
+                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([

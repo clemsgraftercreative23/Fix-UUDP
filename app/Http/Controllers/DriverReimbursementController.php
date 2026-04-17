@@ -183,7 +183,7 @@ class DriverReimbursementController extends Controller
         if (request()->ajax()) {
             $id_user = auth()->user()->id;
 
-            if (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin' || auth()->user()->jabatan == 'Direktur Operasional') {
+            if (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin' || auth()->user()->jabatan == 'Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project', 'reimbursement.id_project', 'master_project.id')
                     ->select('reimbursement.*', 'master_project.nama', 'master_project.no_project', 'master_project.keterangan')
                     ->where('reimbursement.reimbursement_type', 1)->where('reimbursement.status', '!=',10);
@@ -834,7 +834,8 @@ class DriverReimbursementController extends Controller
 
         $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
             || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'superadmin'))
-            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin'));
+            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
+            || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
         }
@@ -845,9 +846,12 @@ class DriverReimbursementController extends Controller
         } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'superadmin')) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
-        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
+        } else if ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin')) {
+            $status = 3;
+            Reimbursement::whereIn('id', $idsArray)->where('status', 3)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }
         
         
@@ -948,7 +952,7 @@ class DriverReimbursementController extends Controller
                     }
                 } 
 
-                if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
+                if (($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'))) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([

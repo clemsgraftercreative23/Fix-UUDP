@@ -19,7 +19,7 @@ class UseraplikasiController extends Controller
     
     public function index(Request $request)
     {
-        $user = DB::select( DB::raw("SELECT *, users.id FROM users LEFT JOIN departemen ON users.departmentId = departemen.id WHERE jabatan='superadmin' OR jabatan='Owner' OR jabatan='Finance' OR jabatan='Direktur Operasional'  OR jabatan='Direktur Utama'" ));  
+        $user = DB::select( DB::raw("SELECT *, users.id FROM users LEFT JOIN departemen ON users.departmentId = departemen.id WHERE jabatan='superadmin' OR jabatan='Owner' OR jabatan='Finance' OR jabatan='Finance Supervisor' OR jabatan='Direktur Operasional'  OR jabatan='Direktur Utama'" ));  
         return view('user/index',['user'=>$user]);
     }
 
