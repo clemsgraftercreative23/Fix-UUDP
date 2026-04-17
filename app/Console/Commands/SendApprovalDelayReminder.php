@@ -15,7 +15,7 @@ class SendApprovalDelayReminder extends Command
      *
      * @var string
      */
-    protected $signature = 'reimbursement:send-approval-delay-reminder {--dry-run : Show which reminders would be sent without sending WhatsApp messages}';
+    protected $signature = 'reimbursement:send-approval-delay-reminder {--dry-run : Show which reminders would be sent without sending WhatsApp messages} {--base-url= : Override app base URL for detail links, e.g. https://uudp.sf-indonesia.com}';
 
     /**
      * The console command description.
@@ -33,6 +33,10 @@ class SendApprovalDelayReminder extends Command
     {
         $threshold = Carbon::now()->subMinutes(5);
         $dryRun = (bool) $this->option('dry-run');
+        $baseUrlOption = $this->option('base-url');
+        $baseUrl = is_string($baseUrlOption) && trim($baseUrlOption) !== ''
+            ? rtrim(trim($baseUrlOption), '/')
+            : null;
 
         $reimbursements = Reimbursement::query()
             ->whereIn('reimbursement_type', [1, 2, 3])
@@ -63,7 +67,7 @@ class SendApprovalDelayReminder extends Command
             }
 
             $stageLabel = $this->stageLabel($reimbursement->status);
-            $detailUrl = $this->detailUrl($reimbursement);
+            $detailUrl = $this->detailUrl($reimbursement, $baseUrl);
             $sentAt = Carbon::now()->toDateTimeString();
             $statusUpdatedAt = Carbon::parse($reimbursement->updated_at)->toDateTimeString();
             $hasSent = false;
@@ -157,25 +161,31 @@ class SendApprovalDelayReminder extends Command
         return 'Owner';
     }
 
-    private function detailUrl($reimbursement): string
+    private function detailUrl($reimbursement, ?string $baseUrl = null): string
     {
+        $path = '/reimbursement-travel/' . $reimbursement->id;
+
         if ((int) $reimbursement->reimbursement_type === 1) {
-            return url('/reimbursement-driver/' . $reimbursement->id);
+            $path = '/reimbursement-driver/' . $reimbursement->id;
         }
 
         if ((int) $reimbursement->reimbursement_type === 3) {
-            return url('/reimbursement-entertaiment/' . $reimbursement->id);
+            $path = '/reimbursement-entertaiment/' . $reimbursement->id;
         }
 
-        return url('/reimbursement-travel/' . $reimbursement->id);
+        if ($baseUrl !== null) {
+            return $baseUrl . $path;
+        }
+
+        return url($path);
     }
 
     private function buildMessage($reimbursement, User $recipient, string $stageLabel, string $detailUrl): string
     {
         return 'Hai *' . $recipient->name . "*,\n\n" .
-            'Reminder: reimbursement nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . "* masih menunggu approval Anda selama lebih dari 5 menit.\n\n" .
+            'reimbursement Nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . "* sudah menunggu 1x24 jam approval anda.\n\n" .
             'Saat ini sedang menunggu proses verifikasi oleh *' . $stageLabel . "*.\n\n" .
-            'Terima kasih.\n\nKlik untuk melihat detail pengajuan : ' . $detailUrl;
+            "Terima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl;
     }
 
     private function sendWhatsapp(string $target, string $message): void
