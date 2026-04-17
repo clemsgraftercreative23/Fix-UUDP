@@ -17,7 +17,7 @@
         border-radius: 5px;
     }
     .dotted{
-    border: dotted 2px #dee2e6; 
+    border: dotted 2px #dee2e6;  
     }
 </style>
 
