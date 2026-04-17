@@ -25,7 +25,7 @@ class JurnalController extends Controller
     {
 		$token = Api::where('id', 1)->get()->pluck('token');
 		$session = Api::where('id', 1)->get()->pluck('session');
-		$url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
+		$url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do'; // save to the other payment
         $data = array (
 		  'detailJournalVoucher' => 
 		  array (

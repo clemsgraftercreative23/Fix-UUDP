@@ -383,7 +383,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))                                
+                        @if (in_array((int) $data->status, [2, 3], true) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>

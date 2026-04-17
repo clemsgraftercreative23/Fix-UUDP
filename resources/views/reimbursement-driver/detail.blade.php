@@ -108,7 +108,7 @@
                         <h5 class="card-title">DETAIL REIMBURSEMENT DRIVER</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Owner', 'superadmin'], true);
                         @endphp
                         @if($isApproverRole && in_array((int) $data->status, [0, 1, 2], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -330,7 +330,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))                                
+                        @if ((($data->status == 2) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'superadmin')) || (($data->status == 3) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin')))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>

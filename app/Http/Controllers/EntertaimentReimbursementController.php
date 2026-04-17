@@ -164,7 +164,7 @@ class EntertaimentReimbursementController extends Controller
         if(request()->ajax())
         {
 
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',3)->where('reimbursement.status', '!=',10);
