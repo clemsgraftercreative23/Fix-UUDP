@@ -1038,6 +1038,7 @@ $(document).ready(function(){
                             const dataTransfer = new DataTransfer();
                             dataTransfer.items.add(file);
                             fileInput[0].files = dataTransfer.files;
+                            fileInput.trigger('change');
 
                             const imageURL = URL.createObjectURL(file);
                             let previewDiv = row.find("#preview_" + (idx + 1)); 
