@@ -7,6 +7,38 @@
     return number_format($angka, 0, ',', '.');
 } ?>
 
+@php
+if (!function_exists('travel_attachment_rows')) {
+    function travel_attachment_rows($detailId, $legacy = '') {
+        $rows = [];
+        $detailId = (int) $detailId;
+        if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
+            $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                ->where('detail_id', $detailId)
+                ->orderBy('id')
+                ->get(['id', 'file_name', 'original_name'])
+                ->toArray();
+        }
+
+        $legacy = trim((string) $legacy);
+        if ($legacy !== '') {
+            $exists = false;
+            foreach ($rows as $r) {
+                if (($r['file_name'] ?? '') === $legacy) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $rows[] = ['id' => 0, 'file_name' => $legacy, 'original_name' => $legacy];
+            }
+        }
+
+        return $rows;
+    }
+}
+@endphp
+
 <style>
     .form-control{
         border-radius:5px;
@@ -221,7 +253,21 @@
                     <td>{{number_format($dt->idr_rate,0,',','.')}}</td>
                     
                     <td>{{$dt->payment_type}}</td>
-                    <td><a href="{{ URL::to('/') }}/images/file_bukti/{{$dt->evidence}}" target="_blank"><i class="fa fa-file"></i></a></td>
+                    <td>
+                        @foreach(travel_attachment_rows($dt->id ?? 0, $dt->evidence ?? '') as $att)
+                            @php
+                                $fileName = $att['file_name'] ?? '';
+                                $display = $att['original_name'] ?? $fileName;
+                            @endphp
+                            @if($fileName !== '')
+                                <div>
+                                    <a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}" target="_blank" title="{{ $display }}">
+                                        <i class="fa fa-file"></i> {{ $display }}
+                                    </a>
+                                </div>
+                            @endif
+                        @endforeach
+                    </td>
                 </tr>
                 @endforeach
 

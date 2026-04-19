@@ -5,6 +5,40 @@ if (!function_exists('rt_travel_pane_rupiah')) {
         return number_format((float) $angka, 0, ',', '.');
     }
 }
+if (!function_exists('rt_travel_detail_attachments')) {
+    function rt_travel_detail_attachments($detailId, $legacyEvidence = '')
+    {
+        $rows = [];
+        $detailId = (int) $detailId;
+        if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
+            $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                ->where('detail_id', $detailId)
+                ->orderBy('id')
+                ->get(['id', 'file_name', 'original_name'])
+                ->toArray();
+        }
+
+        $legacyEvidence = trim((string) $legacyEvidence);
+        if ($legacyEvidence !== '') {
+            $exists = false;
+            foreach ($rows as $r) {
+                if (($r['file_name'] ?? '') === $legacyEvidence) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $rows[] = [
+                    'id' => 0,
+                    'file_name' => $legacyEvidence,
+                    'original_name' => $legacyEvidence,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+}
 $taxFirstExtra = !empty($is_overseas) ? ' tax-input' : '';
 // Some travel rows have no reimbursement_travel_details yet (e.g. new tab); avoid $travel_detail[0] errors.
 $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
@@ -167,23 +201,40 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                     </td>
                     <td>
                         @php
-                            $file = $rtRow0->evidence ?? '';
-                            $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                            $attachments = rt_travel_detail_attachments($rtRow0->id ?? 0, $rtRow0->evidence ?? '');
                             $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
                         @endphp
 
                         <div id="preview_1">
-                            @if($file !== '' && in_array($ext, $imageExt))
-                                <img src="{{ url('images/file_bukti/'.$file) }}"
-                                     class="preview-thumbnail"
-                                     data-preview-src="{{ url('images/file_bukti/'.$file) }}"
-                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px; cursor:pointer;">
-                            @elseif($file !== '')
-                                <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
-                                    <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"
-                                         style="max-width:75px; max-height:75px; border:2px solid #dc3545; border-radius:5px; margin-top:5px;">
-                                </a>
-                            @endif
+                            @foreach($attachments as $att)
+                                @php
+                                    $file = $att['file_name'] ?? '';
+                                    $name = $att['original_name'] ?? $file;
+                                    $attId = (int) ($att['id'] ?? 0);
+                                    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                                @endphp
+                                @if($attId > 0)
+                                    <input type="hidden" name="keep_attachment_ids[0][]" value="{{ $attId }}" class="keep-attachment-input">
+                                @endif
+                                <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        @if($file !== '' && in_array($ext, $imageExt))
+                                            <img src="{{ url('images/file_bukti/'.$file) }}"
+                                                 class="preview-thumbnail"
+                                                 data-preview-src="{{ url('images/file_bukti/'.$file) }}"
+                                                 style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">
+                                        @else
+                                            <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
+                                                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;">
+                                            </a>
+                                        @endif
+                                        <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $name }}</a>
+                                        @if($attId > 0)
+                                        <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
                     </td>
                     <td>
@@ -244,23 +295,40 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                     </td>
                     <td>
                         @php
-                            $file = $row->evidence ?? '';
-                            $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                            $attachments = rt_travel_detail_attachments($row->id ?? 0, $row->evidence ?? '');
                             $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
                         @endphp
 
                         <div id="preview_{{$n}}">
-                            @if($file !== '' && in_array($ext, $imageExt))
-                                <img src="{{ url('images/file_bukti/'.$file) }}"
-                                     class="preview-thumbnail"
-                                     data-preview-src="{{ url('images/file_bukti/'.$file) }}"
-                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px; cursor:pointer;">
-                            @elseif($file !== '')
-                                <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
-                                    <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"
-                                         style="max-width:75px; max-height:75px; border:2px solid #dc3545; border-radius:5px; margin-top:5px;">
-                                </a>
-                            @endif
+                            @foreach($attachments as $att)
+                                @php
+                                    $file = $att['file_name'] ?? '';
+                                    $name = $att['original_name'] ?? $file;
+                                    $attId = (int) ($att['id'] ?? 0);
+                                    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                                @endphp
+                                @if($attId > 0)
+                                    <input type="hidden" name="keep_attachment_ids[{{$key}}][]" value="{{ $attId }}" class="keep-attachment-input">
+                                @endif
+                                <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        @if($file !== '' && in_array($ext, $imageExt))
+                                            <img src="{{ url('images/file_bukti/'.$file) }}"
+                                                 class="preview-thumbnail"
+                                                 data-preview-src="{{ url('images/file_bukti/'.$file) }}"
+                                                 style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">
+                                        @else
+                                            <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
+                                                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;">
+                                            </a>
+                                        @endif
+                                        <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $name }}</a>
+                                        @if($attId > 0)
+                                        <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
                     </td>
                     <td>

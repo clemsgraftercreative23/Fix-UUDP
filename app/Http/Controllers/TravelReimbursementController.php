@@ -9,6 +9,7 @@ use App\User;
 use App\TravelTripType;
 use App\TravelTripRate;
 use App\TravelHotelCondition;
+use App\ReimbursementAttachment;
 use App\ReimbursementDetail;
 use App\ReimbursementTravel;
 use App\ReimbursementTravelDetail;
@@ -16,11 +17,18 @@ use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use DB;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Redirect;
 
 class TravelReimbursementController extends Controller
 {
+
+    private function attachmentTableReady(): bool
+    {
+        return Schema::hasTable('reimbursement_attachments');
+    }
 
     public function __construct() {
         $this->middleware('auth');
@@ -68,6 +76,70 @@ class TravelReimbursementController extends Controller
         return $value;
     }
 
+    /** Normalisasi input exchange rate ke format desimal standar: 17000.50 (maks 2 desimal). */
+    private function normalizeExchangeRateValue($value): string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return '0';
+        }
+
+        $raw = str_replace(',', '.', $raw);
+        $raw = preg_replace('/[^0-9.]/', '', $raw);
+
+        if ($raw === '' || $raw === '.') {
+            return '0';
+        }
+
+        $parts = explode('.', $raw);
+        $intPart = ltrim((string) array_shift($parts), '0');
+        $intPart = $intPart === '' ? '0' : $intPart;
+
+        $decimalPart = '';
+        if (!empty($parts)) {
+            $decimalPart = implode('', $parts);
+            $decimalPart = substr($decimalPart, 0, 2);
+        }
+
+        return $decimalPart !== '' ? ($intPart . '.' . $decimalPart) : $intPart;
+    }
+
+    /** Sinkronkan kurs dari form utama (currency_rate[] + rate[]) ke travel_trip_rates. */
+    private function syncTripRatesFromMainForm(Request $request, int $reimbursementId): void
+    {
+        $currencies = $request->input('currency_rate', []);
+        $rates = $request->input('rate', []);
+
+        if (!is_array($currencies) || !is_array($rates)) {
+            return;
+        }
+
+        $payloads = [];
+        $count = max(count($currencies), count($rates));
+
+        for ($i = 0; $i < $count; $i++) {
+            $currency = strtoupper(trim((string) ($currencies[$i] ?? '')));
+            $rate = $this->normalizeExchangeRateValue($rates[$i] ?? '');
+
+            if ($currency === '') {
+                continue;
+            }
+
+            $payloads[] = [
+                'reimbursement_id' => $reimbursementId,
+                'currency' => $currency,
+                'rate' => $rate,
+            ];
+        }
+
+        if (empty($payloads)) {
+            return;
+        }
+
+        TravelTripRate::where('reimbursement_id', $reimbursementId)->delete();
+        TravelTripRate::insert($payloads);
+    }
+
     /** Simpan file bukti ke public/images/file_bukti dan kembalikan nama file. */
     private function storeTravelEvidenceFile($file): string
     {
@@ -89,6 +161,196 @@ class TravelReimbursementController extends Controller
         $file->move($targetDir, $filename);
 
         return $filename;
+    }
+
+    private function buildAttachmentPayload(int $reimbursementId, string $module, string $detailType, int $detailId, string $storedFile, ?UploadedFile $uploadedFile = null): array
+    {
+        $originalName = $storedFile;
+        $mimeType = null;
+        $fileSize = 0;
+
+        if ($uploadedFile) {
+            try {
+                $candidateName = (string) $uploadedFile->getClientOriginalName();
+                if ($candidateName !== '') {
+                    $originalName = $candidateName;
+                }
+            } catch (\Throwable $e) {
+                // ignore, fallback to stored filename
+            }
+
+            try {
+                $mimeType = $uploadedFile->getClientMimeType();
+            } catch (\Throwable $e) {
+                $mimeType = null;
+            }
+
+            try {
+                $sizeCandidate = $uploadedFile->getSize();
+                $fileSize = is_numeric($sizeCandidate) ? (int) $sizeCandidate : 0;
+            } catch (\Throwable $e) {
+                $fileSize = 0;
+            }
+
+            if ($fileSize <= 0) {
+                try {
+                    $realPath = $uploadedFile->getRealPath();
+                    if ($realPath && is_file($realPath)) {
+                        $fileSize = (int) (filesize($realPath) ?: 0);
+                    }
+                } catch (\Throwable $e) {
+                    $fileSize = 0;
+                }
+            }
+        }
+
+        return [
+            'reimbursement_id' => $reimbursementId,
+            'module' => $module,
+            'detail_type' => $detailType,
+            'detail_id' => $detailId,
+            'file_name' => $storedFile,
+            'original_name' => $originalName,
+            'mime_type' => $mimeType,
+            'file_size' => $fileSize,
+            'created_by' => auth()->id(),
+        ];
+    }
+
+    private function appendUploadedAttachments(int $reimbursementId, string $module, string $detailType, int $detailId, array $uploadedFiles): array
+    {
+        $names = [];
+        if (!$this->attachmentTableReady()) {
+            return $names;
+        }
+        foreach ($uploadedFiles as $file) {
+            if (!$file instanceof UploadedFile) {
+                continue;
+            }
+            $stored = $this->storeTravelEvidenceFile($file);
+            if ($stored === '') {
+                continue;
+            }
+            ReimbursementAttachment::create(
+                $this->buildAttachmentPayload($reimbursementId, $module, $detailType, $detailId, $stored, $file)
+            );
+            $names[] = $stored;
+        }
+
+        return $names;
+    }
+
+    private function getUploadedFilesByRow(Request $request, int $rowIndex): array
+    {
+        $files = [];
+
+        $legacyFile = data_get($request->file('file'), $rowIndex);
+        if ($legacyFile instanceof UploadedFile) {
+            $files[] = $legacyFile;
+        }
+
+        $legacyProof = data_get($request->file('proof'), $rowIndex);
+        if ($legacyProof instanceof UploadedFile) {
+            $files[] = $legacyProof;
+        }
+
+        $batch = data_get($request->file('attachments'), $rowIndex);
+        if ($batch instanceof UploadedFile) {
+            $files[] = $batch;
+        } elseif (is_array($batch)) {
+            foreach ($batch as $f) {
+                if ($f instanceof UploadedFile) {
+                    $files[] = $f;
+                }
+            }
+        }
+
+        return $files;
+    }
+
+    private function ensureLegacyAttachmentMigrated(int $reimbursementId, string $module, string $detailType, int $detailId, string $legacyFile): void
+    {
+        if (!$this->attachmentTableReady()) {
+            return;
+        }
+        $legacyFile = trim($legacyFile);
+        if ($legacyFile === '' || $detailId <= 0) {
+            return;
+        }
+
+        $exists = ReimbursementAttachment::where('detail_type', $detailType)
+            ->where('detail_id', $detailId)
+            ->where('file_name', $legacyFile)
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        ReimbursementAttachment::create(
+            $this->buildAttachmentPayload($reimbursementId, $module, $detailType, $detailId, $legacyFile)
+        );
+    }
+
+    private function syncAttachmentsFromPreviousDetail(Request $request, int $rowIndex, int $reimbursementId, string $module, string $detailType, int $oldDetailId, int $newDetailId, string $legacyEvidence = ''): array
+    {
+        if (!$this->attachmentTableReady()) {
+            $uploaded = $this->getUploadedFilesByRow($request, $rowIndex);
+            if (!empty($uploaded)) {
+                $first = $this->storeTravelEvidenceFile($uploaded[0]);
+                return $first === '' ? [] : [$first];
+            }
+            $legacyEvidence = trim((string) $legacyEvidence);
+            return $legacyEvidence === '' ? [] : [$legacyEvidence];
+        }
+
+        $keptFileNames = [];
+
+        if ($oldDetailId > 0) {
+            $this->ensureLegacyAttachmentMigrated($reimbursementId, $module, $detailType, $oldDetailId, $legacyEvidence);
+
+            $oldAttachments = ReimbursementAttachment::where('detail_type', $detailType)
+                ->where('detail_id', $oldDetailId)
+                ->orderBy('id')
+                ->get();
+
+            $hasKeepField = $request->has('keep_attachment_ids.' . $rowIndex);
+            $keepIds = $hasKeepField
+                ? collect((array) data_get($request->input('keep_attachment_ids', []), $rowIndex, []))
+                    ->map(function ($v) { return (int) $v; })
+                    ->filter(function ($v) { return $v > 0; })
+                    ->values()
+                : null;
+
+            foreach ($oldAttachments as $attachment) {
+                if ($keepIds !== null && !$keepIds->contains((int) $attachment->id)) {
+                    continue;
+                }
+
+                ReimbursementAttachment::create([
+                    'reimbursement_id' => $reimbursementId,
+                    'module' => $module,
+                    'detail_type' => $detailType,
+                    'detail_id' => $newDetailId,
+                    'file_name' => $attachment->file_name,
+                    'original_name' => $attachment->original_name,
+                    'mime_type' => $attachment->mime_type,
+                    'file_size' => (int) $attachment->file_size,
+                    'created_by' => auth()->id(),
+                ]);
+                $keptFileNames[] = (string) $attachment->file_name;
+            }
+        }
+
+        $newFiles = $this->appendUploadedAttachments(
+            $reimbursementId,
+            $module,
+            $detailType,
+            $newDetailId,
+            $this->getUploadedFilesByRow($request, $rowIndex)
+        );
+
+        return array_values(array_filter(array_merge($keptFileNames, $newFiles)));
     }
 
     /** Draft / tambah tab baru: boleh data belum lengkap. */
@@ -525,7 +787,7 @@ class TravelReimbursementController extends Controller
                 TravelTripRate::create([
                     'reimbursement_id' => $data->id,
                     'currency' => $value['code'],
-                    'rate' => str_replace(".", "", $value['rate']),
+                    'rate' => $this->normalizeExchangeRateValue($value['rate'] ?? ''),
                 ]);
             }
             foreach ($request->reimburse as $key => $value) {
@@ -557,21 +819,33 @@ class TravelReimbursementController extends Controller
                         'idr_rate' => str_replace(".","",$v['idr_rate']),
                         'tax' => str_replace(".","",$v['tax']),
                     ];
-                    
-                    if(isset($v['proof'])) {
-                        $image = $request->file('reimburse.'.$key.'.detail.'.$k.'.proof');
-                        $new_name = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $new_name);
-                        $payloadDetail['evidence'] = $new_name;
+                    $uploadFiles = [];
+                    $proofFile = $request->file('reimburse.'.$key.'.detail.'.$k.'.proof');
+                    if ($proofFile instanceof UploadedFile) {
+                        $uploadFiles[] = $proofFile;
                     }
-        
-                    if(isset($v['file'])) {
-                        $image = $request->file('reimburse.'.$key.'.detail.'.$k.'.file');
-                        $new_name = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $new_name);
-                        $payloadDetail['evidence'] = $new_name;
+                    $mainFile = $request->file('reimburse.'.$key.'.detail.'.$k.'.file');
+                    if ($mainFile instanceof UploadedFile) {
+                        $uploadFiles[] = $mainFile;
+                    }
+
+                    if (!empty($uploadFiles)) {
+                        $firstStored = $this->storeTravelEvidenceFile($uploadFiles[0]);
+                        if ($firstStored !== '') {
+                            $payloadDetail['evidence'] = $firstStored;
+                        }
                     }
                     $da = ReimbursementTravelDetail::create($payloadDetail);
+
+                    if (!empty($uploadFiles)) {
+                        $this->appendUploadedAttachments(
+                            (int) $data->id,
+                            'travel',
+                            'reimbursement_travel_details',
+                            (int) $da->id,
+                            $uploadFiles
+                        );
+                    }
                     }
                 }
             }
@@ -744,6 +1018,8 @@ class TravelReimbursementController extends Controller
             
             Reimbursement::whereId($id_main)->update($form_data);
 
+            $this->syncTripRatesFromMainForm($request, (int) $id_main);
+
             // Insert table reimbursement_travel
 
             $form_travel = array(
@@ -769,7 +1045,7 @@ class TravelReimbursementController extends Controller
 
             for ($i=0; $i < $count_; $i++) {
                 $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
-                $hasUploadedEvidence = !empty($request->proof[$i]) || !empty($request->file[$i]);
+                $hasUploadedEvidence = count($this->getUploadedFilesByRow($request, $i)) > 0;
                 if ($costTypeId === '') {
                     if ($allowIncomplete && $hasUploadedEvidence && $draftFallbackCostTypeId > 0) {
                         $costTypeId = (string) $draftFallbackCostTypeId;
@@ -778,22 +1054,16 @@ class TravelReimbursementController extends Controller
                     }
                 }
 
-                $evidence = '';
-                if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                    $id_detail_ = $request->id_detail[$i] ?? '';
-                    if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
-                        $rowEv = DB::select(
-                            'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
-                            [(int) $id_detail_]
-                        );
-                        $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
-                    }
-                } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                    $image = $request->file[$i];
-                    $evidence = $this->storeTravelEvidenceFile($image);
-                } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                    $image = $request->proof[$i];
-                    $evidence = $this->storeTravelEvidenceFile($image);
+                $oldDetailId = 0;
+                $legacyEvidence = '';
+                $id_detail_ = $request->id_detail[$i] ?? '';
+                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                    $oldDetailId = (int) $id_detail_;
+                    $rowEv = DB::select(
+                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                        [$oldDetailId]
+                    );
+                    $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
                 }
 
                 $new = new ReimbursementTravelDetail;
@@ -806,8 +1076,21 @@ class TravelReimbursementController extends Controller
                 $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
                 $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
                 $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
-                $new->evidence = $evidence;
+                $new->evidence = '';
                 $new->status = 1;
+                $new->save();
+
+                $allAttachmentNames = $this->syncAttachmentsFromPreviousDetail(
+                    $request,
+                    $i,
+                    (int) $id_main,
+                    'travel',
+                    'reimbursement_travel_details',
+                    $oldDetailId,
+                    (int) $new->id,
+                    $legacyEvidence
+                );
+                $new->evidence = $allAttachmentNames[0] ?? '';
                 $new->save();
             }
 
@@ -1336,7 +1619,7 @@ class TravelReimbursementController extends Controller
           $new = new TravelTripRate;
           $new->reimbursement_id = $id;
           $new->currency = $request->currency_rate[$i];
-          $new->rate = str_replace(".", "", $request->rate[$i]);
+                    $new->rate = $this->normalizeExchangeRateValue($request->rate[$i] ?? '');
           $new->save();
         }
         
@@ -1373,24 +1656,16 @@ class TravelReimbursementController extends Controller
                 continue;
             }
 
-            $evidence = '';
-            if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i] ?? '';
-                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
-                    $rowEv = DB::select(
-                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
-                        [(int) $id_detail_]
-                    );
-                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
-                }
-            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                $image = $request->file[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
-            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                $image = $request->proof[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
+            $oldDetailId = 0;
+            $legacyEvidence = '';
+            $id_detail_ = $request->id_detail[$i] ?? '';
+            if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                $oldDetailId = (int) $id_detail_;
+                $rowEv = DB::select(
+                    'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                    [$oldDetailId]
+                );
+                $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
             $new = new ReimbursementTravelDetail;
@@ -1403,8 +1678,21 @@ class TravelReimbursementController extends Controller
             $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
             $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
             $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
-            $new->evidence = $evidence;
+            $new->evidence = '';
             $new->status = 1;
+            $new->save();
+
+            $allAttachmentNames = $this->syncAttachmentsFromPreviousDetail(
+                $request,
+                $i,
+                (int) $id,
+                'travel',
+                'reimbursement_travel_details',
+                $oldDetailId,
+                (int) $new->id,
+                $legacyEvidence
+            );
+            $new->evidence = $allAttachmentNames[0] ?? '';
             $new->save();
         }
 
@@ -1584,6 +1872,8 @@ class TravelReimbursementController extends Controller
 
         Reimbursement::whereId($id_main)->update($form_data);
 
+        $this->syncTripRatesFromMainForm($request, (int) $id_main);
+
         //Update table  reimbursement_travel
 
         if ($request->travel_type=='Domestic') {
@@ -1617,7 +1907,7 @@ class TravelReimbursementController extends Controller
 
         for ($i=0; $i < $count_; $i++) {
             $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
-            $hasUploadedEvidence = !empty($request->proof[$i]) || !empty($request->file[$i]);
+            $hasUploadedEvidence = count($this->getUploadedFilesByRow($request, $i)) > 0;
             if ($costTypeId === '') {
                 if ($allowIncomplete && $hasUploadedEvidence && $draftFallbackCostTypeId > 0) {
                     $costTypeId = (string) $draftFallbackCostTypeId;
@@ -1626,22 +1916,16 @@ class TravelReimbursementController extends Controller
                 }
             }
 
-            $evidence = '';
-            if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i] ?? '';
-                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
-                    $rowEv = DB::select(
-                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
-                        [(int) $id_detail_]
-                    );
-                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
-                }
-            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                $image = $request->file[$i];
-                $evidence = $this->storeTravelEvidenceFile($image);
-            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                $image = $request->proof[$i];
-                $evidence = $this->storeTravelEvidenceFile($image);
+            $oldDetailId = 0;
+            $legacyEvidence = '';
+            $id_detail_ = $request->id_detail[$i] ?? '';
+            if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                $oldDetailId = (int) $id_detail_;
+                $rowEv = DB::select(
+                    'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                    [$oldDetailId]
+                );
+                $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
             $new = new ReimbursementTravelDetail;
@@ -1654,8 +1938,21 @@ class TravelReimbursementController extends Controller
             $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
             $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
             $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
-            $new->evidence = $evidence;
+            $new->evidence = '';
             $new->status = 1;
+            $new->save();
+
+            $allAttachmentNames = $this->syncAttachmentsFromPreviousDetail(
+                $request,
+                $i,
+                (int) $id_main,
+                'travel',
+                'reimbursement_travel_details',
+                $oldDetailId,
+                (int) $new->id,
+                $legacyEvidence
+            );
+            $new->evidence = $allAttachmentNames[0] ?? '';
             $new->save();
         }
 
@@ -1815,6 +2112,8 @@ class TravelReimbursementController extends Controller
 
         Reimbursement::whereId($id_main)->update($form_data);
 
+        $this->syncTripRatesFromMainForm($request, (int) $id_main);
+
         //Update table  reimbursement_travel
 
         if ($request->travel_type=='Domestic') {
@@ -1850,24 +2149,16 @@ class TravelReimbursementController extends Controller
                 continue;
             }
 
-            $evidence = '';
-            if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i] ?? '';
-                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
-                    $rowEv = DB::select(
-                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
-                        [(int) $id_detail_]
-                    );
-                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
-                }
-            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                $image = $request->file[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
-            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                $image = $request->proof[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
+            $oldDetailId = 0;
+            $legacyEvidence = '';
+            $id_detail_ = $request->id_detail[$i] ?? '';
+            if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                $oldDetailId = (int) $id_detail_;
+                $rowEv = DB::select(
+                    'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                    [$oldDetailId]
+                );
+                $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
             $new = new ReimbursementTravelDetail;
@@ -1880,8 +2171,21 @@ class TravelReimbursementController extends Controller
             $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
             $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
             $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
-            $new->evidence = $evidence;
+            $new->evidence = '';
             $new->status = 1;
+            $new->save();
+
+            $allAttachmentNames = $this->syncAttachmentsFromPreviousDetail(
+                $request,
+                $i,
+                (int) $id_main,
+                'travel',
+                'reimbursement_travel_details',
+                $oldDetailId,
+                (int) $new->id,
+                $legacyEvidence
+            );
+            $new->evidence = $allAttachmentNames[0] ?? '';
             $new->save();
         }
 
@@ -2037,6 +2341,8 @@ class TravelReimbursementController extends Controller
 
         Reimbursement::whereId($id_main)->update($form_data);
 
+        $this->syncTripRatesFromMainForm($request, (int) $id_main);
+
         //Update table  reimbursement_travel
 
         if ($request->travel_type=='Domestic') {
@@ -2072,24 +2378,16 @@ class TravelReimbursementController extends Controller
                 continue;
             }
 
-            $evidence = '';
-            if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                $id_detail_ = $request->id_detail[$i] ?? '';
-                if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
-                    $rowEv = DB::select(
-                        'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
-                        [(int) $id_detail_]
-                    );
-                    $evidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
-                }
-            } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                $image = $request->file[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
-            } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                $image = $request->proof[$i];
-                $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/file_bukti'), $evidence);
+            $oldDetailId = 0;
+            $legacyEvidence = '';
+            $id_detail_ = $request->id_detail[$i] ?? '';
+            if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
+                $oldDetailId = (int) $id_detail_;
+                $rowEv = DB::select(
+                    'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                    [$oldDetailId]
+                );
+                $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
             $new = new ReimbursementTravelDetail;
@@ -2102,8 +2400,21 @@ class TravelReimbursementController extends Controller
             $new->idr_rate = str_replace(".", "", $request->idr_rate[$i] ?? '');
             $new->amount = str_replace(".", "", $request->amount[$i] ?? '');
             $new->tax = str_replace(".", "", $request->tax[$i] ?? '0');
-            $new->evidence = $evidence;
+            $new->evidence = '';
             $new->status = 1;
+            $new->save();
+
+            $allAttachmentNames = $this->syncAttachmentsFromPreviousDetail(
+                $request,
+                $i,
+                (int) $id_main,
+                'travel',
+                'reimbursement_travel_details',
+                $oldDetailId,
+                (int) $new->id,
+                $legacyEvidence
+            );
+            $new->evidence = $allAttachmentNames[0] ?? '';
             $new->save();
         }
 
@@ -2908,21 +3219,33 @@ class TravelReimbursementController extends Controller
                         'idr_rate' => str_replace(".","",$v['idr_rate']),
                         'tax' => str_replace(".","",$v['tax']),
                     ];
-                    
-                    if(isset($v['proof'])) {
-                        $image = $request->file('reimburse.'.$key.'.detail.'.$k.'.proof');
-                        $new_name = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $new_name);
-                        $payloadDetail['evidence'] = $new_name;
+                    $uploadFiles = [];
+                    $proofFile = $request->file('reimburse.'.$key.'.detail.'.$k.'.proof');
+                    if ($proofFile instanceof UploadedFile) {
+                        $uploadFiles[] = $proofFile;
                     }
-        
-                    if(isset($v['file'])) {
-                        $image = $request->file('reimburse.'.$key.'.detail.'.$k.'.file');
-                        $new_name = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $new_name);
-                        $payloadDetail['evidence'] = $new_name;
+                    $mainFile = $request->file('reimburse.'.$key.'.detail.'.$k.'.file');
+                    if ($mainFile instanceof UploadedFile) {
+                        $uploadFiles[] = $mainFile;
+                    }
+
+                    if (!empty($uploadFiles)) {
+                        $firstStored = $this->storeTravelEvidenceFile($uploadFiles[0]);
+                        if ($firstStored !== '') {
+                            $payloadDetail['evidence'] = $firstStored;
+                        }
                     }
                     $da = ReimbursementTravelDetail::create($payloadDetail);
+
+                    if (!empty($uploadFiles)) {
+                        $this->appendUploadedAttachments(
+                            (int) $id_reimb,
+                            'travel',
+                            'reimbursement_travel_details',
+                            (int) $da->id,
+                            $uploadFiles
+                        );
+                    }
                     }
                 }
             }
@@ -3067,8 +3390,7 @@ class TravelReimbursementController extends Controller
     {
         $id_rate = (int) $request->id_rate;
         $currency = strtoupper(trim((string) $request->currency));
-        $rateRaw = str_replace('.', '', (string) $request->rate);
-        $rate = $rateRaw === '' ? '0' : $rateRaw;
+        $rate = $this->normalizeExchangeRateValue($request->rate);
         $reim_id = $request->reim_id;
 
         if ($currency === '') {
@@ -3123,9 +3445,20 @@ class TravelReimbursementController extends Controller
 
     public function deleteCurrencyOptions(Request $request)
     {
+        $id_rate = (int) $request->id_rate;
         $currency = $request->currency;
-        $rate = $request->rate;
+        $rate = $this->normalizeExchangeRateValue($request->rate);
         $reim_id = $request->reim_id;
+
+        if ($id_rate > 0) {
+            $deletedById = TravelTripRate::where('id', $id_rate)
+                ->where('reimbursement_id', $reim_id)
+                ->delete();
+
+            if ($deletedById) {
+                return response()->json(['status' => 'success', 'message' => 'Data berhasil dihapus.']);
+            }
+        }
 
         // Cek dan hapus jika data ditemukan
         $deleted = TravelTripRate::where('reimbursement_id', $reim_id)

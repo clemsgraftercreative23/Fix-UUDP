@@ -138,6 +138,13 @@ function rupiah($angka){
 	return $hasil_rupiah;
  
 }
+
+function rate_input($angka){
+    if ($angka === null || $angka === '') return '';
+    if (!is_numeric($angka)) return (string) $angka;
+    $v = number_format((float) $angka, 2, '.', '');
+    return rtrim(rtrim($v, '0'), '.');
+}
 ?>
 
 <div class="page-content" id="app">
@@ -224,7 +231,7 @@ function rupiah($angka){
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($travel_trip['0']->rate)}}">
+                                        <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($travel_trip['0']->rate) }}">
                                     </div>
                                     <div class="col-md-3">
                                         <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
@@ -240,7 +247,7 @@ function rupiah($angka){
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($row->rate)}}">
+                                            <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($row->rate) }}">
                                         </div>
                                         <div class="col-md-3">
                                             <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
@@ -569,8 +576,7 @@ $(document).ready(function(){
 	            currencyInputs.forEach((input, index) => {
 	                if (input.value.trim().toUpperCase() === 'USD') {
 	                    let rawRate = rateInputs[index]?.value || '1';
-	                    rawRate = rawRate.replace(/\./g, '').replace(',', '.'); // Bersihkan titik
-	                    usdRate = parseFloat(rawRate) || 1;
+                        usdRate = parseExchangeRateNumber(rawRate) || 1;
 	                }
 	            });
               
@@ -702,6 +708,57 @@ $(document).ready(function(){
     var maxGroup = 10;
     var i = 1;
     var j = 1;
+
+    function sanitizeExchangeRateInput(value, finalize) {
+        var v = (value || '').toString().replace(/,/g, '.');
+        v = v.replace(/[^0-9.]/g, '');
+
+        var firstDot = v.indexOf('.');
+        if (firstDot !== -1) {
+            v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+        }
+
+        var parts = v.split('.');
+        var intPart = parts[0] || '';
+        var decPart = parts[1] || '';
+        if (decPart.length > 2) {
+            decPart = decPart.slice(0, 2);
+        }
+
+        if (finalize) {
+            if (intPart.length > 1) {
+                intPart = intPart.replace(/^0+/, '') || '0';
+            }
+            if (v.endsWith('.')) {
+                return intPart;
+            }
+        }
+
+        return parts.length > 1 ? (intPart + '.' + decPart) : intPart;
+    }
+
+    function normalizeExchangeRateValue(value) {
+        var s = sanitizeExchangeRateInput(value, true);
+        if (s === '') return '0';
+        var parts = s.split('.');
+        var intPart = (parts[0] || '0').replace(/^0+(?=\d)/, '');
+        if (!parts[1]) return intPart;
+        return intPart + '.' + parts[1];
+    }
+
+    function parseExchangeRateNumber(value) {
+        var s = normalizeExchangeRateValue(value);
+        var n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+    }
+
+    $(document).on('input', '.fieldGroup input[name="rate[]"]', function () {
+        this.value = sanitizeExchangeRateInput(this.value, false);
+    });
+
+    $(document).on('blur', '.fieldGroup input[name="rate[]"]', function () {
+        this.value = normalizeExchangeRateValue(this.value);
+    });
     
     $(".addMore").click(function(){
         $("#action_button").prop("disabled", false);
@@ -710,7 +767,7 @@ $(document).ready(function(){
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
          
-          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
+          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
           $(function() {
             $('.currency').maskMoney({
@@ -736,7 +793,7 @@ $(document).ready(function(){
 
         let id_rate = $group.find(".id_rate").val();
         let reim_id = "{{Request::segment('3')}}";
-        let rate = $group.find('input[name="rate[]"]').val().replace(/\./g, '');
+        let rate = normalizeExchangeRateValue($group.find('input[name="rate[]"]').val());
         let currency = $group.find('input[name="currency_rate[]"]').val();
 
         
@@ -745,6 +802,7 @@ $(document).ready(function(){
             type: 'POST',
             data: {
                 reim_id: reim_id,
+                id_rate: id_rate,
                 rate: rate,
                 currency: currency,
                 _token: $('meta[name="csrf-token"]').attr('content')
@@ -895,6 +953,17 @@ $(document).ready(function(){
                 $('#previewImageModal').modal('show');
             });
 
+            $('body').on('click', '.remove-existing-attachment', function () {
+                var $btn = $(this);
+                var $item = $btn.closest('.existing-attachment-item');
+                var $preview = $btn.closest('[id^="preview_"]');
+                var attachmentId = String($btn.data('attachment-id') || '');
+                if (attachmentId !== '') {
+                    $preview.find('input.keep-attachment-input[value="' + attachmentId + '"]').remove();
+                }
+                $item.remove();
+            });
+
       // Fungsi untuk menangani upload file
       $("body").on("click", ".addFile", function () {
         let btn = $(this);
@@ -912,7 +981,6 @@ $(document).ready(function(){
             $(".warning-upload").hide();
 
             let previewDiv = getPreviewDivFromRow(row);
-            previewDiv.empty();
 
             let fileType = file.type;
 
@@ -1000,7 +1068,7 @@ $(document).ready(function(){
 
                             const imageURL = URL.createObjectURL(file);
                             let previewDiv = getPreviewDivFromRow(row);
-                            previewDiv.empty().append(createPreviewImage(imageURL));
+                            previewDiv.append(createPreviewImage(imageURL));
                             btn.find("i").removeClass("fa-camera").addClass("fa-check");
 
                             stream.getTracks().forEach(track => track.stop());
@@ -1352,7 +1420,7 @@ $(document).ready(function(){
         }
         var id_rate = parseInt($group.find('.id_rate').val(), 10) || 0;
         var rateVal = $group.find('input[name="rate[]"]').val();
-        var rate = rateVal ? String(rateVal).replace(/\./g, '') : '';
+        var rate = normalizeExchangeRateValue(rateVal);
         var currency = ($group.find('input[name="currency_rate[]"]').val() || '').trim();
         var reim_id = "{{ Request::segment(3) }}";
         if (!currency) {
