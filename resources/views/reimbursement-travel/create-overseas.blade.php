@@ -136,7 +136,7 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" :value="dt.rate" @input="onExchangeRateInput(i, $event)" @focus="onExchangeRateFocus(i, $event)" @blur="onExchangeRateBlur(i, $event)" autocomplete="off" inputmode="numeric" />
+                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" :value="dt.rate" @input="onExchangeRateInput(i, $event)" @focus="onExchangeRateFocus(i, $event)" @blur="onExchangeRateBlur(i, $event)" autocomplete="off" inputmode="decimal" />
                                         </div>
                                     </div>
                                 </div>
@@ -478,7 +478,7 @@ $(document).ready(function(){
                 },
         numericRate(val) {
             if (val === null || val === undefined || val === '') return 0;
-            const s = String(val).replace(/\./g, '').replace(/,/g, '');
+            const s = String(val).replace(/\s/g, '').replace(/[^\d]/g, '');
             const n = parseInt(s, 10);
             return isNaN(n) ? 0 : n;
         },
@@ -505,15 +505,27 @@ $(document).ready(function(){
         },
         onExchangeRateInput(idx, event) {
             const raw = event && event.target ? event.target.value : '';
-            const cleaned = String(raw).replace(/[^0-9]/g, '');
-            const display = cleaned ? parseInt(cleaned, 10).toLocaleString('de-DE') : '';
+            let v = String(raw).replace(/\s/g, '');
+            v = v.replace(/,/g, '.');
+            v = v.replace(/[^0-9.]/g, '');
+            const firstDot = v.indexOf('.');
+            if (firstDot !== -1) {
+                v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+            }
+            const parts = v.split('.');
+            let intPart = parts[0] || '';
+            let decPart = parts[1] || '';
+            if (decPart.length > 2) {
+                decPart = decPart.slice(0, 2);
+            }
+            const display = parts.length > 1 ? (intPart + '.' + decPart) : intPart;
             if (this.rates[idx]) {
                 this.$set(this.rates[idx], 'rate', display);
             }
             if (event && event.target) {
                 event.target.value = display;
             }
-            this.logExchangeRate('input', idx, { raw: raw, cleaned: cleaned, display: display });
+            this.logExchangeRate('input', idx, { raw: raw, display: display });
         },
         onExchangeRateBlur(idx, event) {
             const current = this.rates[idx] ? this.rates[idx].rate : '';

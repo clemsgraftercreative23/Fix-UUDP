@@ -752,11 +752,11 @@ $(document).ready(function(){
         return isNaN(n) ? 0 : n;
     }
 
-    $(document).on('input', '.fieldGroup input[name="rate[]"]', function () {
+    $(document).on('input', 'input.exchange-rate-input[name="rate[]"]', function () {
         this.value = sanitizeExchangeRateInput(this.value, false);
     });
 
-    $(document).on('blur', '.fieldGroup input[name="rate[]"]', function () {
+    $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
         this.value = normalizeExchangeRateValue(this.value);
     });
     
@@ -1468,7 +1468,7 @@ $(document).ready(function(){
         }
     }
 
-    $(document).on('blur', '.fieldGroup input[name="rate[]"]', function () {
+    $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
         var $g = $(this).closest('.fieldGroup');
         clearTripRateDebounce($g);
         persistTripRateRow($g);
@@ -1478,7 +1478,7 @@ $(document).ready(function(){
         clearTripRateDebounce($g);
         persistTripRateRow($g);
     });
-    $(document).on('input', '.fieldGroup input[name="currency_rate[]"], .fieldGroup input[name="rate[]"]', function () {
+    $(document).on('input', '.fieldGroup input[name="currency_rate[]"], input.exchange-rate-input[name="rate[]"]', function () {
         debouncePersistTripRate($(this).closest('.fieldGroup'), 500);
     });
 
