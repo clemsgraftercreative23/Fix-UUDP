@@ -138,6 +138,13 @@ function rupiah($angka){
 	return $hasil_rupiah;
  
 }
+
+function rate_input($angka){
+    if ($angka === null || $angka === '') return '';
+    if (!is_numeric($angka)) return (string) $angka;
+    $v = number_format((float) $angka, 2, '.', '');
+    return rtrim(rtrim($v, '0'), '.');
+}
 ?>
 
 <div class="page-content" id="app">
@@ -224,7 +231,7 @@ function rupiah($angka){
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($travel_trip['0']->rate)}}">
+                                        <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($travel_trip['0']->rate) }}">
                                     </div>
                                     <div class="col-md-3">
                                         <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
@@ -240,7 +247,7 @@ function rupiah($angka){
                                         </div>
                                         <div class="col-md-6">
                                             <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($row->rate)}}">
+                                            <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($row->rate) }}">
                                         </div>
                                         <div class="col-md-3">
                                             <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
@@ -283,6 +290,23 @@ function rupiah($angka){
 </div>
 
 <!-- End Modal -->
+
+<!-- Modal Preview Image -->
+<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+      <div class="modal-content" style="background: transparent; border: 0; box-shadow: none;">
+          <div class="modal-header" style="border: 0;">
+              <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 1; font-size: 2rem;">
+                  <span aria-hidden="true">&times;</span>
+              </button>
+          </div>
+          <div class="modal-body text-center pt-0">
+              <img id="previewImageModalSrc" src="" alt="Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+          </div>
+      </div>
+  </div>
+</div>
+<!-- End Modal Preview Image -->
 
 <!-- Modal -->
 <div class="modal fade" id="modalPhoto"  data-backdrop="static" tabindex="-1" role="dialog" aria-hidden="true">
@@ -552,8 +576,7 @@ $(document).ready(function(){
 	            currencyInputs.forEach((input, index) => {
 	                if (input.value.trim().toUpperCase() === 'USD') {
 	                    let rawRate = rateInputs[index]?.value || '1';
-	                    rawRate = rawRate.replace(/\./g, '').replace(',', '.'); // Bersihkan titik
-	                    usdRate = parseFloat(rawRate) || 1;
+                        usdRate = parseExchangeRateNumber(rawRate) || 1;
 	                }
 	            });
               
@@ -685,6 +708,57 @@ $(document).ready(function(){
     var maxGroup = 10;
     var i = 1;
     var j = 1;
+
+    function sanitizeExchangeRateInput(value, finalize) {
+        var v = (value || '').toString().replace(/,/g, '.');
+        v = v.replace(/[^0-9.]/g, '');
+
+        var firstDot = v.indexOf('.');
+        if (firstDot !== -1) {
+            v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+        }
+
+        var parts = v.split('.');
+        var intPart = parts[0] || '';
+        var decPart = parts[1] || '';
+        if (decPart.length > 2) {
+            decPart = decPart.slice(0, 2);
+        }
+
+        if (finalize) {
+            if (intPart.length > 1) {
+                intPart = intPart.replace(/^0+/, '') || '0';
+            }
+            if (v.endsWith('.')) {
+                return intPart;
+            }
+        }
+
+        return parts.length > 1 ? (intPart + '.' + decPart) : intPart;
+    }
+
+    function normalizeExchangeRateValue(value) {
+        var s = sanitizeExchangeRateInput(value, true);
+        if (s === '') return '0';
+        var parts = s.split('.');
+        var intPart = (parts[0] || '0').replace(/^0+(?=\d)/, '');
+        if (!parts[1]) return intPart;
+        return intPart + '.' + parts[1];
+    }
+
+    function parseExchangeRateNumber(value) {
+        var s = normalizeExchangeRateValue(value);
+        var n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+    }
+
+    $(document).on('input', '.fieldGroup input[name="rate[]"]', function () {
+        this.value = sanitizeExchangeRateInput(this.value, false);
+    });
+
+    $(document).on('blur', '.fieldGroup input[name="rate[]"]', function () {
+        this.value = normalizeExchangeRateValue(this.value);
+    });
     
     $(".addMore").click(function(){
         $("#action_button").prop("disabled", false);
@@ -693,7 +767,7 @@ $(document).ready(function(){
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
          
-          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
+          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
           $(function() {
             $('.currency').maskMoney({
@@ -719,7 +793,7 @@ $(document).ready(function(){
 
         let id_rate = $group.find(".id_rate").val();
         let reim_id = "{{Request::segment('3')}}";
-        let rate = $group.find('input[name="rate[]"]').val().replace(/\./g, '');
+        let rate = normalizeExchangeRateValue($group.find('input[name="rate[]"]').val());
         let currency = $group.find('input[name="currency_rate[]"]').val();
 
         
@@ -728,6 +802,7 @@ $(document).ready(function(){
             type: 'POST',
             data: {
                 reim_id: reim_id,
+                id_rate: id_rate,
                 rate: rate,
                 currency: currency,
                 _token: $('meta[name="csrf-token"]').attr('content')
@@ -771,7 +846,13 @@ $(document).ready(function(){
         }
         count++;
         ct++;
-        var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+        var rowTemplate = $.trim($('#rt-detail-row-template').html() || '');
+        if (!rowTemplate) {
+            return false;
+        }
+        var fieldHTML = rowTemplate
+            .replace(/__IDX__/g, String(count))
+            .replace(/__PREVIEW__/g, String(ct));
         $root.find('.fieldGroupDetail:last').after(fieldHTML);
         $(function() {
             $('.currency').maskMoney({
@@ -790,22 +871,103 @@ $(document).ready(function(){
         window.rtTravelAppendDetailRow({});
     });
     
-    $("body").on("click",".remove-detail",function(){ 
-       $("#action_button").prop("disabled", false);
-       $("#action_button_draft").prop("disabled", false);
-       $(".warning-upload").hide();
-       $(this).parents(".fieldGroupDetail").remove();
-       total_nominal();
-    });
+     $("body").on("click",".remove-detail",function(){ 
+         $("#action_button").prop("disabled", false);
+         $("#action_button_draft").prop("disabled", false);
+         $(".warning-upload").hide();
+
+         var $row = $(this).closest(".fieldGroupDetail");
+         var $tbody = $row.closest("tbody");
+         var rowCount = $tbody.find('.fieldGroupDetail').length;
+
+         if (rowCount <= 1) {
+             $row.find('input[name="id_detail[]"]').val('');
+             $row.find('select[name="cost_type_id[]"]').val('');
+             $row.find('input[name="destination[]"]').val('');
+             $row.find('select[name="currency[]"]').val('');
+             $row.find('input[name="amount[]"]').val('');
+             $row.find('input[name="idr_rate[]"]').val('');
+             $row.find('input[name="tax[]"]').val('0');
+             $row.find('select[name="payment_type[]"]').val('');
+             $row.find('input.file-input[type="file"], input.camera-input[type="file"]').val('');
+             $row.find('[id^="preview_"]').empty();
+         } else {
+             $row.remove();
+         }
+
+         total_nominal();
+     });
     
     // Objek untuk menyimpan status upload di setiap row
       let uploadStatus = {};
+
+            function getPreviewDivFromRow(row) {
+                return row.find('[id^="preview_"]').first();
+            }
+
+            function createPreviewImage(src) {
+                return $('<img>')
+                    .attr('src', src)
+                    .attr('data-preview-src', src)
+                    .addClass('preview-thumbnail')
+                    .css({
+                        maxWidth: '75px',
+                        maxHeight: '75px',
+                        border: '2px solid #28a745',
+                        borderRadius: '5px',
+                        marginTop: '5px',
+                        cursor: 'pointer'
+                    });
+            }
+
+            function bindExistingPreviewThumbnails() {
+                $('[id^="preview_"] img').each(function () {
+                    const src = $(this).attr('src');
+                    if (!src || src.indexOf('flaticon.com') !== -1) return;
+                    $(this)
+                        .addClass('preview-thumbnail')
+                        .attr('data-preview-src', src)
+                        .css('cursor', 'pointer');
+                });
+            }
+
+            bindExistingPreviewThumbnails();
+
+            $('body').on('click', '.preview-thumbnail', function () {
+                var src = $(this).attr('data-preview-src') || $(this).attr('src');
+                if (!src) return;
+                var safeSrc = src;
+                var isDataOrBlob = /^data:|^blob:/i.test(src);
+                if (!isDataOrBlob) {
+                    var sep = src.indexOf('?') === -1 ? '?' : '&';
+                    safeSrc = src + sep + 'v=' + Date.now();
+                }
+                var $modalImg = $('#previewImageModalSrc');
+                $modalImg.off('error.rtPreview').on('error.rtPreview', function () {
+                    $('#previewImageModal').modal('hide');
+                    if (!isDataOrBlob && src) {
+                        window.open(src, '_blank');
+                    }
+                });
+                $modalImg.attr('src', safeSrc);
+                $('#previewImageModal').modal('show');
+            });
+
+            $('body').on('click', '.remove-existing-attachment', function () {
+                var $btn = $(this);
+                var $item = $btn.closest('.existing-attachment-item');
+                var $preview = $btn.closest('[id^="preview_"]');
+                var attachmentId = String($btn.data('attachment-id') || '');
+                if (attachmentId !== '') {
+                    $preview.find('input.keep-attachment-input[value="' + attachmentId + '"]').remove();
+                }
+                $item.remove();
+            });
 
       // Fungsi untuk menangani upload file
       $("body").on("click", ".addFile", function () {
         let btn = $(this);
         let row = btn.closest("tr");
-        let idx = row.index();
         let fileInput = row.find(".file-input");
 
         fileInput.click();
@@ -818,8 +980,7 @@ $(document).ready(function(){
             $("#action_button_draft").prop("disabled", false);
             $(".warning-upload").hide();
 
-            let previewDiv = row.find("#preview_" + (idx + 1));
-            previewDiv.empty();
+            let previewDiv = getPreviewDivFromRow(row);
 
             let fileType = file.type;
 
@@ -827,15 +988,7 @@ $(document).ready(function(){
               // Preview gambar
               var reader = new FileReader();
               reader.onload = function (e) {
-                previewDiv.append(
-                  $('<img>').attr('src', e.target.result).css({
-                    maxWidth: '75px',
-                    maxHeight: '75px',
-                    border: '2px solid #28a745',
-                    borderRadius: '5px',
-                    marginTop: '5px'
-                  })
-                );
+                                previewDiv.append(createPreviewImage(e.target.result));
               };
               reader.readAsDataURL(file);
 
@@ -876,7 +1029,6 @@ $(document).ready(function(){
     $("body").on("click", ".addCamera", function () {
         let btn = $(this);
         let row = btn.closest("tr");
-        let idx = row.index();
         let fileInput = row.find(".camera-input");
 
         if (navigator.mediaDevices.getUserMedia) {
@@ -915,16 +1067,9 @@ $(document).ready(function(){
                             fileInput[0].files = dataTransfer.files;
 
                             const imageURL = URL.createObjectURL(file);
-                            let previewDiv = row.find("#preview_" + (idx + 1)); 
-                            previewDiv.empty().append(
-                                $('<img>').attr('src', imageURL).css({
-                                    maxWidth: '75px',
-                                    maxHeight: '75px',
-                                    border: '2px solid #28a745',
-                                    borderRadius: '5px',
-                                    marginTop: '5px'
-                                })
-                            );
+                            let previewDiv = getPreviewDivFromRow(row);
+                            previewDiv.append(createPreviewImage(imageURL));
+                            btn.find("i").removeClass("fa-camera").addClass("fa-check");
 
                             stream.getTracks().forEach(track => track.stop());
                             $("#modalPhoto").modal("hide");
@@ -1275,7 +1420,7 @@ $(document).ready(function(){
         }
         var id_rate = parseInt($group.find('.id_rate').val(), 10) || 0;
         var rateVal = $group.find('input[name="rate[]"]').val();
-        var rate = rateVal ? String(rateVal).replace(/\./g, '') : '';
+        var rate = normalizeExchangeRateValue(rateVal);
         var currency = ($group.find('input[name="currency_rate[]"]').val() || '').trim();
         var reim_id = "{{ Request::segment(3) }}";
         if (!currency) {
