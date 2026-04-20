@@ -5,7 +5,7 @@
 <div class="page-content" id="app">
 
 @php
-  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
+  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Finance Supervisor', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
 @endphp
 @if($showApprovalTab)
 <div class="clearfix">
@@ -145,6 +145,7 @@
                               <th>Inquiry By</th>
                               <th>Total Inquiry</th>
                               <th>Status Inquiry</th>
+                              <th>Action</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -650,6 +651,10 @@ $(document).ready(function(){
                       {
                         data: 'nominal_pengajuan',
                         name: 'nominal_pengajuan'
+                      },
+                      {
+                        data: 'status_label',
+                        name: 'status_label'
                       },
                       {
                         data: 'action',

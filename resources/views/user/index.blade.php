@@ -50,6 +50,8 @@
                                         Head Department
                                     @elseif($row->jabatan=='Finance')
                                         HR GA
+                                    @elseif($row->jabatan=='Finance Supervisor')
+                                        Finance Supervisor
                                     @elseif($row->jabatan=='Owner')
                                         Finance
                                     @else

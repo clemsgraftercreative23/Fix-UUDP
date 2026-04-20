@@ -56,6 +56,7 @@
                               <option value="superadmin" {{ $us['0']->jabatan == 'superadmin' ? 'selected' : '' }}>Admin</option>
                               <option value="Direktur Operasional" {{ $us['0']->jabatan == 'Direktur Operasional' ? 'selected' : '' }}>Head Department</option>
                               <option value="Finance" {{ $us['0']->jabatan == 'Finance' ? 'selected' : '' }}>HR GA</option>
+                              <option value="Finance Supervisor" {{ $us['0']->jabatan == 'Finance Supervisor' ? 'selected' : '' }}>Finance Supervisor</option>
                               <option value="Owner" {{ $us['0']->jabatan == 'Owner' ? 'selected' : '' }}>Finance</option>
                           </select>
                       </div>

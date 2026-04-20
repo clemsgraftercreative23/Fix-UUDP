@@ -213,7 +213,7 @@ class PencairanController extends Controller
         $data = DB::table('pengajuan')
         ->select( DB::raw('SUM(nominal_pengajuan - sisa_pengajuan) as total'))
         ->whereNotNull('sisa_pengajuan')
-        ->where('status',3);
+        ->where('status',4);
         if(!empty($request->first) && !empty($request->last))
                      {
                          $first = $request->first;
@@ -257,7 +257,7 @@ class PencairanController extends Controller
         $data = DB::table('pengajuan')
         ->select( DB::raw('SUM(sisa_pengajuan) as total'))
         ->whereNotNull('sisa_pengajuan')
-        ->where('status',3);
+        ->where('status',4);
         if(!empty($request->first) && !empty($request->last))
                      {
                          $first = $request->first;

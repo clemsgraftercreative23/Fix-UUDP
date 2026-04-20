@@ -4,7 +4,9 @@ namespace App;
 
 use Illuminate\Database\Eloquent\Model;
 
-class TravelHotelCondition extends Model
+class ReimbursementAttachment extends Model
 {
+    protected $table = 'reimbursement_attachments';
+
     protected $guarded = [];
 }

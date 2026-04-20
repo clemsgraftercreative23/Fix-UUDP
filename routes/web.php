@@ -64,6 +64,7 @@
   Route::post('/pengajuan/add','PengajuanController@store');
   Route::post('/pengajuan/update','PengajuanController@update');
   Route::post('/pengajuan/approvefinace','PengajuanController@approvefinace');
+  Route::post('/pengajuan/approvefinancesupervisor','PengajuanController@approvefinancesupervisor');
   Route::post('/pengajuan/approveowner','PengajuanController@approveowner');
   Route::get('/abc/{id}/{project}','PengajuanController@searchrencana');
   Route::get('/pengajuan/searchbudget/{proyek}/{kelompok}/{daftar}/{list}','PengajuanController@searchbudget');

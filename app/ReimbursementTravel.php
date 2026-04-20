@@ -16,7 +16,6 @@ class ReimbursementTravel extends Model
     function tripType() {
         return $this->belongsTo('App\TravelTripType','trip_type_id');
     }
-
     
     function hotelCondition() {
         return $this->belongsTo('App\TravelHotelCondition','hotel_condition_id');

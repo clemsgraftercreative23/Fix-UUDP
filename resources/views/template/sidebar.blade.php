@@ -14,6 +14,8 @@
                                 Finance
                             @elseif(Auth::user()->jabatan=='Finance')
                                 HR GA
+                            @elseif(Auth::user()->jabatan=='Finance Supervisor')
+                                Finance Supervisor
                             @elseif(Auth::user()->jabatan=='Direktur Operasional')
                                 Head Department
                             @elseif(Auth::user()->jabatan=='karyawan')
@@ -335,7 +337,7 @@
                         </li>
                         
                     </ul>
-                    @elseif(Auth::user()->jabatan=='Finance')
+                    @elseif(Auth::user()->jabatan=='Finance' || Auth::user()->jabatan=='Finance Supervisor')
                     <ul class="accordion-menu">
                         <li class="sidebar-title">
                             Menu

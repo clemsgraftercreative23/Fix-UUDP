@@ -341,10 +341,12 @@
           show = (status == '9' || status == '0');
         @elseif(Auth::user()->jabatan=='Finance')
           show = (status == '1');
+        @elseif(Auth::user()->jabatan=='Finance Supervisor')
+          show = (status == '1');
         @elseif(Auth::user()->jabatan=='Owner')
-          show = (status == '2');
+          show = (status == '2' || status == '3');
         @elseif(Auth::user()->jabatan=='superadmin')
-          show = (status == '0' || status == '1' || status == '2');
+          show = (status == '0' || status == '1' || status == '2' || status == '3');
         @endif
         if (show) { $('.btn-approve').show(); } else { $('.btn-approve').hide(); }
     };

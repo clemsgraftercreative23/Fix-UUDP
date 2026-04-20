@@ -7,6 +7,36 @@
     return number_format($angka, 0, ',', '.');
 } ?>
 
+@php
+if (!function_exists('driver_attachment_rows')) {
+  function driver_attachment_rows($detailId, $legacy = '') {
+    $rows = [];
+    $detailId = (int) $detailId;
+    if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
+      $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_driver')
+        ->where('detail_id', $detailId)
+        ->orderBy('id')
+        ->get(['id', 'file_name', 'original_name'])
+        ->toArray();
+    }
+    $legacy = trim((string) $legacy);
+    if ($legacy !== '') {
+      $exists = false;
+      foreach ($rows as $r) {
+        if (($r['file_name'] ?? '') === $legacy) {
+          $exists = true;
+          break;
+        }
+      }
+      if (!$exists) {
+        $rows[] = ['id' => 0, 'file_name' => $legacy, 'original_name' => $legacy];
+      }
+    }
+    return $rows;
+  }
+}
+@endphp
+
 <style>
 
     .form-control{
@@ -38,6 +68,51 @@
         max-height: 90vh; 
     }
 
+    .img-lightbox-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 20000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .img-lightbox-overlay.active {
+      display: flex;
+    }
+
+    .img-lightbox-content {
+      position: relative;
+      max-width: 95vw;
+      max-height: 90vh;
+    }
+
+    .img-lightbox-content img {
+      max-width: 95vw;
+      max-height: 90vh;
+      border-radius: 8px;
+    }
+
+    .img-lightbox-close {
+      position: absolute;
+      right: -12px;
+      top: -12px;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 999px;
+      background: #fff;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .preview-thumbnail {
+      cursor: pointer !important;
+    }
+
 </style>
 
 <div class="page-content">
@@ -46,7 +121,12 @@
     <div class="row">
         <div class="col-lg-12">
             <div class="card">
-                <a href="{!!url('reimbursement-driver')!!}" class="btn btn-primary" style="float:left;"><i class="fa    fa-arrow-circle-left"></i> Back </a>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <a href="{!!url('reimbursement-driver')!!}" class="btn btn-primary" style="float:left;"><i class="fa fa-arrow-circle-left"></i> Back </a>
+                    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target=".bd-example-modal-lg">
+                        <i class="fa fa-plus-circle" aria-hidden="true"></i> Create Inquiry
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -58,7 +138,7 @@
                         <h5 class="card-title">DETAIL REIMBURSEMENT DRIVER</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Owner', 'superadmin'], true);
                         @endphp
                         @if($isApproverRole && in_array((int) $data->status, [0, 1, 2], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -196,7 +276,14 @@
                         <td width="200px"><span>{{number_format($row->subtotal,0,',','.')}}</span></td>
                         <td width="200px"><span>{{$row->payment_type}}</span></td>
                         <td width="200px"><span>{{$row->remark}}</span></td>
-                        <td width="200px"><a href="{{ URL::to('/') }}/images/file_bukti/{{$row->evidence}}" target="_blank"><i class="fa fa-file"></i></a></td>
+                        <td width="260px">
+                          @foreach(driver_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
+                            @php $fileName = $att['file_name'] ?? ''; $display = $att['original_name'] ?? $fileName; @endphp
+                            @if($fileName !== '')
+                              <div><a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}" target="_blank">{{ $display }}</a></div>
+                            @endif
+                          @endforeach
+                        </td>
 
                     </tr>
                     @endforeach
@@ -280,7 +367,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))                                
+                        @if ((($data->status == 2) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'superadmin')) || (($data->status == 3) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin')))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
@@ -429,7 +516,25 @@
                                 </td>
                                 <td>
                                     <div id="preview_1">
-                                        <img src="{!!url('images/file_bukti/'.$detail['0']->evidence.'')!!}" style="max-width: 75px; max-height: 75px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px;">
+                                      @foreach(driver_attachment_rows($detail['0']->id ?? 0, $detail['0']->evidence ?? '') as $att)
+                                      @php
+                                        $attId = (int) ($att['id'] ?? 0);
+                                        $fileName = $att['file_name'] ?? '';
+                                        $display = $att['original_name'] ?? $fileName;
+                                      @endphp
+                                      @if($attId > 0)
+                                      <input type="hidden" name="keep_attachment_ids[0][]" value="{{ $attId }}" class="keep-attachment-input">
+                                      @endif
+                                      <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
+                                        <div style="display:flex; gap:6px; align-items:center;">
+                                          <img src="{!!url('images/file_bukti/'.$fileName.'')!!}" class="preview-thumbnail" data-preview-src="{!!url('images/file_bukti/'.$fileName.'')!!}" onclick="openImageLightbox(this.getAttribute('data-preview-src') || this.src)" style="max-width: 55px; max-height: 55px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px; cursor: pointer;">
+                                          <a href="{!!url('images/file_bukti/'.$fileName.'')!!}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $display }}</a>
+                                          @if($attId > 0)
+                                          <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
+                                          @endif
+                                        </div>
+                                      </div>
+                                      @endforeach
                                     </div>
                                 </td>
                                   
@@ -482,7 +587,25 @@
                                 </td>
                                 <td>
                                     <div id="preview_{{$numb}}">
-                                        <img src="{!!url('images/file_bukti/'.$row->evidence.'')!!}" style="max-width: 75px; max-height: 75px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px;">
+                                      @foreach(driver_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
+                                      @php
+                                        $attId = (int) ($att['id'] ?? 0);
+                                        $fileName = $att['file_name'] ?? '';
+                                        $display = $att['original_name'] ?? $fileName;
+                                      @endphp
+                                      @if($attId > 0)
+                                      <input type="hidden" name="keep_attachment_ids[{{$key}}][]" value="{{ $attId }}" class="keep-attachment-input">
+                                      @endif
+                                      <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
+                                        <div style="display:flex; gap:6px; align-items:center;">
+                                          <img src="{!!url('images/file_bukti/'.$fileName.'')!!}" class="preview-thumbnail" data-preview-src="{!!url('images/file_bukti/'.$fileName.'')!!}" onclick="openImageLightbox(this.getAttribute('data-preview-src') || this.src)" style="max-width: 55px; max-height: 55px; border: 2px solid rgb(40, 167, 69); border-radius: 5px; margin-top: 5px; cursor: pointer;">
+                                          <a href="{!!url('images/file_bukti/'.$fileName.'')!!}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $display }}</a>
+                                          @if($attId > 0)
+                                          <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
+                                          @endif
+                                        </div>
+                                      </div>
+                                      @endforeach
                                     </div>
                                 </td>
                                   
@@ -586,7 +709,34 @@
       </div>
   </div>
   </div>
+      </div>
 <!-- End Modal -->
+
+<!-- Modal Preview Image -->
+<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content" style="background: transparent; border: 0; box-shadow: none;">
+      <div class="modal-header" style="border: 0;">
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 1; font-size: 2rem;">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body text-center pt-0">
+        <img id="previewImageModalSrc" src="" alt="Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+      </div>
+    </div>
+  </div>
+</div>
+<!-- End Modal Preview Image -->
+
+<!-- Custom Lightbox -->
+<div id="imgLightboxOverlay" class="img-lightbox-overlay">
+  <div class="img-lightbox-content">
+    <button type="button" class="img-lightbox-close" aria-label="Close">&times;</button>
+    <img id="imgLightboxImage" src="" alt="Preview Besar">
+  </div>
+</div>
+<!-- End Custom Lightbox -->
 
 
 
@@ -599,6 +749,12 @@
   
   
    $(document).ready(function(){
+
+        window.openImageLightbox = function (src) {
+          if (!src) return;
+          $('#imgLightboxImage').attr('src', src);
+          $('#imgLightboxOverlay').addClass('active');
+        };
   
   
         function numberWithCommas(x) {
@@ -2471,6 +2627,67 @@
         // Objek untuk menyimpan status upload di setiap row
           let uploadStatus = {};
 
+          function getPreviewDivFromRow(row) {
+            return row.find('[id^="preview_"]').first();
+          }
+
+          function createPreviewImage(src) {
+            return $('<img>')
+              .attr('src', src)
+              .attr('data-preview-src', src)
+              .addClass('preview-thumbnail')
+              .css({
+                maxWidth: '75px',
+                maxHeight: '75px',
+                border: '2px solid #28a745',
+                borderRadius: '5px',
+                marginTop: '5px',
+                cursor: 'pointer'
+              });
+          }
+
+          function bindExistingPreviewThumbnails() {
+            $('[id^="preview_"] img').each(function () {
+              $(this)
+                .addClass('preview-thumbnail')
+                .attr('data-preview-src', $(this).attr('src'))
+                .css('cursor', 'pointer');
+            });
+          }
+
+          bindExistingPreviewThumbnails();
+
+          $('body').on('click', '.preview-thumbnail, [id^="preview_"] img', function () {
+            var src = $(this).attr('data-preview-src') || $(this).attr('src');
+            if (!src) return;
+            window.openImageLightbox(src);
+          });
+
+          $('body').on('click', '.remove-existing-attachment', function () {
+            var $btn = $(this);
+            var $item = $btn.closest('.existing-attachment-item');
+            var $preview = $btn.closest('[id^="preview_"]');
+            var attachmentId = String($btn.data('attachment-id') || '');
+            if (attachmentId !== '') {
+              $preview.find('input.keep-attachment-input[value="' + attachmentId + '"]').remove();
+            }
+            $item.remove();
+          });
+
+          $('body').on('click', '#imgLightboxOverlay, .img-lightbox-close', function (e) {
+            if ($(e.target).is('#imgLightboxOverlay') || $(e.target).is('.img-lightbox-close')) {
+              $('#imgLightboxOverlay').removeClass('active');
+              $('#imgLightboxImage').attr('src', '');
+            }
+          });
+
+          $(document).on('keydown', function (e) {
+            if (e.key === 'Escape') {
+              $('#imgLightboxOverlay').removeClass('active');
+              $('#imgLightboxImage').attr('src', '');
+            }
+          });
+
           // Fungsi untuk menangani upload file
           $("body").on("click", ".addFile", function () {
             let btn = $(this);
@@ -2489,16 +2706,8 @@
                 $(".warning-upload").hide();
 
                 reader.onload = function (e) {
-                  let previewDiv = row.find("#preview_" + (idx + 1)); // Pastikan id cocok
-                  previewDiv.empty().append(
-                    $('<img>').attr('src', e.target.result).css({
-                      maxWidth: '75px',
-                      maxHeight: '75px',
-                      border: '2px solid #28a745',
-                      borderRadius: '5px',
-                      marginTop: '5px'
-                    })
-                  );
+                  let previewDiv = getPreviewDivFromRow(row);
+                  previewDiv.append(createPreviewImage(e.target.result));
 
                   btn.find("i").removeClass("fa-upload").addClass("fa-check");
                 };
@@ -2556,16 +2765,9 @@
                                 fileInput[0].files = dataTransfer.files;
 
                                 const imageURL = URL.createObjectURL(file);
-                                let previewDiv = row.find("#preview_" + (idx + 1));
-                                previewDiv.empty().append(
-                                    $('<img>').attr('src', imageURL).css({
-                                        maxWidth: '75px',
-                                        maxHeight: '75px',
-                                        border: '2px solid #28a745',
-                                        borderRadius: '5px',
-                                        marginTop: '5px'
-                                    })
-                                );
+                                let previewDiv = getPreviewDivFromRow(row);
+                                previewDiv.append(createPreviewImage(imageURL));
+                                btn.find("i").removeClass("fa-camera").addClass("fa-check");
 
                                 // stop kamera
                                 stream.getTracks().forEach(track => track.stop());

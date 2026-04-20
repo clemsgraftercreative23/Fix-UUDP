@@ -61,6 +61,7 @@
                               <option value="superadmin">Admin</option>
                               <option value="Direktur Operasional">Head Department</option>
                               <option value="Finance">HR GA</option>
+                              <option value="Finance Supervisor">Finance Supervisor</option>
                               <option value="Owner">Finance</option>
                           </select>
                       </div>

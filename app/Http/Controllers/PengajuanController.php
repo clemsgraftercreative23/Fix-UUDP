@@ -64,8 +64,10 @@ class PengajuanController extends Controller
                   }elseif ($data->status == 1) {
                     $button = '<button  class="view btn btn-primary btn-sm">PROSES</button>';
                   } elseif ($data->status == 2) {
-                    $button = '<button   class="view btn btn-success btn-sm">APPROVED</button>';
+                    $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
                   } elseif ($data->status == 3) {
+                    $button = '<button  class=" view btn btn-success btn-sm">APPROVED Finance Supervisor</button>';
+                  } elseif ($data->status == 4) {
                     $button = '<button  class=" view btn btn-success btn-sm">APPROVED Owner</button>';
                   }
                   else {
@@ -145,8 +147,10 @@ class PengajuanController extends Controller
                   }elseif ($data->status == 1) {
                     $button = '<button  name="proses" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="proses view btn btn-primary btn-sm">PROSES</button>';
                   } elseif ($data->status == 2) {
-                    $button = '<button   class="prosesowner view btn btn-success btn-sm">APPROVED Finance</button>';
+                    $button = '<button   class="view btn btn-success btn-sm">APPROVED Finance</button>';
                   } elseif ($data->status == 3) {
+                    $button = '<button  class=" view btn btn-success btn-sm">APPROVED Finance Supervisor</button>';
+                  } elseif ($data->status == 4) {
                     $button = '<button  class=" view btn btn-success btn-sm">APPROVED Owner</button>';
                   }
                   else {
@@ -166,7 +170,7 @@ class PengajuanController extends Controller
                   ->make(true);
 
                   // code...
-                }elseif ($jabatan == 'Owner') {
+                }elseif ($jabatan == 'Finance Supervisor') {
                   $data = DB::table('pengajuan')
                   ->join('master_project','pengajuan.id_project','master_project.id')
                   ->select('pengajuan.*','master_project.nama','master_project.no_project','master_project.keterangan')
@@ -191,8 +195,57 @@ class PengajuanController extends Controller
                   }elseif ($data->status == 1) {
                     $button = '<button  class="proses view btn btn-primary btn-sm">PROSES</button>';
                   } elseif ($data->status == 2) {
-                    $button = '<button  name="prosesowner" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="prosesowner view btn btn-success btn-sm">APPROVED Finance</button>';
+                    $button = '<button  name="prosesfs" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="prosesfs view btn btn-success btn-sm">APPROVED Finance</button>';
                   } elseif ($data->status == 3) {
+                    $button = '<button  class=" view btn btn-success btn-sm">APPROVED Finance Supervisor</button>';
+                  } elseif ($data->status == 4) {
+                    $button = '<button  class=" view btn btn-success btn-sm">APPROVED Owner</button>';
+                  }
+                  else {
+                    $button = '<button  class="view btn btn-danger btn-sm">TOLAK</button>';
+                  }
+                    $button .= '&nbsp;&nbsp;';
+
+                    return $button;
+
+                  })
+                  ->addColumn('total', function ($data) {
+                    $button ='';
+                      $button .= number_format($data->nominal_pengajuan,0, ',' , '.');
+                    return $button;
+                  })
+                  ->rawColumns(['action','total'])
+                  ->make(true);
+                }
+                elseif ($jabatan == 'Owner') {
+                  $data = DB::table('pengajuan')
+                  ->join('master_project','pengajuan.id_project','master_project.id')
+                  ->select('pengajuan.*','master_project.nama','master_project.no_project','master_project.keterangan')
+                  ->where('pengajuan.status',3);
+                  if(!empty($request->first) && !empty($request->last))
+                              {
+                                  $first = $request->first;
+                                  $last = $request->last;
+                                  $tahun = date("Y");
+                                  $from = $tahun.'-'.$first.'-01';
+                                  $to = $tahun.'-'.$last.'-30';
+
+                                $data = $data->whereBetween('pengajuan.created_at',[$from,$to]);
+
+                              }
+
+                  $data = $data->orderBy('pengajuan.id', 'DESC');
+                  $data = $data->get();
+                  return datatables()->of($data)->addColumn('action', function ($data) {
+                    if($data->status == 0 ){
+                    $button = '<button  class="edit view btn btn-secondary  btn-sm">PENDING</button>';
+                  }elseif ($data->status == 1) {
+                    $button = '<button  class="proses view btn btn-primary btn-sm">PROSES</button>';
+                  } elseif ($data->status == 2) {
+                    $button = '<button  class="view btn btn-success btn-sm">APPROVED Finance</button>';
+                  } elseif ($data->status == 3) {
+                    $button = '<button  name="prosesowner" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="prosesowner view btn btn-success btn-sm">APPROVED Finance Supervisor</button>';
+                  } elseif ($data->status == 4) {
                     $button = '<button  class=" view btn btn-success btn-sm">APPROVED Owner</button>';
                   }
                   else {
@@ -237,8 +290,10 @@ class PengajuanController extends Controller
                   }elseif ($data->status == 1) {
                     $button = '<button  name="proses" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="proses view btn btn-primary btn-sm">PROSES</button>';
                   } elseif ($data->status == 2) {
-                    $button = '<button  name="prosesowner" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="prosesowner view btn btn-success btn-sm">APPROVED Finance</button>';
+                    $button = '<button  name="prosesfs" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="prosesfs view btn btn-success btn-sm">APPROVED Finance</button>';
                   } elseif ($data->status == 3) {
+                    $button = '<button  name="prosesowner" id="'.$data->id.'" data-toggle="modal" data-target=".bd-example-modal-xl" class="prosesowner view btn btn-success btn-sm">APPROVED Finance Supervisor</button>';
+                  } elseif ($data->status == 4) {
                     $button = '<button  class=" view btn btn-success btn-sm">APPROVED Owner</button>';
                   }
                   else {
@@ -274,7 +329,7 @@ class PengajuanController extends Controller
         $data = DB::table('pengajuan')
         ->join('master_project','pengajuan.id_project','master_project.id')
         ->select( DB::raw('SUM(pengajuan.nominal_pengajuan) as total'))
-        ->where('pengajuan.status',3);
+        ->where('pengajuan.status',4);
         if(!empty($request->first) && !empty($request->last))
                      {
                          $first = $request->first;
@@ -524,6 +579,11 @@ class PengajuanController extends Controller
       public function approvefinace(request $request){
         $nama= Auth::user()->name;
 
+        $financeSupervisor = \App\User::where('jabatan','Finance Supervisor')->get();
+        if($financeSupervisor->isEmpty()){
+          return response()->json(['errors' => ['Belum ada user dengan role Finance Supervisor. Approval tidak dapat dilanjutkan.']], 422);
+        }
+
           $form_data = array(
               'status'        =>  2,
               'menyetujui'        =>  $nama
@@ -548,12 +608,12 @@ class PengajuanController extends Controller
                     ])
                     ->withData([
                         'target' => $user->phoneNumber,
-                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Direktur Utama.\n\nTerima kasih.
+                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Supervisor.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                     ])
                     ->post();
 
-        $dirops = \App\User::where('jabatan','Owner')->get();
+        $dirops = $financeSupervisor;
 
         foreach ($dirops as $value) {
           
@@ -563,7 +623,7 @@ class PengajuanController extends Controller
                   ])
                   ->withData([
                       'target' => $value->phoneNumber,
-                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                   ])
                   ->post();
@@ -573,11 +633,60 @@ class PengajuanController extends Controller
 
       }
 
+      public function approvefinancesupervisor(request $request){
+        $nama= Auth::user()->name;
+
+        $financeManager = \App\User::where('jabatan','Owner')->get();
+        if($financeManager->isEmpty()){
+          return response()->json(['errors' => ['Belum ada user dengan role Finance Manager (Owner). Approval tidak dapat dilanjutkan.']], 422);
+        }
+
+        $form_data = array(
+            'status'        =>  3
+        );
+        Pengajuan::whereId($request->id_pengajuan)->update($form_data);
+
+        $date = date('Y-m-d H:i:s');
+        $c = DB::table("pengajuan")
+            ->where('id',$request->id_pengajuan)
+            ->pluck('no_pengajuan');
+        $id_user= Auth::user()->name;
+        DB::insert('insert into notif (data, created_at, created_by) values (?, ?, ?)', ['Pengajuan Telah Disetujui Oleh Finance Supervisor dengan ID '.$c[0], $date, $id_user]);
+
+        $dt = Pengajuan::find($request->id_pengajuan);
+        $user = \App\User::where('id',$dt->id_user)->first();
+        $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders([
+                        'Authorization: G-BJE9txd#aXDewvme7u'
+                    ])
+                    ->withData([
+                        'target' => $user->phoneNumber,
+                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Manager.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
+                    ])
+                    ->post();
+
+        foreach ($financeManager as $value) {
+          $curl = \Curl::to('https://api.fonnte.com/send')
+                  ->withHeaders([
+                      'Authorization: G-BJE9txd#aXDewvme7u'
+                  ])
+                  ->withData([
+                      'target' => $value->phoneNumber,
+                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
+                  ])
+                  ->post();
+        }
+
+        return response()->json(['success' => 'Data is successfully updated']);
+      }
+
       public function approveowner(request $request){
         $nama= Auth::user()->name;
 
         $form_data = array(
-            'status'        =>  3,
+            'status'        =>  4,
             'mengetahui'        =>  $nama
 
 

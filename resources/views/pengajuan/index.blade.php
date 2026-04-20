@@ -616,6 +616,38 @@ $(document).ready(function(){
 
                 $('#formModaledit').modal('hide');
             },
+      error:function(xhr) {
+        if (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.length > 0) {
+          alert(xhr.responseJSON.errors[0]);
+        }
+      }
+
+    });
+
+    }
+
+    if($('#action').val() == "finance_supervisor")
+    {
+      $.ajax({
+      url:"{{ url('pengajuan/approvefinancesupervisor') }}",
+      method:"POST",
+      data: new FormData(this),
+      contentType: false,
+      cache:false,
+      processData: false,
+      dataType:"json",
+       success:function(data) {
+
+                $('#sample_edit')[0].reset();
+                $('#myTable').DataTable().ajax.reload();
+
+                $('#formModaledit').modal('hide');
+            },
+      error:function(xhr) {
+        if (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.length > 0) {
+          alert(xhr.responseJSON.errors[0]);
+        }
+      }
 
     });
 
@@ -949,6 +981,58 @@ $(document).ready(function(){
       $('#sum_edit').maskMoney({ thousands:'.', decimal:',', precision:0, affixesStay: true}).trigger('mask.maskMoney');
       var x1 = document.getElementById("tipe_pencairan");
       x1.style.display = "none";
+      }
+    })
+
+    $.ajax({
+    url: '/pengajuan/detail/'+id,
+    dataType:"json",
+   success:function(data) {
+     $('#dynamic_fields').html('');
+
+     for (var i = 0; i < data.cek; i++) {
+       var z = i+1;
+       $('#dynamic_fields').append('<tr id="row'+i+'"><td>'+z+'</td><td><input type="hidden" name="id_list[]" id="id_list_'+i+'" value="'+data.hasil[i].id+'"><input type="text" id="id_budget_'+i+'" value="'+data.hasil[i].nama_kelompok+'" readonly name="id_budget[]" style="border-radius: 10px;" placeholder="Limit Budget" class="form-control name_list limit_budget" /></td><td><input type="text" id="id_budget_'+i+'" value="'+data.hasil[i].nama_daftar+'" readonly name="id_budget[]" style="border-radius: 10px;" placeholder="Limit Budget" class="form-control name_list limit_budget" /></td><td><input type="text" name="keterangan_pengajuan[]" style="border-radius: 10px;" placeholder="Isi keterangan" value="'+data.hasil[i].keterangan+'" readonly class="form-control name_list" /></td><td><input type="text" id="limit_'+i+'" value="'+data.hasil[i].limit+'" readonly name="id_budget[]" style="border-radius: 10px;" placeholder="Limit Budget" class="form-control name_list limit_budget" /></td><td><input type="text" value="'+data.hasil[i].nominal_pengajuan+'" name="nominal_pengajuan[]" id="nominal_pengajuan_'+i+'" style="border-radius: 10px;"  placeholder="Nominal" class="form-control name_list nominal_pengajuan_edit" onclick="nominal_hitung_edit()" readonly  /></td></tr>');
+       $("#limit_"+i).maskMoney({ thousands:'.', decimal:',', precision:0, affixesStay: true}).trigger('mask.maskMoney');
+       $("#nominal_pengajuan_"+i).maskMoney({ thousands:'.', decimal:',', precision:0, affixesStay: true}).trigger('mask.maskMoney');
+
+     }
+
+
+    }
+  })
+
+  });
+})
+</script>
+<script type="text/javascript">
+$(document).ready(function(){
+  $(document).on('click', '.prosesfs', function(){
+      var id = $(this).attr('id');
+      $('#edit_form').html('');
+      $('#lbltipAddedComment').html('');
+      document.getElementById('lbltipAddedComment').innerHTML = 'Approved Inquiry UUDP';
+
+      $.ajax({
+      url: '/pengajuan/edit/'+id,
+      dataType:"json",
+      success:function(html){
+      $('#no_pengajuan_edit').val(html.data[0].no_pengajuan);
+      $('#id_project_edit').val(html.data[0].no_project);
+      $('#nama_project_edit').val(html.data[0].nama_project);
+      $('#keterangan_project_edit').val(html.data[0].keterangan_project);
+      $('#sum_edit').val(html.data[0].nominal_pengajuan);
+      $('#id_pengajuan').val(html.data[0].id);
+      $('#tgl').val(html.data[0].created_at);
+      $('#nama_lengkap').val(html.data[0].name_user);
+      $('#nik').val(html.data[0].nik);
+      $('#jabatan').val(html.data[0].jabatan);
+      $('#sum_edit').maskMoney({ thousands:'.', decimal:',', precision:0, affixesStay: true}).trigger('mask.maskMoney');
+
+      var x1 = document.getElementById("tipe_pencairan");
+      x1.style.display = "none";
+      $('#action').val("finance_supervisor");
+
       }
     })
 

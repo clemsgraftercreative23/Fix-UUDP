@@ -5,6 +5,40 @@ if (!function_exists('rt_travel_pane_rupiah')) {
         return number_format((float) $angka, 0, ',', '.');
     }
 }
+if (!function_exists('rt_travel_detail_attachments')) {
+    function rt_travel_detail_attachments($detailId, $legacyEvidence = '')
+    {
+        $rows = [];
+        $detailId = (int) $detailId;
+        if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
+            $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                ->where('detail_id', $detailId)
+                ->orderBy('id')
+                ->get(['id', 'file_name', 'original_name'])
+                ->toArray();
+        }
+
+        $legacyEvidence = trim((string) $legacyEvidence);
+        if ($legacyEvidence !== '') {
+            $exists = false;
+            foreach ($rows as $r) {
+                if (($r['file_name'] ?? '') === $legacyEvidence) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $rows[] = [
+                    'id' => 0,
+                    'file_name' => $legacyEvidence,
+                    'original_name' => $legacyEvidence,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+}
 $taxFirstExtra = !empty($is_overseas) ? ' tax-input' : '';
 // Some travel rows have no reimbursement_travel_details yet (e.g. new tab); avoid $travel_detail[0] errors.
 $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
@@ -167,25 +201,45 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                     </td>
                     <td>
                         @php
-                            $file = $rtRow0->evidence ?? '';
-                            $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                            $attachments = rt_travel_detail_attachments($rtRow0->id ?? 0, $rtRow0->evidence ?? '');
                             $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
                         @endphp
 
                         <div id="preview_1">
-                            @if($file !== '' && in_array($ext, $imageExt))
-                                <img src="{{ url('images/file_bukti/'.$file) }}"
-                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px;">
-                            @elseif($file !== '')
-                                <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
-                                    <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"
-                                         style="max-width:75px; max-height:75px; border:2px solid #dc3545; border-radius:5px; margin-top:5px;">
-                                </a>
-                            @endif
+                            @foreach($attachments as $att)
+                                @php
+                                    $file = $att['file_name'] ?? '';
+                                    $name = $att['original_name'] ?? $file;
+                                    $attId = (int) ($att['id'] ?? 0);
+                                    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                                @endphp
+                                @if($attId > 0)
+                                    <input type="hidden" name="keep_attachment_ids[0][]" value="{{ $attId }}" class="keep-attachment-input">
+                                @endif
+                                <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        @if($file !== '' && in_array($ext, $imageExt))
+                                            <img src="{{ url('images/file_bukti/'.$file) }}"
+                                                 class="preview-thumbnail"
+                                                 data-preview-src="{{ url('images/file_bukti/'.$file) }}"
+                                                 style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">
+                                        @else
+                                            <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
+                                                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;">
+                                            </a>
+                                        @endif
+                                        <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $name }}</a>
+                                        @if($attId > 0)
+                                        <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
                     </td>
                     <td>
                         <button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button>
+                        <button type="button" class="btn btn-danger remove-detail" style="margin-left:6px;"><i class="fa fa-trash"></i></button>
                     </td>
                 </tr>
 
@@ -195,7 +249,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                 <tr class="fieldGroupDetail">
                     <td>
                         <input type="hidden" name="id_detail[]" value="{{$row->id}}">
-                        <select class="form-control cost_type_id{{$key}}" name="cost_type_id[]">
+                        <select class="form-control cost_type_id{{$key}} cost-type-select" name="cost_type_id[]">
                             <option value="">Select...</option>
                             @foreach ($types as $item)
                                 <option value="{{$item->id}}" @if($row->cost_type_id == $item->id) selected @endif>{{$item->name}}</option>
@@ -203,7 +257,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control" name="destination[]" value="{{$row->destination}}">
+                        <input type="text" class="form-control destination-input" name="destination[]" value="{{$row->destination}}">
                     </td>
                     <td>
                         <select class="form-control currency{{$key}} currency-select" name="currency[]" style="width:130%">
@@ -214,16 +268,16 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control amount{{$key}} currency change-amount" value="{{ rt_travel_pane_rupiah($row->amount) }}" name="amount[]">
+                        <input type="text" class="form-control amount{{$key}} amount-input currency change-amount" value="{{ rt_travel_pane_rupiah($row->amount) }}" name="amount[]">
                     </td>
                     <td>
-                        <input type="text" class="form-control number-format currency idr_rate_{{$key}} change-rate" value="{{ rt_travel_pane_rupiah($row->idr_rate) }}" name="idr_rate[]" readonly>
+                        <input type="text" class="form-control number-format currency idr_rate_{{$key}} change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($row->idr_rate) }}" name="idr_rate[]" readonly>
                     </td>
                     <td>
-                        <input type="text" class="form-control number-format currency tax{{$key}}" readonly value="{{ rt_travel_pane_rupiah($row->tax) }}" name="tax[]">
+                        <input type="text" class="form-control number-format currency tax{{$key}}{{ $taxFirstExtra }} tax-input" readonly value="{{ rt_travel_pane_rupiah($row->tax) }}" name="tax[]">
                     </td>
                     <td>
-                        <select class="form-control" name="payment_type[]" style="width:130%">
+                        <select class="form-control payment-select" name="payment_type[]" style="width:130%">
                             <option value="">Select...</option>
                             <option value="BDC" @if($row->payment_type=='BDC') selected @endif>BDC</option>
                             <option value="Cash" @if($row->payment_type=='Cash') selected @endif>Cash</option>
@@ -241,21 +295,40 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                     </td>
                     <td>
                         @php
-                            $file = $row->evidence ?? '';
-                            $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                            $attachments = rt_travel_detail_attachments($row->id ?? 0, $row->evidence ?? '');
                             $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
                         @endphp
 
                         <div id="preview_{{$n}}">
-                            @if(in_array($ext, $imageExt))
-                                <img src="{{ url('images/file_bukti/'.$file) }}"
-                                     style="max-width:75px; max-height:75px; border:2px solid #28a745; border-radius:5px; margin-top:5px;">
-                            @else
-                                <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
-                                    <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png"
-                                         style="max-width:75px; max-height:75px; border:2px solid #dc3545; border-radius:5px; margin-top:5px;">
-                                </a>
-                            @endif
+                            @foreach($attachments as $att)
+                                @php
+                                    $file = $att['file_name'] ?? '';
+                                    $name = $att['original_name'] ?? $file;
+                                    $attId = (int) ($att['id'] ?? 0);
+                                    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                                @endphp
+                                @if($attId > 0)
+                                    <input type="hidden" name="keep_attachment_ids[{{$key}}][]" value="{{ $attId }}" class="keep-attachment-input">
+                                @endif
+                                <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        @if($file !== '' && in_array($ext, $imageExt))
+                                            <img src="{{ url('images/file_bukti/'.$file) }}"
+                                                 class="preview-thumbnail"
+                                                 data-preview-src="{{ url('images/file_bukti/'.$file) }}"
+                                                 style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">
+                                        @else
+                                            <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
+                                                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;">
+                                            </a>
+                                        @endif
+                                        <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $name }}</a>
+                                        @if($attId > 0)
+                                        <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
                     </td>
                     <td>
@@ -268,6 +341,64 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         </table>
     </div>
 </div>
+
+<script type="text/template" id="rt-detail-row-template">
+<tr class="fieldGroupDetail">
+    <td>
+        <input type="hidden" name="id_detail[]" value="">
+        <select class="form-control cost_type_id__IDX__ cost-type-select" name="cost_type_id[]">
+            <option value="">Select...</option>
+            @foreach ($types as $item)
+                <option value="{{$item->id}}">{{$item->name}}</option>
+            @endforeach
+        </select>
+    </td>
+    <td>
+        <input type="text" class="form-control destination-input" name="destination[]" value="">
+    </td>
+    <td>
+        <select class="form-control currency__IDX__ currency-select" name="currency[]" style="width:130%">
+            <option value="">Select...</option>
+            @foreach ($currency as $item)
+                <option value="{{$item->currency}}">{{$item->currency}}</option>
+            @endforeach
+        </select>
+    </td>
+    <td>
+        <input type="text" class="form-control amount__IDX__ amount-input currency change-amount" name="amount[]" value="">
+    </td>
+    <td>
+        <input type="text" class="form-control number-format currency idr_rate___IDX__ change-rate idr-rate-input" name="idr_rate[]" readonly value="">
+    </td>
+    <td>
+        <input type="text" class="form-control number-format currency tax__IDX__{{ $taxFirstExtra }} tax-input" readonly name="tax[]" value="">
+    </td>
+    <td>
+        <select class="form-control payment-select" name="payment_type[]" style="width:130%">
+            <option value="">Select...</option>
+            <option value="BDC">BDC</option>
+            <option value="Cash">Cash</option>
+        </select>
+    </td>
+    <td class="file-proof">
+        <button type="button" data-idx="__IDX__" class="btn btn-success btn-sm addFile">
+            <i class="fa fa-upload"></i>
+        </button>
+        <button type="button" data-idx="__IDX__" class="btn btn-success btn-sm addCamera">
+            <i class="fa fa-camera"></i>
+        </button>
+        <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file__IDX__">
+        <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+    </td>
+    <td>
+        <div id="preview___PREVIEW__"></div>
+    </td>
+    <td>
+        <button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button>
+    </td>
+</tr>
+</script>
+
 <hr>
 <div class="row">
     <div class="col-md-3">
@@ -295,7 +426,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
     @endif
 
-    @if(auth()->user()->jabatan == 'Finance' && $data['0']->status==1)
+    @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor') && $data['0']->status==1)
         <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
     @endif
 

@@ -7,6 +7,38 @@
     return number_format($angka, 0, ',', '.');
 } ?>
 
+@php
+if (!function_exists('travel_attachment_rows')) {
+    function travel_attachment_rows($detailId, $legacy = '') {
+        $rows = [];
+        $detailId = (int) $detailId;
+        if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
+            $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                ->where('detail_id', $detailId)
+                ->orderBy('id')
+                ->get(['id', 'file_name', 'original_name'])
+                ->toArray();
+        }
+
+        $legacy = trim((string) $legacy);
+        if ($legacy !== '') {
+            $exists = false;
+            foreach ($rows as $r) {
+                if (($r['file_name'] ?? '') === $legacy) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $rows[] = ['id' => 0, 'file_name' => $legacy, 'original_name' => $legacy];
+            }
+        }
+
+        return $rows;
+    }
+}
+@endphp
+
 <style>
     .form-control{
         border-radius:5px;
@@ -39,7 +71,7 @@
                         <h5 class="card-title">DETAIL REIMBURSEMENT TRAVEL {{$data->travel_type}}</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Owner', 'superadmin'], true);
                         @endphp
                         @if($isApproverRole && in_array((int) $data->status, [0, 1, 2], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -247,7 +279,21 @@
                     <td>{{number_format($dt->idr_rate,0,',','.')}}</td>
                     
                     <td>{{$dt->payment_type}}</td>
-                    <td><a href="{{ URL::to('/') }}/images/file_bukti/{{$dt->evidence}}" target="_blank"><i class="fa fa-file"></i></a></td>
+                    <td>
+                        @foreach(travel_attachment_rows($dt->id ?? 0, $dt->evidence ?? '') as $att)
+                            @php
+                                $fileName = $att['file_name'] ?? '';
+                                $display = $att['original_name'] ?? $fileName;
+                            @endphp
+                            @if($fileName !== '')
+                                <div>
+                                    <a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}" target="_blank" title="{{ $display }}">
+                                        <i class="fa fa-file"></i> {{ $display }}
+                                    </a>
+                                </div>
+                            @endif
+                        @endforeach
+                    </td>
                 </tr>
                 @endforeach
 
@@ -399,7 +445,7 @@
                                 </form>
                             @endif
                             
-                            @if ($data->status == 1 && (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if ($data->status == 1 && (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-warning">Edit</a>
@@ -408,7 +454,7 @@
                                 </form>
                             @endif
                             
-                            @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if (in_array((int) $data->status, [2, 3], true) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-warning">Edit</a>

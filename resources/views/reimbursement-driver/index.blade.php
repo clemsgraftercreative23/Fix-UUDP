@@ -34,7 +34,7 @@
 <div class="page-content" id="app">
 
 @php
-  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
+  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Finance Supervisor', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
 @endphp
 @if($showApprovalTab)
 <div class="clearfix">
@@ -159,6 +159,7 @@
                               <th>Total Inquiry</th>
                               <th>Payment Type</th>
                               <th>Status Inquiry</th>
+                              <th>Action</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -2600,8 +2601,12 @@ $("body").on("click",".remove-item",function(){
                         name: 'payment_type'
                       },
                       {
-                        data: 'action',
-                        name: 'action'
+                                                data: 'status_label',
+                                                name: 'status_label'
+                                            },
+                                            {
+                                                data: 'action',
+                                                name: 'action'
                       },
 
                 ],

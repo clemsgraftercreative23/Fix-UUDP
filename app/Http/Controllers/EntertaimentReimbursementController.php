@@ -7,15 +7,195 @@ use App\Reimbursement;
 use App\User;
 use App\ReimbursementDetail;
 use App\ReimbursementEntertaiment;
+use App\ReimbursementAttachment;
 use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use DB;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 class EntertaimentReimbursementController extends Controller
 {
 
     public function __construct() {
         $this->middleware('auth');
+    }
+
+    private function attachmentTableReady(): bool
+    {
+        return Schema::hasTable('reimbursement_attachments');
+    }
+
+    private function storeAttachmentFile(?UploadedFile $file): string
+    {
+        if (!$file) {
+            return '';
+        }
+
+        $targetDir = public_path('images/file_bukti');
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+        }
+
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '') {
+            $ext = 'jpg';
+        }
+
+        $filename = uniqid('bukti_', true) . '.' . $ext;
+        $file->move($targetDir, $filename);
+
+        return $filename;
+    }
+
+    private function getEntertainmentRowUploadedFiles(Request $request, int $index): array
+    {
+        $files = [];
+        $f = data_get($request->file('file'), $index);
+        if ($f instanceof UploadedFile) {
+            $files[] = $f;
+        }
+
+        $p = data_get($request->file('proof'), $index);
+        if ($p instanceof UploadedFile) {
+            $files[] = $p;
+        }
+
+        $batch = data_get($request->file('attachments'), $index);
+        if ($batch instanceof UploadedFile) {
+            $files[] = $batch;
+        } elseif (is_array($batch)) {
+            foreach ($batch as $bf) {
+                if ($bf instanceof UploadedFile) {
+                    $files[] = $bf;
+                }
+            }
+        }
+
+        return $files;
+    }
+
+    private function ensureEntertainmentLegacyAttachment(int $reimbursementId, int $detailId, string $legacyEvidence): void
+    {
+        if (!$this->attachmentTableReady()) {
+            return;
+        }
+        $legacyEvidence = trim($legacyEvidence);
+        if ($detailId <= 0 || $legacyEvidence === '') {
+            return;
+        }
+
+        $exists = ReimbursementAttachment::where('detail_type', 'reimbursement_entertaiments')
+            ->where('detail_id', $detailId)
+            ->where('file_name', $legacyEvidence)
+            ->exists();
+        if ($exists) {
+            return;
+        }
+
+        ReimbursementAttachment::create([
+            'reimbursement_id' => $reimbursementId,
+            'module' => 'entertainment',
+            'detail_type' => 'reimbursement_entertaiments',
+            'detail_id' => $detailId,
+            'file_name' => $legacyEvidence,
+            'original_name' => $legacyEvidence,
+            'created_by' => auth()->id(),
+        ]);
+    }
+
+    private function syncEntertainmentAttachments(Request $request, int $rowIndex, int $reimbursementId, int $newDetailId, int $oldDetailId = 0, string $legacyEvidence = ''): array
+    {
+        if (!$this->attachmentTableReady()) {
+            $uploaded = $this->getEntertainmentRowUploadedFiles($request, $rowIndex);
+            if (!empty($uploaded)) {
+                $first = $this->storeAttachmentFile($uploaded[0]);
+                return $first === '' ? [] : [$first];
+            }
+            $legacyEvidence = trim((string) $legacyEvidence);
+            return $legacyEvidence === '' ? [] : [$legacyEvidence];
+        }
+
+        $kept = [];
+
+        if ($oldDetailId > 0) {
+            $this->ensureEntertainmentLegacyAttachment($reimbursementId, $oldDetailId, $legacyEvidence);
+
+            $oldRows = ReimbursementAttachment::where('detail_type', 'reimbursement_entertaiments')
+                ->where('detail_id', $oldDetailId)
+                ->orderBy('id')
+                ->get();
+
+            $hasKeepField = $request->has('keep_attachment_ids.' . $rowIndex);
+            $keepIds = $hasKeepField
+                ? collect((array) data_get($request->input('keep_attachment_ids', []), $rowIndex, []))
+                    ->map(function ($v) { return (int) $v; })
+                    ->filter(function ($v) { return $v > 0; })
+                    ->values()
+                : null;
+
+            foreach ($oldRows as $old) {
+                if ($keepIds !== null && !$keepIds->contains((int) $old->id)) {
+                    continue;
+                }
+
+                ReimbursementAttachment::create([
+                    'reimbursement_id' => $reimbursementId,
+                    'module' => 'entertainment',
+                    'detail_type' => 'reimbursement_entertaiments',
+                    'detail_id' => $newDetailId,
+                    'file_name' => $old->file_name,
+                    'original_name' => $old->original_name,
+                    'mime_type' => $old->mime_type,
+                    'file_size' => (int) $old->file_size,
+                    'created_by' => auth()->id(),
+                ]);
+                $kept[] = (string) $old->file_name;
+            }
+        }
+
+        $newNames = [];
+        foreach ($this->getEntertainmentRowUploadedFiles($request, $rowIndex) as $file) {
+            $originalName = '';
+            $mimeType = null;
+            $fileSize = 0;
+            try {
+                $originalName = (string) $file->getClientOriginalName();
+            } catch (\Throwable $e) {
+                $originalName = '';
+            }
+            try {
+                $mimeType = $file->getClientMimeType();
+            } catch (\Throwable $e) {
+                $mimeType = null;
+            }
+            try {
+                $sizeCandidate = $file->getSize();
+                $fileSize = is_numeric($sizeCandidate) ? (int) $sizeCandidate : 0;
+            } catch (\Throwable $e) {
+                $fileSize = 0;
+            }
+
+            $stored = $this->storeAttachmentFile($file);
+            if ($stored === '') {
+                continue;
+            }
+
+            ReimbursementAttachment::create([
+                'reimbursement_id' => $reimbursementId,
+                'module' => 'entertainment',
+                'detail_type' => 'reimbursement_entertaiments',
+                'detail_id' => $newDetailId,
+                'file_name' => $stored,
+                'original_name' => ($originalName !== '' ? $originalName : $stored),
+                'mime_type' => $mimeType,
+                'file_size' => $fileSize,
+                'created_by' => auth()->id(),
+            ]);
+            $newNames[] = $stored;
+        }
+
+        return array_values(array_filter(array_merge($kept, $newNames)));
     }
     /**
      * Display a listing of the resource.
@@ -72,7 +252,7 @@ class EntertaimentReimbursementController extends Controller
 
             $data = $data->orderBy('reimbursement.id', 'DESC');
             return datatables()->of($data)
-            ->addColumn('action', function ($data) {
+            ->addColumn('status_label', function ($data) {
                 if($data->status == 0 ){
                 $button = '<button" class="edit view btn btn-secondary  btn-sm">PENDING</button>';
                 }elseif ($data->status == 1) {
@@ -97,9 +277,31 @@ class EntertaimentReimbursementController extends Controller
                 } elseif ($data->status == 10){
                     $button = '<button  class="view btn btn-warning btn-sm">DRAFT</button>';
                 }
-                $button .= '&nbsp;&nbsp;';
 
                 return $button;
+            })
+            ->addColumn('action', function ($data) {
+                $buttons = '<div style="display:flex; gap:4px; align-items:center;">';
+
+                // Show button (always visible)
+                $buttons .= '<a href="' . route('reimbursement-entertaiment.show', $data->id) . '" class="btn btn-info btn-sm" title="Detail" aria-label="Detail"><i class="fa fa-eye"></i></a>';
+
+                // Edit button (always visible)
+                $buttons .= '<a href="' . route('reimbursement-entertaiment.edit', $data->id) . '" class="btn btn-primary btn-sm" title="Edit" aria-label="Edit"><i class="fa fa-edit"></i></a>';
+
+                // Delete button (only for status 0 or 10)
+                if (in_array((int) $data->status, [0, 10], true)) {
+                    $buttons .= '<form method="POST" action="' . route('reimbursement-entertaiment.destroy', $data->id) . '" style="display:inline-block; margin:0;" onsubmit="return confirm(\'Yakin ingin menghapus pengajuan ini?\')">'
+                        . csrf_field()
+                        . method_field('DELETE')
+                        . '<button type="submit" class="btn btn-danger btn-sm" title="Delete" aria-label="Delete"><i class="fa fa-trash"></i></button></form>';
+                } else {
+                    $buttons .= '<span>-</span>';
+                }
+
+                $buttons .= '</div>';
+
+                return $buttons;
 
             })
             ->addColumn('checkbox', function ($data) {
@@ -117,9 +319,9 @@ class EntertaimentReimbursementController extends Controller
                 return $button;
             })
             ->editColumn('no_reimbursement', function ($data) {
-                return "<a href='".route('reimbursement-entertaiment.show',$data->id)."'>".$data->no_reimbursement."</a>";
+                return $data->no_reimbursement;
             })
-            ->rawColumns(['action', 'checkbox' ,'nominal_pengajuan','no_reimbursement'])
+            ->rawColumns(['status_label', 'action', 'checkbox', 'nominal_pengajuan'])
             ->make(true);
         }
         
@@ -142,7 +344,7 @@ class EntertaimentReimbursementController extends Controller
         if(request()->ajax())
         {
 
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',3)->where('reimbursement.status', '!=',10);
@@ -275,16 +477,6 @@ class EntertaimentReimbursementController extends Controller
             $id_reim  = DB::select( DB::raw("SELECT max(id) AS id FROM reimbursement"))['0']->id;
 
             for ($i = 0; $i < count($request->empty_zone); $i++) {
-                if (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                    $image = $request->file[$i];
-                    $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $evidence);
-                } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                    $image = $request->proof[$i];
-                    $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $evidence);
-                }
-
                 $new = new ReimbursementEntertaiment();
                 $new->reimbursement_id = $id_reim;
                 $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
@@ -298,8 +490,12 @@ class EntertaimentReimbursementController extends Controller
                 $new->type = str_replace(".", "", $request->type[$i]);
                 $new->amount = str_replace(".", "", $request->amount[$i]);
                 $new->remark = $request->remark[$i];
-                $new->evidence = $evidence;
+                $new->evidence = '';
                 $new->status = 1;
+                $new->save();
+
+                $allAttachmentNames = $this->syncEntertainmentAttachments($request, $i, (int) $id_reim, (int) $new->id);
+                $new->evidence = $allAttachmentNames[0] ?? '';
                 $new->save();
             }
 
@@ -407,7 +603,9 @@ class EntertaimentReimbursementController extends Controller
      */
     public function edit($id)
     {
-        //
+        // For now, edit redirects to show (detail view)
+        // Can be extended later to show edit form
+        return $this->show($id);
     }
 
     /**
@@ -452,18 +650,13 @@ class EntertaimentReimbursementController extends Controller
             DB::select(DB::raw("UPDATE reimbursement_entertaiments SET status=0  WHERE reimbursement_id = '$id'"));
             
             for ($i=0; $i < count($request->empty_zone); $i++) { 
-                
-                if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                    $id_detail = $request->id_detail[$i];
-                    $evidence = DB::select(DB::raw("SELECT evidence FROM reimbursement_entertaiments WHERE id='$id_detail'"))['0']->evidence;
-                } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                    $image = $request->file[$i];
-                    $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $evidence);
-                } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                    $image = $request->proof[$i];
-                    $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $evidence);
+                $oldDetailId = isset($request->id_detail[$i]) && ctype_digit((string) $request->id_detail[$i])
+                    ? (int) $request->id_detail[$i]
+                    : 0;
+                $legacyEvidence = '';
+                if ($oldDetailId > 0) {
+                    $rowEv = DB::select(DB::raw("SELECT evidence FROM reimbursement_entertaiments WHERE id='$oldDetailId'"));
+                    $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
                 }
                 
                 $new = new ReimbursementEntertaiment();
@@ -479,8 +672,19 @@ class EntertaimentReimbursementController extends Controller
                 $new->type = str_replace(".", "", $request->type[$i]);
                 $new->amount = str_replace(".", "", $request->amount[$i]);
                 $new->remark = str_replace(".", "", $request->remark[$i]);
-                $new->evidence = $evidence;
+                $new->evidence = '';
                 $new->status = 1;
+                $new->save();
+
+                $allAttachmentNames = $this->syncEntertainmentAttachments(
+                    $request,
+                    $i,
+                    (int) $data->id,
+                    (int) $new->id,
+                    $oldDetailId,
+                    $legacyEvidence
+                );
+                $new->evidence = $allAttachmentNames[0] ?? '';
                 $new->save();
                 
             }
@@ -583,18 +787,13 @@ class EntertaimentReimbursementController extends Controller
                 DB::select(DB::raw("UPDATE reimbursement_entertaiments SET status=0  WHERE reimbursement_id = '$id'"));
                 
                 for ($i=0; $i < count($request->empty_zone); $i++) { 
-                    
-                    if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                        $id_detail = $request->id_detail[$i];
-                        $evidence = DB::select(DB::raw("SELECT evidence FROM reimbursement_entertaiments WHERE id='$id_detail'"))['0']->evidence;
-                    } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                        $image = $request->file[$i];
-                        $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $evidence);
-                    } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                        $image = $request->proof[$i];
-                        $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $evidence);
+                    $oldDetailId = isset($request->id_detail[$i]) && ctype_digit((string) $request->id_detail[$i])
+                        ? (int) $request->id_detail[$i]
+                        : 0;
+                    $legacyEvidence = '';
+                    if ($oldDetailId > 0) {
+                        $rowEv = DB::select(DB::raw("SELECT evidence FROM reimbursement_entertaiments WHERE id='$oldDetailId'"));
+                        $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
                     }
                     
                     $new = new ReimbursementEntertaiment();
@@ -610,8 +809,19 @@ class EntertaimentReimbursementController extends Controller
                     $new->type = str_replace(".", "", $request->type[$i]);
                     $new->amount = str_replace(".", "", $request->amount[$i]);
                     $new->remark = str_replace(".", "", $request->remark[$i]);
-                    $new->evidence = $evidence;
+                    $new->evidence = '';
                     $new->status = 1;
+                    $new->save();
+
+                    $allAttachmentNames = $this->syncEntertainmentAttachments(
+                        $request,
+                        $i,
+                        (int) $data->id,
+                        (int) $new->id,
+                        $oldDetailId,
+                        $legacyEvidence
+                    );
+                    $new->evidence = $allAttachmentNames[0] ?? '';
                     $new->save();
                     
                 }
@@ -654,18 +864,13 @@ class EntertaimentReimbursementController extends Controller
                 DB::select(DB::raw("UPDATE reimbursement_entertaiments SET status=0  WHERE reimbursement_id = '$id'"));
                 
                 for ($i=0; $i < count($request->empty_zone); $i++) { 
-                    
-                    if (empty($request->proof[$i]) && empty($request->file[$i])) {
-                        $id_detail = $request->id_detail[$i];
-                        $evidence = DB::select(DB::raw("SELECT evidence FROM reimbursement_entertaiments WHERE id='$id_detail'"))['0']->evidence;
-                    } elseif (empty($request->proof[$i]) && !empty($request->file[$i])) {
-                        $image = $request->file[$i];
-                        $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $evidence);
-                    } elseif (empty($request->file[$i]) && !empty($request->proof[$i])) {
-                        $image = $request->proof[$i];
-                        $evidence = rand() . '.' . $image->getClientOriginalExtension();
-                        $image->move(public_path('images/file_bukti'), $evidence);
+                    $oldDetailId = isset($request->id_detail[$i]) && ctype_digit((string) $request->id_detail[$i])
+                        ? (int) $request->id_detail[$i]
+                        : 0;
+                    $legacyEvidence = '';
+                    if ($oldDetailId > 0) {
+                        $rowEv = DB::select(DB::raw("SELECT evidence FROM reimbursement_entertaiments WHERE id='$oldDetailId'"));
+                        $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
                     }
                     
                     $new = new ReimbursementEntertaiment();
@@ -681,8 +886,19 @@ class EntertaimentReimbursementController extends Controller
                     $new->type = str_replace(".", "", $request->type[$i]);
                     $new->amount = str_replace(".", "", $request->amount[$i]);
                     $new->remark = str_replace(".", "", $request->remark[$i]);
-                    $new->evidence = $evidence;
+                    $new->evidence = '';
                     $new->status = 1;
+                    $new->save();
+
+                    $allAttachmentNames = $this->syncEntertainmentAttachments(
+                        $request,
+                        $i,
+                        (int) $data->id,
+                        (int) $new->id,
+                        $oldDetailId,
+                        $legacyEvidence
+                    );
+                    $new->evidence = $allAttachmentNames[0] ?? '';
                     $new->save();
                     
                 }
@@ -718,7 +934,35 @@ class EntertaimentReimbursementController extends Controller
 
     public function destroy($id)
     {
-        //
+        $data = Reimbursement::where('id', $id)
+            ->where('reimbursement_type', 3)
+            ->first();
+
+        if (!$data) {
+            return redirect()->back()->withErrors(['Data reimbursement entertainment tidak ditemukan']);
+        }
+
+        $isOwner = (int) $data->id_user === (int) auth()->id();
+        $isSuperadmin = auth()->user()->jabatan === 'superadmin';
+        if (!$isOwner && !$isSuperadmin) {
+            return redirect()->back()->withErrors(['Anda tidak memiliki akses untuk menghapus data ini']);
+        }
+
+        if (!in_array((int) $data->status, [0, 10], true)) {
+            return redirect()->back()->withErrors(['Hanya pengajuan dengan status pending atau draft yang dapat dihapus']);
+        }
+
+        DB::beginTransaction();
+        try {
+            ReimbursementEntertaiment::where('reimbursement_id', $id)->delete();
+            $data->delete();
+            DB::commit();
+
+            return redirect('reimbursement-entertaiment')->with(['success' => 'Pengajuan berhasil dihapus']);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['Gagal menghapus pengajuan: ' . $e->getMessage()]);
+        }
     }
     
     function approve(Request $requset, $id) {
