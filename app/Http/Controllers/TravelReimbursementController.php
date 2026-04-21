@@ -20,6 +20,7 @@ use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Redirect;
 
 class TravelReimbursementController extends Controller
@@ -93,6 +94,34 @@ class TravelReimbursementController extends Controller
         }
 
         return $fallbackIdTravel;
+    }
+
+    private function canManageTravelTabs(Reimbursement $reimbursement): bool
+    {
+        $status = (int) $reimbursement->status;
+        $jabatan = (string) auth()->user()->jabatan;
+
+        if ($status === 10) {
+            return true;
+        }
+
+        if ($status === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+            return true;
+        }
+
+        if ($status === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'superadmin'], true)) {
+            return true;
+        }
+
+        if ($status === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+            return true;
+        }
+
+        if ($status === 3 && in_array($jabatan, ['Owner', 'superadmin'], true)) {
+            return true;
+        }
+
+        return false;
     }
 
     /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400. */
@@ -1041,21 +1070,34 @@ class TravelReimbursementController extends Controller
     {
 
         DB::beginTransaction();
-        
-        if (isset($_POST['save'])) {
+
+        // Deteksi intent submit yang lebih robust untuk tombol tanpa value.
+        $postKeys = is_array($_POST ?? null) ? array_keys($_POST) : [];
+        $isSave = in_array('save', $postKeys, true);
+        $isSaveDraft = in_array('save_draft', $postKeys, true);
+        $isSaveItem = in_array('save_item', $postKeys, true);
+
+        // Fallback: bila tombol submit tidak terkirim, treat sebagai "save_item"
+        // agar proses add new tab tidak terseret validasi full.
+        if (!$isSave && !$isSaveDraft && !$isSaveItem) {
+            $isSaveItem = true;
+        }
+
+        if ($isSave) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
-        } else if (isset($_POST['save_draft'])) {
+        } else if ($isSaveDraft) {
             $status = 10; // DRAFT
             $notif = 'Reimbursement Successfully Saved as Draft';
-        } else if (isset($_POST['save_item'])) {
+        } else if ($isSaveItem) {
             $status = 10;
             $notif = 'redirect';
         }
 
 
         try {
-            $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
+            $allowIncomplete = $isSaveDraft || $isSaveItem;
+            $this->validateTravelReimbursementItemRequest($request, $allowIncomplete);
 
             $remark = $request->remark;
             $reimbursement_department_id = $request->reimbursement_department_id;
@@ -1092,7 +1134,6 @@ class TravelReimbursementController extends Controller
 
             $currencies = is_array($request->currency) ? $request->currency : [];
             $count_ = count($currencies);
-            $allowIncomplete = $this->travelItemAllowIncompleteForm();
             $draftFallbackCostTypeId = (int) (TravelType::min('id') ?: 0);
 
             for ($i=0; $i < $count_; $i++) {
@@ -1283,16 +1324,15 @@ class TravelReimbursementController extends Controller
 
             
 
+        } catch (ValidationException $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors($e->validator)->withInput();
+    
         } catch(\Exception $e) {
-            // return var_dump($e);
-            dd($e->getMessage() . " at line ". $e->getLine());
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
     
         } catch(\Throwable $e) {
-            // return var_dump($e);
-            dd($e->getMessage() . " at line ". $e->getLine());
-
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
         }
@@ -1505,9 +1545,9 @@ class TravelReimbursementController extends Controller
         try {
             $reimbursement = Reimbursement::findOrFail($id_main);
 
-            if ((int) $reimbursement->status !== 10) {
+            if (!$this->canManageTravelTabs($reimbursement)) {
                 DB::rollback();
-                return redirect()->back()->withErrors(['Tab hanya bisa dihapus saat status draft']);
+                return redirect()->back()->withErrors(['Anda tidak memiliki akses untuk menghapus tab ini pada status pengajuan saat ini']);
             }
 
             $travel = ReimbursementTravel::where('id', $id_travel)->where('reimbursement_id', $id_main)->first();
@@ -1535,6 +1575,10 @@ class TravelReimbursementController extends Controller
             $remainingTravelCount = ReimbursementTravel::where('reimbursement_id', $id_main)->count();
 
             if ($remainingTravelCount === 0) {
+                if ((int) $reimbursement->status !== 10) {
+                    DB::rollback();
+                    return redirect()->back()->withErrors(['Minimal harus ada 1 tab perjalanan pada pengajuan non-draft']);
+                }
                 TravelTripRate::where('reimbursement_id', $id_main)->delete();
                 $reimbursement->delete();
                 DB::commit();
@@ -1867,6 +1911,7 @@ class TravelReimbursementController extends Controller
     public function updateItem(Request $request, $id_main, $id_travel)
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
+        $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
 
         if($request->id_user == $request->id_editor) {
           if (isset($_POST['save'])) {
@@ -1880,6 +1925,10 @@ class TravelReimbursementController extends Controller
               $return = redirect('reimbursement-travel/add-item/'.$id_main.'');
           }
         } else {
+            if (isset($_POST['save_item'])) {
+                $status = $currentStatus;
+                $return = redirect('reimbursement-travel/add-item/'.$id_main.'');
+            } else
           
 			if (isset($_POST['save_owner'])) {
                 $status = 3;

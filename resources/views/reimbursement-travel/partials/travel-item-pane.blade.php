@@ -55,6 +55,22 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         'evidence' => '',
     ];
 @endphp
+@php
+    $statusInt = (int) ($data[0]->status ?? 0);
+    $jabatan = (string) (auth()->user()->jabatan ?? '');
+    $canManageTabs = false;
+    if ($statusInt === 10) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'superadmin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'superadmin'], true)) {
+        $canManageTabs = true;
+    }
+@endphp
 <div class="nav-tabs-container">
     <ul class="nav nav-tabs">
         @foreach($data_item as $item)
@@ -65,13 +81,13 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         data-rt-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
                         data-rt-tab="1"
                         data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></button>
-                @if($data['0']->status == 10)
+                @if($canManageTabs)
                 <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
                 @endif
             </div>
         </li>
         @endforeach
-        @if($data['0']->status==10)
+        @if($canManageTabs)
         <li class="nav-item">
             <button type="submit" class="nav-link" name="save_item" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
         </li>
