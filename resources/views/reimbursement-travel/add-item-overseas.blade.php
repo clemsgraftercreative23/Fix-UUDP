@@ -3,17 +3,18 @@
 @section('content')
 
 <style>
-    .modal-dialog {
+    /* Hanya modal kamera: jangan timpa .modal-dialog global (merusak #previewImageModal). */
+    #modalPhoto .modal-dialog {
         max-width: 100%;
         margin: 0 auto;
     }
 
-    .modal-content {
+    #modalPhoto .modal-content {
         max-height: 100vh; 
         overflow-y: auto; 
     }
 
-    .modal-body {
+    #modalPhoto .modal-body {
         overflow-y: auto;
         max-height: 90vh; 
     }
@@ -142,8 +143,7 @@ function rupiah($angka){
 function rate_input($angka){
     if ($angka === null || $angka === '') return '';
     if (!is_numeric($angka)) return (string) $angka;
-    $v = number_format((float) $angka, 2, '.', '');
-    return rtrim(rtrim($v, '0'), '.');
+    return number_format((float) $angka, 2, ',', '.');
 }
 ?>
 
@@ -223,37 +223,35 @@ function rate_input($angka){
                         <hr>
                         <div class="row">
                             <div class="col-md-12">
+                                @php
+                                    $travelTripRatesSorted = collect($travel_trip ?? [])->values()->sort(function ($a, $b) {
+                                        $aIdr = strtoupper((string) ($a->currency ?? '')) === 'IDR';
+                                        $bIdr = strtoupper((string) ($b->currency ?? '')) === 'IDR';
+                                        if ($aIdr !== $bIdr) {
+                                            return $aIdr ? -1 : 1;
+                                        }
+                                        return ((int) ($a->id ?? 0)) <=> ((int) ($b->id ?? 0));
+                                    })->values();
+                                @endphp
+                                @foreach($travelTripRatesSorted as $row)
                                 <div class="row fieldGroup">
-                                    <input type="hidden" name="id_rate" class="id_rate" value="{{$travel_trip['0']->id}}">
+                                    <input type="hidden" name="id_rate" class="id_rate" value="{{ $row->id }}">
                                     <div class="col-md-3">
                                         <label for="">Currency</label>
-                                        <input type="text" class="form-control" name="currency_rate[]" value="{{$travel_trip['0']->currency}}">
+                                        <input type="text" class="form-control" name="currency_rate[]" value="{{ $row->currency }}">
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($travel_trip['0']->rate) }}">
+                                        <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($row->rate) }}">
                                     </div>
                                     <div class="col-md-3">
+                                        @if($loop->first)
                                         <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
+                                        @else
+                                        <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
+                                        @endif
                                     </div>
                                 </div>
-                                @foreach($travel_trip as $key => $row)
-                                    @if($key > 0)
-                                    <div class="row fieldGroup">
-                                        <input type="hidden" name="id_rate" class="id_rate" value="{{$row->id}}">
-                                        <div class="col-md-3">
-                                            <label for="">Currency</label>
-                                            <input type="text" class="form-control" name="currency_rate[]" value="{{$row->currency}}">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="">Exchange Rate</label>
-                                            <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($row->rate) }}">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
-                                        </div>
-                                    </div>
-                                    @endif
                                 @endforeach
                             </div>                 
                         </div>
@@ -304,27 +302,28 @@ function rate_input($angka){
           <div class="modal-body">
             <video id="videoElement" autoplay style="width: 100%"></video>
             <canvas id="canvas"></canvas>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <button id="captureButton" class="btn btn-success">Capture Image</button>
-            </div>
+          </div>
+          <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+              <button id="captureButton" class="btn btn-success">Capture Image</button>
+          </div>
       </div>
   </div>
-  </div>
+</div>
 
 <!-- End Modal -->
 
 <!-- Modal Preview Image -->
-<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Preview Gambar</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <i class="material-icons">close</i>
+        <div class="modal-content" style="background: transparent; border: 0; box-shadow: none;">
+            <div class="modal-header" style="border: 0;">
+                <h5 class="modal-title text-white">Preview Gambar</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 1; font-size: 2rem;">
+                    <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body text-center" style="max-height: 80vh; overflow:auto;">
+            <div class="modal-body text-center pt-0" style="max-height: 80vh; overflow:auto;">
                 <img id="previewImageModalSrc" src="" alt="Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
             </div>
         </div>
@@ -691,12 +690,12 @@ $(document).ready(function(){
         decimal: ',',
         allowZero: true,
         allowNegative: true,
-        precision: 0 // ubah ke 2 kalau butuh angka desimal
+        precision: 2
       });
       $('.currency').maskMoney('mask');
     });
 
-    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
+    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:2});
     
     $(".type-currency").on("keyup", function(event) {
       var i = event.keyCode;
@@ -712,47 +711,74 @@ $(document).ready(function(){
     var i = 1;
     var j = 1;
 
-    function sanitizeExchangeRateInput(value, finalize) {
-        var v = (value || '').toString().replace(/,/g, '.');
-        v = v.replace(/[^0-9.]/g, '');
-
-        var firstDot = v.indexOf('.');
-        if (firstDot !== -1) {
-            v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+    function normalizeEuropeanNumberString(raw) {
+        var x = String(raw || '').trim().replace(/\s/g, '');
+        if (!x) return '0';
+        var lastC = x.lastIndexOf(',');
+        var lastD = x.lastIndexOf('.');
+        if (lastC > lastD) {
+            x = x.replace(/\./g, '').replace(',', '.');
+            return (x.replace(/[^\d.]/g, '') || '0');
         }
+        x = x.replace(/,/g, '');
+        var idx = x.lastIndexOf('.');
+        if (idx === -1) {
+            return (x.replace(/[^\d]/g, '') || '0');
+        }
+        var intRaw = x.slice(0, idx);
+        var frac = x.slice(idx + 1).replace(/\D/g, '');
+        var intPart = intRaw.replace(/\./g, '');
+        if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
+            return intPart + frac;
+        }
+        return (intPart || '0') + '.' + frac;
+    }
 
-        var parts = v.split('.');
+    function sanitizeExchangeRateInput(value, finalize) {
+        var s = (value || '').toString().trim().replace(/\s/g, '');
+        if (!s) return '';
+        var lastC = s.lastIndexOf(',');
+        var lastD = s.lastIndexOf('.');
+        if (lastC > lastD) {
+            s = s.replace(/\./g, '').replace(',', '.');
+        } else {
+            s = s.replace(/,/g, '');
+        }
+        s = s.replace(/[^0-9.]/g, '');
+        var firstDot = s.indexOf('.');
+        if (firstDot !== -1) {
+            s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '');
+        }
+        var parts = s.split('.');
         var intPart = parts[0] || '';
         var decPart = parts[1] || '';
         if (decPart.length > 2) {
             decPart = decPart.slice(0, 2);
         }
-
-        if (finalize) {
-            if (intPart.length > 1) {
-                intPart = intPart.replace(/^0+/, '') || '0';
-            }
-            if (v.endsWith('.')) {
-                return intPart;
-            }
+        if (finalize && intPart.length > 1) {
+            intPart = intPart.replace(/^0+/, '') || '0';
         }
-
+        if (finalize && parts.length > 1 && parts[1] === '' && s.slice(-1) === '.') {
+            return intPart;
+        }
         return parts.length > 1 ? (intPart + '.' + decPart) : intPart;
     }
 
     function normalizeExchangeRateValue(value) {
         var s = sanitizeExchangeRateInput(value, true);
-        if (s === '') return '0';
-        var parts = s.split('.');
-        var intPart = (parts[0] || '0').replace(/^0+(?=\d)/, '');
-        if (!parts[1]) return intPart;
-        return intPart + '.' + parts[1];
+        if (s === '') return '0,00';
+        var canonical = normalizeEuropeanNumberString(s);
+        var n = parseFloat(canonical);
+        if (isNaN(n)) return '0,00';
+        n = Math.round(n * 100) / 100;
+        return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     function parseExchangeRateNumber(value) {
-        var s = normalizeExchangeRateValue(value);
-        var n = parseFloat(s);
-        return isNaN(n) ? 0 : n;
+        var canonical = normalizeEuropeanNumberString(String(value || '').trim());
+        var n = parseFloat(canonical);
+        if (isNaN(n)) return 0;
+        return Math.round(n * 100) / 100;
     }
 
     $(document).on('input', 'input.exchange-rate-input[name="rate[]"]', function () {
@@ -778,7 +804,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0 // ubah ke 2 kalau butuh angka desimal
+              precision: 2
             });
             $('.currency').maskMoney('mask');
           });
@@ -864,7 +890,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0
+              precision: 2
             });
             $('.currency').maskMoney('mask');
         });
@@ -1141,34 +1167,34 @@ $(document).ready(function(){
       mounted() {
         // this.initSelectForm()
         self = this
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.idr-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.usd-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.usd_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.jpy-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.jpy_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
             self.calculateTotal(0,0)
         });
-        // $('.number-format').maskMoney({ thousands:'.', decimal:',', precision:0});
+        // $('.number-format').maskMoney({ thousands:'.', decimal:',', precision:2});
       
       },
       methods : {
@@ -1306,7 +1332,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               // self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
@@ -1330,7 +1356,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               // self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());

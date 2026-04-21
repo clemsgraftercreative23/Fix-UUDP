@@ -3,17 +3,17 @@
 @section('content')
 
 <style>
-    .modal-dialog {
+    #modalPhoto .modal-dialog {
         max-width: 100%;
         margin: 0 auto;
     }
 
-    .modal-content {
+    #modalPhoto .modal-content {
         max-height: 100vh; 
         overflow-y: auto; 
     }
 
-    .modal-body {
+    #modalPhoto .modal-body {
         overflow-y: auto;
         max-height: 90vh; 
     }
@@ -205,37 +205,35 @@ function rupiah($angka){
                         <hr>
                         <div class="row">
                             <div class="col-md-12">
+                                @php
+                                    $travelTripRatesSorted = collect($travel_trip ?? [])->values()->sort(function ($a, $b) {
+                                        $aIdr = strtoupper((string) ($a->currency ?? '')) === 'IDR';
+                                        $bIdr = strtoupper((string) ($b->currency ?? '')) === 'IDR';
+                                        if ($aIdr !== $bIdr) {
+                                            return $aIdr ? -1 : 1;
+                                        }
+                                        return ((int) ($a->id ?? 0)) <=> ((int) ($b->id ?? 0));
+                                    })->values();
+                                @endphp
+                                @foreach($travelTripRatesSorted as $row)
                                 <div class="row fieldGroup">
-                                    <input type="hidden" name="id_rate" class="id_rate" value="{{$travel_trip['0']->id}}">
+                                    <input type="hidden" name="id_rate" class="id_rate" value="{{ $row->id }}">
                                     <div class="col-md-3">
                                         <label for="">Currency</label>
-                                        <input type="text" class="form-control" name="currency_rate[]" value="{{$travel_trip['0']->currency}}">
+                                        <input type="text" class="form-control" name="currency_rate[]" value="{{ $row->currency }}">
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($travel_trip['0']->rate)}}">
+                                        <input type="text" class="form-control currency" name="rate[]" value="{{ rupiah($row->rate) }}">
                                     </div>
                                     <div class="col-md-3">
+                                        @if($loop->first)
                                         <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
+                                        @else
+                                        <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
+                                        @endif
                                     </div>
                                 </div>
-                                @foreach($travel_trip as $key => $row)
-                                    @if($key > 0)
-                                    <div class="row fieldGroup">
-                                        <input type="hidden" name="id_rate" class="id_rate" value="{{$row->id}}">
-                                        <div class="col-md-3">
-                                            <label for="">Currency</label>
-                                            <input type="text" class="form-control" name="currency_rate[]" value="{{$row->currency}}">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($row->rate)}}">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
-                                        </div>
-                                    </div>
-                                    @endif
                                 @endforeach
                             </div>                 
                         </div>
@@ -471,13 +469,14 @@ function rupiah($angka){
           <div class="modal-body">
             <video id="videoElement" autoplay style="width: 100%"></video>
             <canvas id="canvas"></canvas>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <button id="captureButton" class="btn btn-success">Capture Image</button>
-            </div>
+          </div>
+          <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+              <button id="captureButton" class="btn btn-success">Capture Image</button>
+          </div>
       </div>
   </div>
-  </div>
+</div>
 
 <!-- End Modal -->
 
@@ -788,12 +787,12 @@ $(document).ready(function(){
           decimal: ',',
           allowZero: true,
           allowNegative: true,
-          precision: 0 // ubah ke 2 kalau butuh angka desimal
+          precision: 2
         });
         $('.currency').maskMoney('mask');
     });
 
-    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
+    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:2});
     
     $(".type-currency").on("keyup", function(event) {
       var i = event.keyCode;
@@ -824,7 +823,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0 // ubah ke 2 kalau butuh angka desimal
+              precision: 2
             });
             $('.currency').maskMoney('mask');
           });
@@ -904,7 +903,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0
+              precision: 2
             });
             $('.currency').maskMoney('mask');
         });
@@ -1120,7 +1119,7 @@ $(document).ready(function(){
         var rtSkipVueTravelPane = function (event) {
           return $(event.target).closest('#rt-travel-item-pane').length > 0;
         };
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.idr-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
@@ -1128,7 +1127,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.usd-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
@@ -1136,7 +1135,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.jpy-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
@@ -1144,14 +1143,14 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
             self.calculateTotal(0,0)
         });
-        // $('.number-format').maskMoney({ thousands:'.', decimal:',', precision:0});
+        // $('.number-format').maskMoney({ thousands:'.', decimal:',', precision:2});
       
       },
       methods : {
@@ -1245,7 +1244,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
@@ -1270,7 +1269,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 const index = $(event.target).closest('tr').index();

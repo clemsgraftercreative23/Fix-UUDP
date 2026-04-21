@@ -2,7 +2,7 @@
 if (!function_exists('rt_travel_pane_rupiah')) {
     function rt_travel_pane_rupiah($angka)
     {
-        return number_format((float) $angka, 0, ',', '.');
+        return number_format((float) $angka, 2, ',', '.');
     }
 }
 if (!function_exists('rt_travel_detail_attachments')) {

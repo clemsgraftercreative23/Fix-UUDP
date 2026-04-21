@@ -32,6 +32,34 @@
     return String(tid || '') === NEW_ITEM_DRAFT_KEY;
   }
 
+  /** Windows / beberapa browser mengosongkan `File.type`; tetap anggap gambar dari ekstensi. */
+  function inferImageMimeFromFileName(name) {
+    const ext = String(name || '').split('.').pop().toLowerCase();
+    const map = {
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      bmp: 'image/bmp',
+      svg: 'image/svg+xml'
+    };
+    return map[ext] || '';
+  }
+
+  function isLikelyImageFile(file) {
+    if (!file) return false;
+    const t = (file.type || '').trim();
+    if (t && /^image\//i.test(t)) return true;
+    return !!inferImageMimeFromFileName(file.name);
+  }
+
+  /**
+   * Baca file ke data URL untuk draft; file terlalu besar membuat attr/localStorage bermasalah
+   * dan bisa memicu error upload di beberapa browser.
+   */
+  var RT_MAX_EVIDENCE_READ_BYTES = 6 * 1024 * 1024;
+
   function readMainIdAttr($pane) {
     const v = $pane.attr('data-main-id');
     return v === undefined ? '' : String(v);
@@ -198,24 +226,34 @@
     if (!$tr || !$tr.length || !rowState || !rowState.temp_file || !rowState.temp_file.data_url) return;
 
     const tf = rowState.temp_file;
-    const file = dataUrlToFile(tf.data_url, tf.file_name || 'draft_upload', tf.file_type || 'application/octet-stream');
+    const mimeHint = (tf.file_type || '').trim() || inferImageMimeFromFileName(tf.file_name) || 'application/octet-stream';
+    const file = dataUrlToFile(tf.data_url, tf.file_name || 'draft_upload', mimeHint);
     if (!file) return;
 
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(file);
+    try {
+      dataTransfer.items.add(file);
+    } catch (eAdd) {
+      return;
+    }
 
     const targetInput = (tf.source === 'camera')
       ? $tr.find('input.camera-input[type="file"]').first()
       : $tr.find('input.file-input[type="file"]').first();
 
     if (targetInput.length) {
-      targetInput[0].files = dataTransfer.files;
+      try {
+        targetInput[0].files = dataTransfer.files;
+      } catch (eFiles) {
+        /* Firefox/dll: kadang menolak FileList sintetis — preview dari data_url tetap dipasang di bawah. */
+      }
     }
 
     const $preview = $tr.find('[id^="preview_"]').first();
     if ($preview.length) {
       $preview.empty();
-      if ((tf.file_type || '').indexOf('image/') === 0) {
+      const previewMime = (tf.file_type || '').trim() || inferImageMimeFromFileName(tf.file_name);
+      if (previewMime.indexOf('image/') === 0) {
         const $img = $('<img>')
           .attr('src', tf.data_url)
           .attr('data-preview-src', tf.data_url)
@@ -953,7 +991,7 @@
         return;
       }
 
-      if (!/^image\//i.test(file.type || '')) {
+      if (!isLikelyImageFile(file)) {
         const minimal = {
           source: $input.hasClass('camera-input') ? 'camera' : 'file',
           file_name: file.name || 'upload',
@@ -967,12 +1005,25 @@
         return;
       }
 
+      if (typeof file.size === 'number' && file.size > RT_MAX_EVIDENCE_READ_BYTES) {
+        $row.removeAttr('data-rt-temp-file');
+        schedulePersist();
+        return;
+      }
+
       const reader = new FileReader();
+      reader.onerror = function () {
+        try {
+          $row.removeAttr('data-rt-temp-file');
+        } catch (eR) { /* ignore */ }
+        schedulePersist();
+      };
       reader.onload = function (ev) {
+        const inferred = (file.type || '').trim() || inferImageMimeFromFileName(file.name) || 'image/jpeg';
         const payload = {
           source: $input.hasClass('camera-input') ? 'camera' : 'file',
           file_name: file.name || 'upload',
-          file_type: file.type || 'image/jpeg',
+          file_type: inferred,
           data_url: ev && ev.target ? (ev.target.result || '') : ''
         };
         try {

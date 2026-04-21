@@ -127,17 +127,22 @@
                             </div>
                             <hr />
                             <div v-for="(dt,i) in rates" :key="'travel-rate-row-'+i" class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-9">
                                     <div class="row">
-                                        <div class="col-md-3">
+                                        <div class="col-md-4">
                                             <label for="">Currency</label>
                                             <input type="text" class="form-control" :name="'rates['+i+'][code]'" v-model.trim="dt.code" @blur="dt.code = (dt.code || '').toUpperCase()" />
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-8">
                                             <label for="">Exchange Rate</label>
                                             <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" :value="dt.rate" @input="onExchangeRateInput(i, $event)" @focus="onExchangeRateFocus(i, $event)" @blur="onExchangeRateBlur(i, $event)" autocomplete="off" inputmode="decimal" />
                                         </div>
                                     </div>
+                                </div>
+                                <div class="col-md-3 text-left" v-if="i > 0" style="padding-top:28px">
+                                    <button type="button" class="btn btn-danger btn-sm" @click.prevent="removeRate(i)" title="Hapus kurs">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
                                 </div>
                             </div>
                             <hr />
@@ -364,7 +369,7 @@ $(document).ready(function(){
         $('#modalPassword').modal('show');
     @endif
 
-    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});   
+    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:2});   
     
     var maxGroup = 10;
     var i = 1;
@@ -430,28 +435,28 @@ $(document).ready(function(){
       mounted() {
         this.initSelectForm()
         self = this
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.idr-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.usd-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.usd_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
         $('.jpy-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.jpy_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
         // Set default hotel condition for first row before trip type is selected.
         if (this.reimburses.length > 0) {
             this.reimburses[0].hotel_condition = this.not_stay_hotel_condition_id;
@@ -476,11 +481,38 @@ $(document).ready(function(){
             const trip = row && row.trip !== undefined && row.trip !== null ? String(row.trip) : '';
             return trip === '' || trip === '0';
         },
+        /**
+         * Normalisasi string angka (koma/titik desimal atau ribuan) ke satu bilangan float, max 2 desimal.
+         * Contoh: "139,88" / "12.89" / "16.400,50" / "16400"
+         */
+        normalizeEuropeanNumberString(s) {
+            let x = String(s || '').trim().replace(/\s/g, '');
+            if (!x) return '0';
+            const lastC = x.lastIndexOf(',');
+            const lastD = x.lastIndexOf('.');
+            if (lastC > lastD) {
+                x = x.replace(/\./g, '').replace(',', '.');
+                return x.replace(/[^\d.]/g, '') || '0';
+            }
+            x = x.replace(/,/g, '');
+            const idx = x.lastIndexOf('.');
+            if (idx === -1) {
+                return (x.replace(/[^\d]/g, '') || '0');
+            }
+            const intRaw = x.slice(0, idx);
+            const frac = x.slice(idx + 1).replace(/\D/g, '');
+            const intPart = intRaw.replace(/\./g, '');
+            if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
+                return intPart + frac;
+            }
+            return (intPart || '0') + '.' + frac;
+        },
         numericRate(val) {
             if (val === null || val === undefined || val === '') return 0;
-            const s = String(val).replace(/\s/g, '').replace(/[^\d]/g, '');
-            const n = parseInt(s, 10);
-            return isNaN(n) ? 0 : n;
+            const t = this.normalizeEuropeanNumberString(String(val).trim());
+            const n = parseFloat(t);
+            if (isNaN(n)) return 0;
+            return Math.round(n * 100) / 100;
         },
         /**
          * Jangan destroy + re-init semua mask: itu mereset nilai tampilan jadi 0/1.
@@ -488,8 +520,11 @@ $(document).ready(function(){
          * Sebelum tambah baris, syncRatesFromExchangeInputs() agar v-model.lazy tidak kehilangan isian.
          */
         formatRateDisplay(val) {
+            if (val === null || val === undefined || val === '') return '';
+            if (typeof val === 'string' && val.trim() === '') return '';
             const n = this.numericRate(val);
-            return n > 0 ? n.toLocaleString('de-DE') : '';
+            if (isNaN(n)) return '';
+            return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         },
         logExchangeRate(action, idx, payload) {
             try {
@@ -510,8 +545,20 @@ $(document).ready(function(){
         },
         onExchangeRateInput(idx, event) {
             const raw = event && event.target ? event.target.value : '';
-            let v = String(raw).replace(/\s/g, '');
-            v = v.replace(/,/g, '.');
+            let v = String(raw).trim().replace(/\s/g, '');
+            if (!v) {
+                if (this.rates[idx]) this.$set(this.rates[idx], 'rate', '');
+                if (event && event.target) event.target.value = '';
+                this.logExchangeRate('input', idx, { raw: raw, display: '' });
+                return;
+            }
+            const lastC = v.lastIndexOf(',');
+            const lastD = v.lastIndexOf('.');
+            if (lastC > lastD) {
+                v = v.replace(/\./g, '').replace(',', '.');
+            } else {
+                v = v.replace(/,/g, '');
+            }
             v = v.replace(/[^0-9.]/g, '');
             const firstDot = v.indexOf('.');
             if (firstDot !== -1) {
@@ -767,6 +814,16 @@ $(document).ready(function(){
                 this.syncRatesFromExchangeInputs();
             });
         },
+        removeRate(i) {
+            if (i <= 0 || !Array.isArray(this.rates) || this.rates.length <= 1) {
+                return;
+            }
+            this.syncRatesFromExchangeInputs();
+            this.rates.splice(i, 1);
+            this.$nextTick(() => {
+                this.syncRatesFromExchangeInputs();
+            });
+        },
         addTravel() {
             this.reimburses.push({
                 trip: null,
@@ -790,7 +847,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
@@ -819,7 +876,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());

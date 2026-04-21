@@ -205,37 +205,35 @@ function rupiah($angka){
                         <hr>
                         <div class="row">
                             <div class="col-md-12">
+                                @php
+                                    $travelTripRatesSorted = collect($travel_trip ?? [])->values()->sort(function ($a, $b) {
+                                        $aIdr = strtoupper((string) ($a->currency ?? '')) === 'IDR';
+                                        $bIdr = strtoupper((string) ($b->currency ?? '')) === 'IDR';
+                                        if ($aIdr !== $bIdr) {
+                                            return $aIdr ? -1 : 1;
+                                        }
+                                        return ((int) ($a->id ?? 0)) <=> ((int) ($b->id ?? 0));
+                                    })->values();
+                                @endphp
+                                @foreach($travelTripRatesSorted as $row)
                                 <div class="row fieldGroup">
-                                    <input type="hidden" name="id_rate" class="id_rate" value="{{$travel_trip['0']->id}}">
+                                    <input type="hidden" name="id_rate" class="id_rate" value="{{ $row->id }}">
                                     <div class="col-md-3">
                                         <label for="">Currency</label>
-                                        <input type="text" class="form-control" name="currency_rate[]" value="{{$travel_trip['0']->currency}}">
+                                        <input type="text" class="form-control" name="currency_rate[]" value="{{ $row->currency }}">
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($travel_trip['0']->rate)}}">
+                                        <input type="text" class="form-control currency" name="rate[]" value="{{ rupiah($row->rate) }}">
                                     </div>
                                     <div class="col-md-3">
+                                        @if($loop->first)
                                         <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
+                                        @else
+                                        <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
+                                        @endif
                                     </div>
                                 </div>
-                                @foreach($travel_trip as $key => $row)
-                                    @if($key > 0)
-                                    <div class="row fieldGroup">
-                                        <input type="hidden" name="id_rate" class="id_rate" value="{{$row->id}}">
-                                        <div class="col-md-3">
-                                            <label for="">Currency</label>
-                                            <input type="text" class="form-control" name="currency_rate[]" value="{{$row->currency}}">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="">Exchange Rate</label>
-                                            <input type="text" class="form-control currency" name="rate[]" value="{{rupiah($row->rate)}}">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
-                                        </div>
-                                    </div>
-                                    @endif
                                 @endforeach
                             </div>                 
                         </div>
