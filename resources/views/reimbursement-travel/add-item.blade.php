@@ -387,76 +387,21 @@ $(document).ready(function(){
 
     calculateTimeDifference();
     
+    function parseTravelMoney(raw) {
+        var s = String(raw || '').trim();
+        if (!s) return 0;
+        // Format yang dipakai UI: 1.234.567 atau 1.234.567,89
+        s = s.replace(/\./g, '').replace(',', '.');
+        var n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+    }
+
     function total_nominal() {
-        
-        var allowance = $('.allowance').val().split(".").join("");
-        
-        var idr_main = $('.idr_rate_main').val().split(".").join("");
-        
-        if ($('.idr_rate_1').val()) {
-            var idr_1 = $('.idr_rate_1').val().split(".").join("");    
-        } else {
-            var idr_1 = 0;
-        }
-        
-        if ($('.idr_rate_2').val()) {
-            var idr_2 = $('.idr_rate_2').val().split(".").join("");    
-        } else {
-            var idr_2 = 0;
-        }
-        
-        if ($('.idr_rate_3').val()) {
-            var idr_3 = $('.idr_rate_3').val().split(".").join("");    
-        } else {
-            var idr_3 = 0;
-        }
-        
-        if ($('.idr_rate_4').val()) {
-            var idr_4 = $('.idr_rate_4').val().split(".").join("");    
-        } else {
-            var idr_4 = 0;
-        }
-        
-        if ($('.idr_rate_5').val()) {
-            var idr_5 = $('.idr_rate_5').val().split(".").join("");    
-        } else {
-            var idr_5 = 0;
-        }
-        
-        if ($('.idr_rate_6').val()) {
-            var idr_6 = $('.idr_rate_6').val().split(".").join("");    
-        } else {
-            var idr_6 = 0;
-        }
-        
-        if ($('.idr_rate_7').val()) {
-            var idr_7 = $('.idr_rate_7').val().split(".").join("");    
-        } else {
-            var idr_7 = 0;
-        }
-        
-        if ($('.idr_rate_8').val()) {
-            var idr_8 = $('.idr_rate_8').val().split(".").join("");    
-        } else {
-            var idr_8 = 0;
-        }
-        
-        if ($('.idr_rate_9').val()) {
-            var idr_9 = $('.idr_rate_9').val().split(".").join("");    
-        } else {
-            var idr_9 = 0;
-        }
-        
-        if ($('.idr_rate_10').val()) {
-            var idr_10 = $('.idr_rate_10').val().split(".").join("");    
-        } else {
-            var idr_10 = 0;
-        }
-      
-    
-        var total_append = +allowance + +idr_main + +idr_1 + +idr_2 + +idr_3 + +idr_4 + +idr_5 + +idr_6 + +idr_7 + +idr_8 + +idr_9 + +idr_10; 
-        
-        $('.total-nominal').val(numberWithCommas(total_append));
+        var total = parseTravelMoney($('.allowance').val());
+        $('#rt-travel-item-pane input[name="idr_rate[]"]').each(function () {
+            total += parseTravelMoney($(this).val());
+        });
+        $('.total-nominal').val(numberWithCommas(Math.round(total)));
     }
 
     window.rtNumberWithCommas = numberWithCommas;
@@ -608,76 +553,7 @@ $(document).ready(function(){
             total_nominal();
             return;
         }
-
-        var allowance = $('.allowance').val().split(".").join("");
-        
-        var idr_main = $('.idr_rate_main').val().split(".").join("");
-        
-        if ($('.idr_rate_1').val()) {
-            var idr_1 = $('.idr_rate_1').val().split(".").join("");    
-        } else {
-            var idr_1 = 0;
-        }
-        
-        if ($('.idr_rate_2').val()) {
-            var idr_2 = $('.idr_rate_2').val().split(".").join("");    
-        } else {
-            var idr_2 = 0;
-        }
-        
-        if ($('.idr_rate_3').val()) {
-            var idr_3 = $('.idr_rate_3').val().split(".").join("");    
-        } else {
-            var idr_3 = 0;
-        }
-        
-        if ($('.idr_rate_4').val()) {
-            var idr_4 = $('.idr_rate_4').val().split(".").join("");    
-        } else {
-            var idr_4 = 0;
-        }
-        
-        if ($('.idr_rate_5').val()) {
-            var idr_5 = $('.idr_rate_5').val().split(".").join("");    
-        } else {
-            var idr_5 = 0;
-        }
-        
-        if ($('.idr_rate_6').val()) {
-            var idr_6 = $('.idr_rate_6').val().split(".").join("");    
-        } else {
-            var idr_6 = 0;
-        }
-        
-        if ($('.idr_rate_7').val()) {
-            var idr_7 = $('.idr_rate_7').val().split(".").join("");    
-        } else {
-            var idr_7 = 0;
-        }
-        
-        if ($('.idr_rate_8').val()) {
-            var idr_8 = $('.idr_rate_8').val().split(".").join("");    
-        } else {
-            var idr_8 = 0;
-        }
-        
-        if ($('.idr_rate_9').val()) {
-            var idr_9 = $('.idr_rate_9').val().split(".").join("");    
-        } else {
-            var idr_9 = 0;
-        }
-        
-        if ($('.idr_rate_10').val()) {
-            var idr_10 = $('.idr_rate_10').val().split(".").join("");    
-        } else {
-            var idr_10 = 0;
-        }
-      
-    
-        var total_append = +allowance + +idr_main + +idr_1 + +idr_2 + +idr_3 + +idr_4 + +idr_5 + +idr_6 + +idr_7 + +idr_8 + +idr_9 + +idr_10; 
-        
-        $('.total-nominal').val(numberWithCommas(total_append));
-        
+        total_nominal();
     });
     
     $(function() {
