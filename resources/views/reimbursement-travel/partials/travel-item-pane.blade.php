@@ -79,6 +79,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
     </ul>
 </div><hr>
 <div class="row">
+    <input type="hidden" name="active_travel_id" value="{{ $data_travel['0']->id }}">
     <div class="col-md-3">
         <label for="">Transaction Date</label>
         <input type="date" name="date" class="form-control" required value="{{$data_travel['0']->date}}">

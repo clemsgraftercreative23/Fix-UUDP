@@ -76,6 +76,25 @@ class TravelReimbursementController extends Controller
         return $value;
     }
 
+    /**
+     * Gunakan travel id dari tab aktif di form bila valid.
+     * Ini mencegah update tersimpan ke tab lain saat action URL stale.
+     */
+    private function resolveActiveTravelId(Request $request, int $idMain, int $fallbackIdTravel): int
+    {
+        $activeTravelId = (int) $request->input('active_travel_id', 0);
+        if ($activeTravelId > 0) {
+            $exists = ReimbursementTravel::where('id', $activeTravelId)
+                ->where('reimbursement_id', $idMain)
+                ->exists();
+            if ($exists) {
+                return $activeTravelId;
+            }
+        }
+
+        return $fallbackIdTravel;
+    }
+
     /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400. */
     private function normalizeExchangeRateValue($value): string
     {
@@ -162,7 +181,13 @@ class TravelReimbursementController extends Controller
     /** Simpan file bukti ke public/images/file_bukti dan kembalikan nama file. */
     private function storeTravelEvidenceFile($file): string
     {
-        if (!$file) {
+        if (!$file instanceof UploadedFile) {
+            return '';
+        }
+
+        // Menghindari exception "not uploaded due to an unknown error"
+        // saat object upload sudah invalid/terproses ulang.
+        if (!$file->isValid()) {
             return '';
         }
 
@@ -262,25 +287,33 @@ class TravelReimbursementController extends Controller
     private function getUploadedFilesByRow(Request $request, int $rowIndex): array
     {
         $files = [];
+        $seen = [];
+        $appendFile = static function ($candidate) use (&$files, &$seen): void {
+            if (!$candidate instanceof UploadedFile) {
+                return;
+            }
+            // Bisa terjadi object file yang sama masuk dari beberapa input.
+            // Jika diproses dua kali, move() kedua dapat gagal.
+            $objectId = spl_object_id($candidate);
+            if (isset($seen[$objectId])) {
+                return;
+            }
+            $seen[$objectId] = true;
+            $files[] = $candidate;
+        };
 
         $legacyFile = data_get($request->file('file'), $rowIndex);
-        if ($legacyFile instanceof UploadedFile) {
-            $files[] = $legacyFile;
-        }
+        $appendFile($legacyFile);
 
         $legacyProof = data_get($request->file('proof'), $rowIndex);
-        if ($legacyProof instanceof UploadedFile) {
-            $files[] = $legacyProof;
-        }
+        $appendFile($legacyProof);
 
         $batch = data_get($request->file('attachments'), $rowIndex);
         if ($batch instanceof UploadedFile) {
-            $files[] = $batch;
+            $appendFile($batch);
         } elseif (is_array($batch)) {
             foreach ($batch as $f) {
-                if ($f instanceof UploadedFile) {
-                    $files[] = $f;
-                }
+                $appendFile($f);
             }
         }
 
@@ -1833,7 +1866,7 @@ class TravelReimbursementController extends Controller
 
     public function updateItem(Request $request, $id_main, $id_travel)
     {
-        
+        $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
 
         if($request->id_user == $request->id_editor) {
           if (isset($_POST['save'])) {
@@ -2093,6 +2126,8 @@ class TravelReimbursementController extends Controller
   
     public function updateItemReject(Request $request, $id_main, $id_travel)
     {
+        $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
+
         if (isset($_POST['save_again'])) {
             $status = 0;
             $return = redirect('reimbursement-travel')->with(['success' => "Reimbursement Successfully Submitted Again"]);
@@ -2319,6 +2354,8 @@ class TravelReimbursementController extends Controller
 
     public function updateItemApproval(Request $request, $id_main, $id_travel)
     {
+        $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
+
         if (auth()->user()->jabatan=='Direktur Operasional') {
             $status = 1;
         } else if (auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor') {
