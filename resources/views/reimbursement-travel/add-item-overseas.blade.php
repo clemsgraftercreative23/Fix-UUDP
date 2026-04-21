@@ -348,6 +348,14 @@ $(document).ready(function(){
     function numberWithCommas(x) {
         return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
     }
+
+    function parseTravelMoney(raw) {
+        var s = String(raw || '').trim();
+        if (!s) return 0;
+        s = s.replace(/\./g, '').replace(',', '.');
+        var n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+    }
   
    
 
@@ -391,75 +399,11 @@ $(document).ready(function(){
     calculateTimeDifference();
     
     function total_nominal() {
-        
-        var allowance = $('.allowance').val().split(".").join("");
-        
-        var idr_main = $('.idr_rate_main').val().split(".").join("");
-        
-        if ($('.idr_rate_1').val()) {
-            var idr_1 = $('.idr_rate_1').val().split(".").join("");    
-        } else {
-            var idr_1 = 0;
-        }
-        
-        if ($('.idr_rate_2').val()) {
-            var idr_2 = $('.idr_rate_2').val().split(".").join("");    
-        } else {
-            var idr_2 = 0;
-        }
-        
-        if ($('.idr_rate_3').val()) {
-            var idr_3 = $('.idr_rate_3').val().split(".").join("");    
-        } else {
-            var idr_3 = 0;
-        }
-        
-        if ($('.idr_rate_4').val()) {
-            var idr_4 = $('.idr_rate_4').val().split(".").join("");    
-        } else {
-            var idr_4 = 0;
-        }
-        
-        if ($('.idr_rate_5').val()) {
-            var idr_5 = $('.idr_rate_5').val().split(".").join("");    
-        } else {
-            var idr_5 = 0;
-        }
-        
-        if ($('.idr_rate_6').val()) {
-            var idr_6 = $('.idr_rate_6').val().split(".").join("");    
-        } else {
-            var idr_6 = 0;
-        }
-        
-        if ($('.idr_rate_7').val()) {
-            var idr_7 = $('.idr_rate_7').val().split(".").join("");    
-        } else {
-            var idr_7 = 0;
-        }
-        
-        if ($('.idr_rate_8').val()) {
-            var idr_8 = $('.idr_rate_8').val().split(".").join("");    
-        } else {
-            var idr_8 = 0;
-        }
-        
-        if ($('.idr_rate_9').val()) {
-            var idr_9 = $('.idr_rate_9').val().split(".").join("");    
-        } else {
-            var idr_9 = 0;
-        }
-        
-        if ($('.idr_rate_10').val()) {
-            var idr_10 = $('.idr_rate_10').val().split(".").join("");    
-        } else {
-            var idr_10 = 0;
-        }
-      
-    
-        var total_append = +allowance + +idr_main + +idr_1 + +idr_2 + +idr_3 + +idr_4 + +idr_5 + +idr_6 + +idr_7 + +idr_8 + +idr_9 + +idr_10; 
-        
-        $('.total-nominal').val(numberWithCommas(total_append));
+        var total = parseTravelMoney($('.allowance').val());
+        $('#rt-travel-item-pane input[name="idr_rate[]"]').each(function () {
+            total += parseTravelMoney($(this).val());
+        });
+        $('.total-nominal').val(numberWithCommas(total));
     }
 
     window.rtNumberWithCommas = numberWithCommas;
@@ -613,74 +557,7 @@ $(document).ready(function(){
             return;
         }
 
-        var allowance = $('.allowance').val().split(".").join("");
-        
-        var idr_main = $('.idr_rate_main').val().split(".").join("");
-        
-        if ($('.idr_rate_1').val()) {
-            var idr_1 = $('.idr_rate_1').val().split(".").join("");    
-        } else {
-            var idr_1 = 0;
-        }
-        
-        if ($('.idr_rate_2').val()) {
-            var idr_2 = $('.idr_rate_2').val().split(".").join("");    
-        } else {
-            var idr_2 = 0;
-        }
-        
-        if ($('.idr_rate_3').val()) {
-            var idr_3 = $('.idr_rate_3').val().split(".").join("");    
-        } else {
-            var idr_3 = 0;
-        }
-        
-        if ($('.idr_rate_4').val()) {
-            var idr_4 = $('.idr_rate_4').val().split(".").join("");    
-        } else {
-            var idr_4 = 0;
-        }
-        
-        if ($('.idr_rate_5').val()) {
-            var idr_5 = $('.idr_rate_5').val().split(".").join("");    
-        } else {
-            var idr_5 = 0;
-        }
-        
-        if ($('.idr_rate_6').val()) {
-            var idr_6 = $('.idr_rate_6').val().split(".").join("");    
-        } else {
-            var idr_6 = 0;
-        }
-        
-        if ($('.idr_rate_7').val()) {
-            var idr_7 = $('.idr_rate_7').val().split(".").join("");    
-        } else {
-            var idr_7 = 0;
-        }
-        
-        if ($('.idr_rate_8').val()) {
-            var idr_8 = $('.idr_rate_8').val().split(".").join("");    
-        } else {
-            var idr_8 = 0;
-        }
-        
-        if ($('.idr_rate_9').val()) {
-            var idr_9 = $('.idr_rate_9').val().split(".").join("");    
-        } else {
-            var idr_9 = 0;
-        }
-        
-        if ($('.idr_rate_10').val()) {
-            var idr_10 = $('.idr_rate_10').val().split(".").join("");    
-        } else {
-            var idr_10 = 0;
-        }
-      
-    
-        var total_append = +allowance + +idr_main + +idr_1 + +idr_2 + +idr_3 + +idr_4 + +idr_5 + +idr_6 + +idr_7 + +idr_8 + +idr_9 + +idr_10; 
-        
-        $('.total-nominal').val(numberWithCommas(total_append));
+        total_nominal();
         
     });
     
@@ -690,12 +567,12 @@ $(document).ready(function(){
         decimal: ',',
         allowZero: true,
         allowNegative: true,
-        precision: 2
+        precision: 0
       });
       $('.currency').maskMoney('mask');
     });
 
-    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:2});
+    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     
     $(".type-currency").on("keyup", function(event) {
       var i = event.keyCode;
@@ -804,7 +681,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 2
+              precision: 0
             });
             $('.currency').maskMoney('mask');
           });
@@ -890,7 +767,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 2
+              precision: 0
             });
             $('.currency').maskMoney('mask');
         });
@@ -1167,29 +1044,38 @@ $(document).ready(function(){
       mounted() {
         // this.initSelectForm()
         self = this
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        // Jangan sinkronkan input di travel pane ke data Vue:
+        // mutasi akan memicu re-render v-for dan bisa menghilangkan state tab (add/remove).
+        var rtSkipVueTravelPane = function (event) {
+            return $(event.target).closest('#rt-travel-item-pane').length > 0;
+        };
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.idr-rate-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.usd-rate-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.usd_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.jpy-rate-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.jpy_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
+            if (rtSkipVueTravelPane(event)) return;
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
             self.calculateTotal(0,0)
@@ -1332,8 +1218,9 @@ $(document).ready(function(){
             this.$nextTick(() => {
               // self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
+                if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
                 self.calculateTotal(self.reimburses.length - 1,0)
@@ -1356,8 +1243,9 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               // self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
+                if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());
                 self.changeAmount(0);

@@ -1603,78 +1603,27 @@ class TravelReimbursementController extends Controller
 
     public function edit($id)
     {
-        // Determine if travel is Domestic or International and redirect to appropriate edit method
+        // Route edit lama sekarang diseragamkan ke UI tab add-item (new flow).
         $reimbursement = Reimbursement::find($id);
-        
         if (!$reimbursement) {
             return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
         }
-        
-        if ($reimbursement->travel_type === 'Domestic') {
-            return $this->editInquiry($id);
-        } else {
-            return $this->editOverseas($id);
-        }
+
+        return redirect('reimbursement-travel/add-item/' . $id);
     }
 
     public function editInquiry($id)
     {
-
-        $tripTypes = TravelTripType::where('type','LOCAL')->get();
-        $types = TravelType::get();
-        $hotelCondition = TravelHotelCondition::get();
-        
-        $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id'"));
-        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id' ORDER BY date ASC, id ASC"));
-        $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id' ORDER BY date ASC, id ASC"));
-        $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id'"));
-        $id_detail = $data_travel['0']->id;
-        $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
-        $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb'"));
-        
-        
-        return view('reimbursement-travel.edit-inquiry',[
-            "trip_types" => $tripTypes,
-            "types" => $types,
-            "hotel_conditions" => $hotelCondition,
-            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
-            "data" => $data,
-            "data_travel" => $data_travel,
-            "travel_trip" => $travel_trip,
-            "travel_detail" => $travel_detail,
-            "currency" => $currency,
-            "item" => $item,
-        ]);
+        // Endpoint legacy dipertahankan untuk kompatibilitas URL lama,
+        // namun diarahkan ke UI tab add-item yang baru.
+        return redirect('reimbursement-travel/add-item/' . $id);
     }
     
     public function editOverseas($id)
     {
-
-        $tripTypes = TravelTripType::where('type','INTERNATIONAL')->where('is_show', 1)->get();
-        $types = TravelType::get();
-        $hotelCondition = TravelHotelCondition::get();
-        
-        $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id'"));
-        $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id' ORDER BY date ASC, id ASC"));
-        $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id'"));
-        $id_detail = $data_travel['0']->id;
-        $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
-        $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb'"));
-        
-        
-        return view('reimbursement-travel.edit-overseas',[
-            "trip_types" => $tripTypes,
-            "types" => $types,
-            "hotel_conditions" => $hotelCondition,
-            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
-            "data" => $data,
-            "data_travel" => $data_travel,
-            "travel_trip" => $travel_trip,
-            "travel_detail" => $travel_detail,
-            "currency" => $currency,
-        ]);
+        // Endpoint legacy dipertahankan untuk kompatibilitas URL lama,
+        // namun diarahkan ke UI tab add-item yang baru.
+        return redirect('reimbursement-travel/add-item/' . $id);
     }
 
     

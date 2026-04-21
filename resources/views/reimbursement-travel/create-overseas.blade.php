@@ -458,7 +458,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
         if (this.reimburses.length > 0) {
             this.reimburses[0].hotel_condition = this.not_stay_hotel_condition_id;
             this.reimburses[0].start_time = null;
@@ -834,7 +834,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
@@ -863,7 +863,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());

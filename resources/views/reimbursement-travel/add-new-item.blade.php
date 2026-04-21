@@ -552,7 +552,7 @@ $(document).ready(function(){
         $('#rt-travel-item-pane input[name="idr_rate[]"]').each(function () {
             total += parseTravelMoney($(this).val());
         });
-        $('.total-nominal').val(numberWithCommas(Math.round(total)));
+        $('.total-nominal').val(numberWithCommas(total));
     }
 
     window.rtNumberWithCommas = numberWithCommas;
@@ -622,7 +622,7 @@ $(document).ready(function(){
             total_nominal();
             return;
         }
-        let usd_rate = $('input[name="rate[]"]').eq(1).val().replace(/\./g, '');
+        let usd_rate = parseTravelMoney($('input[name="rate[]"]').eq(1).val()) || 0;
         $.ajax({
             url:"../../../get-trip-type/"+id,
             dataType:"json",
@@ -660,7 +660,7 @@ $(document).ready(function(){
         decimal: ',',
         allowZero: true,
         allowNegative: true,
-        precision: 0 // ubah ke 2 kalau butuh angka desimal
+        precision: 0
       });
       $('.currency').maskMoney('mask');
     });
@@ -696,7 +696,7 @@ $(document).ready(function(){
               decimal: ',',
               allowZero: true,
               allowNegative: true,
-              precision: 0 // ubah ke 2 kalau butuh angka desimal
+              precision: 0
             });
             $('.currency').maskMoney('mask');
           });
