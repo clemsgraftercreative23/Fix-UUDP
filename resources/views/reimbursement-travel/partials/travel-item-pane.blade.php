@@ -5,6 +5,13 @@ if (!function_exists('rt_travel_pane_rupiah')) {
         return number_format((float) $angka, 2, ',', '.');
     }
 }
+if (!function_exists('rt_travel_pane_amount_int')) {
+    /** Tampilan kolom Amount: bilangan bulat tanpa desimal dan tanpa pemisah ribuan. */
+    function rt_travel_pane_amount_int($angka)
+    {
+        return (string) (int) floor((float) $angka);
+    }
+}
 if (!function_exists('rt_travel_detail_attachments')) {
     function rt_travel_detail_attachments($detailId, $legacyEvidence = '')
     {
@@ -191,7 +198,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control currency amount0 change-amount" value="{{ rt_travel_pane_rupiah($rtRow0->amount) }}" name="amount[]">
+                        <input type="text" class="form-control currency amount0 change-amount" value="{{ rt_travel_pane_amount_int($rtRow0->amount) }}" name="amount[]">
                     </td>
                     <td>
                         <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($rtRow0->idr_rate) }}" name="idr_rate[]" readonly>
@@ -285,7 +292,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control amount{{$key}} amount-input currency change-amount" value="{{ rt_travel_pane_rupiah($row->amount) }}" name="amount[]">
+                        <input type="text" class="form-control amount{{$key}} amount-input currency change-amount" value="{{ rt_travel_pane_amount_int($row->amount) }}" name="amount[]">
                     </td>
                     <td>
                         <input type="text" class="form-control number-format currency idr_rate_{{$key}} change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($row->idr_rate) }}" name="idr_rate[]" readonly>

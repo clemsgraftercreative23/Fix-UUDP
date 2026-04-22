@@ -907,17 +907,37 @@
 
   function initMaskMoney($pane) {
     if (!$pane || !$pane.length || !$.fn.maskMoney) return;
+    // amount[]: integer tanpa pemisah ribuan; allowance: 2 desimal; lainnya: precision 0 dengan titik ribuan.
+    var $allCurrency = $pane.find('.currency');
+    var $excluded = $allCurrency.filter(
+      'input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input.exchange-rate-input[name="rate[]"]'
+    );
+    var $maskSrc = $allCurrency.not($excluded);
     try {
-      $pane.find('.currency').maskMoney('destroy');
+      $allCurrency.each(function () {
+        try {
+          $(this).maskMoney('destroy');
+        } catch (e2) { /* not initialized */ }
+      });
     } catch (e) { /* not initialized */ }
-    $pane.find('.currency').maskMoney({
-      thousands: '.',
-      decimal: ',',
-      allowZero: true,
-      allowNegative: true,
-      precision: 0
-    });
-    $pane.find('.currency').maskMoney('mask');
+    var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
+    var optsAmountInt = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+    var opts0 = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+    var $allowanceOnly = $maskSrc.filter('input[name="allowance"]');
+    var $amountOnly = $maskSrc.filter('input[name="amount[]"]');
+    var $intLike = $maskSrc.not($allowanceOnly).not($amountOnly);
+    if ($allowanceOnly.length) {
+      $allowanceOnly.maskMoney(optsAllowance);
+      $allowanceOnly.maskMoney('mask');
+    }
+    if ($amountOnly.length) {
+      $amountOnly.maskMoney(optsAmountInt);
+      $amountOnly.maskMoney('mask');
+    }
+    if ($intLike.length) {
+      $intLike.maskMoney(opts0);
+      $intLike.maskMoney('mask');
+    }
   }
 
   window.rtInitTravelItemPane = function ($pane) {

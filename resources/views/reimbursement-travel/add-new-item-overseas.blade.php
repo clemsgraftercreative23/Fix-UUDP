@@ -506,6 +506,51 @@ $(document).ready(function(){
         var n = parseFloat(s);
         return isNaN(n) ? 0 : n;
     }
+
+    function parseTravelAmountInteger(raw) {
+        var s = String(raw || '').trim();
+        if (!s) return 0;
+        var c = s.lastIndexOf(',');
+        if (c !== -1) {
+            s = s.substring(0, c);
+        }
+        s = s.replace(/\./g, '').replace(/[^\d-]/g, '');
+        var n = parseInt(s, 10);
+        return isNaN(n) ? 0 : n;
+    }
+
+    function applyOverseasNewItemAllCurrencyMasks() {
+        var $all = $('.currency');
+        try {
+            $all.each(function () {
+                try { $(this).maskMoney('destroy'); } catch (e2) { /* not initialized */ }
+            });
+        } catch (e) { /* ignore */ }
+        var optsRate = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+        var optsAmount = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+        var optsIdrTax = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
+        var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
+        var $amt = $all.filter('input[name="amount[]"]');
+        var $idrTax = $all.filter('input[name="idr_rate[]"], input[name="tax[]"]');
+        var $allowance = $all.filter('input[name="allowance"]');
+        var $other = $all.not($amt).not($idrTax).not($allowance);
+        if ($amt.length) {
+            $amt.maskMoney(optsAmount);
+            $amt.maskMoney('mask');
+        }
+        if ($idrTax.length) {
+            $idrTax.maskMoney(optsIdrTax);
+            $idrTax.maskMoney('mask');
+        }
+        if ($allowance.length) {
+            $allowance.maskMoney(optsAllowance);
+            $allowance.maskMoney('mask');
+        }
+        if ($other.length) {
+            $other.maskMoney(optsRate);
+            $other.maskMoney('mask');
+        }
+    }
   
    
 
@@ -564,8 +609,7 @@ $(document).ready(function(){
         var $tr = $(this).closest('tr');
         var currency = $tr.find('select[name="currency[]"]').val();
         var id = "{{ Request::segment(3) }}";
-        var amountStr = (($(this).val() || '').split('.').join(''));
-        var amount = parseFloat(amountStr) || 0;
+        var amount = parseTravelAmountInteger($(this).val());
         var cost_type = $tr.find('select[name="cost_type_id[]"]').val();
         if (!currency) {
             return;
@@ -658,14 +702,7 @@ $(document).ready(function(){
     });
     
     $(function() {
-        $('.currency').maskMoney({
-          thousands: '.',
-          decimal: ',',
-          allowZero: true,
-          allowNegative: true,
-        precision: 0
-        });
-        $('.currency').maskMoney('mask');
+        applyOverseasNewItemAllCurrencyMasks();
     });
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
@@ -694,14 +731,7 @@ $(document).ready(function(){
           var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
           $(function() {
-            $('.currency').maskMoney({
-              thousands: '.',
-              decimal: ',',
-              allowZero: true,
-              allowNegative: true,
-              precision: 0
-            });
-            $('.currency').maskMoney('mask');
+            applyOverseasNewItemAllCurrencyMasks();
           });
       } else{
           alert('Maximum '+maxGroup+' groups are allowed.');
@@ -774,14 +804,7 @@ $(document).ready(function(){
         var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
         $root.find('.fieldGroupDetail:last').after(fieldHTML);
         $(function() {
-            $('.currency').maskMoney({
-              thousands: '.',
-              decimal: ',',
-              allowZero: true,
-              allowNegative: true,
-              precision: 0
-            });
-            $('.currency').maskMoney('mask');
+            applyOverseasNewItemAllCurrencyMasks();
         });
         return true;
     };
@@ -1019,7 +1042,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
@@ -1120,7 +1143,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
@@ -1145,7 +1168,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 const index = $(event.target).closest('tr').index();

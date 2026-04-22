@@ -171,6 +171,14 @@ class TravelReimbursementController extends Controller
         return (float) $this->normalizeExchangeRateValue($value);
     }
 
+    /**
+     * Nilai kolom amount detail travel: bilangan bulat (desimal dari input diabaikan).
+     */
+    private function normalizeTravelAmountInteger($value): int
+    {
+        return (int) floor($this->normalizeTravelMoneyValue($value));
+    }
+
     /** Sinkronkan kurs dari form utama (currency_rate[] + rate[]) ke travel_trip_rates. */
     private function syncTripRatesFromMainForm(Request $request, int $reimbursementId): void
     {
@@ -871,6 +879,14 @@ class TravelReimbursementController extends Controller
                     'rate' => $this->normalizeExchangeRateValue($value['rate'] ?? ''),
                 ]);
             }
+
+            $tripRateMap = TravelTripRate::where('reimbursement_id', $data->id)
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [strtoupper((string) $row->currency) => (float) $row->rate];
+                })
+                ->toArray();
+
             foreach ($request->reimburse as $key => $value) {
                 $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
                 $payload = [
@@ -888,6 +904,11 @@ class TravelReimbursementController extends Controller
                 $dt = ReimbursementTravel::create($payload);
                 foreach ($value['detail'] as $k => $v) {
                     if (isset($v['cost_type_id'])) {
+
+                    $currencyCode = !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR';
+                    $amountValue = $this->normalizeTravelAmountInteger($v['amount'] ?? '');
+                    $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
+                    $computedIdrRate = $amountValue * $rateValue;
                         
                     $payloadDetail = [
                         'reimbursement_id' => $id_max,
@@ -895,9 +916,9 @@ class TravelReimbursementController extends Controller
                         'destination' => $v['destination'],
                         'payment_type' => $v['payment_type'],
                         'cost_type_id' => $v['cost_type_id'],
-                        'currency' => !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR',
-                        'amount' => $this->normalizeTravelMoneyValue($v['amount'] ?? ''),
-                        'idr_rate' => $this->normalizeTravelMoneyValue($v['idr_rate'] ?? ''),
+                        'currency' => $currencyCode,
+                        'amount' => $amountValue,
+                        'idr_rate' => $computedIdrRate,
                         'tax' => $this->normalizeTravelMoneyValue($v['tax'] ?? '0'),
                     ];
                     $uploadFiles = [];
@@ -1046,7 +1067,7 @@ class TravelReimbursementController extends Controller
             if ($notif!='redirect') {
                 return redirect()->route('reimbursement-travel.index')->with(['success' => $notif]);    
             } else {
-                return redirect('reimbursement-travel/add-item/'.$id_main.'/');
+                return redirect('reimbursement-travel/add-item/'.$id_main.'/?new=1');
             }
 
             
@@ -1114,6 +1135,13 @@ class TravelReimbursementController extends Controller
 
             $this->syncTripRatesFromMainForm($request, (int) $id_main);
 
+            $tripRateMap = TravelTripRate::where('reimbursement_id', $id_main)
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [strtoupper((string) $row->currency) => (float) $row->rate];
+                })
+                ->toArray();
+
             // Insert table reimbursement_travel
 
             $form_travel = array(
@@ -1165,9 +1193,17 @@ class TravelReimbursementController extends Controller
                 $new->cost_type_id = (int) $costTypeId;
                 $new->destination = $request->destination[$i] ?? '';
                 $new->payment_type = $request->payment_type[$i] ?? '';
-                $new->currency = $request->currency[$i] ?? '';
-                $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-                $new->amount = $this->normalizeTravelMoneyValue($request->amount[$i] ?? '');
+                $currencyCode = strtoupper(trim((string) ($request->currency[$i] ?? '')));
+                if ($currencyCode === '') {
+                    $currencyCode = 'IDR';
+                }
+                $amountValue = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+                $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
+                $computedIdrRate = $amountValue * $rateValue;
+
+                $new->currency = $currencyCode;
+                $new->amount = $amountValue;
+                $new->idr_rate = $computedIdrRate;
                 $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
                 $new->evidence = '';
                 $new->status = 1;
@@ -1319,7 +1355,7 @@ class TravelReimbursementController extends Controller
             if ($notif!='redirect') {
                 return redirect()->route('reimbursement-travel.index')->with(['success' => $notif]);    
             } else {
-                return redirect('reimbursement-travel/add-item/'.$id_main.'/');
+                return redirect('reimbursement-travel/add-item/'.$id_main.'/?new=1');
             }
 
             
@@ -1431,7 +1467,7 @@ class TravelReimbursementController extends Controller
         return view('reimbursement-travel.'.$file.'', $payload);
     }
 
-    public function addNewItem($id_main)
+    public function addNewItem(Request $request, $id_main)
     {
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id_main'"));
         if (empty($data)) {
@@ -1452,6 +1488,19 @@ class TravelReimbursementController extends Controller
         $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
         $id_reimb = $data['0']->id;
         $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
+
+        // Saat user menekan tombol "Add New Item" kita kirim flag ?new=1 sehingga
+        // form kosong "new item" benar-benar ditampilkan. Tanpa flag ini,
+        // pembukaan ulang halaman edit akan diarahkan ke item terakhir agar user
+        // tidak selalu masuk ke layar "new add item" saat membuka edit kembali.
+        $forceNew = $request->query('new') === '1';
+        if (!$forceNew && !empty($data_travel)) {
+            $activeTravelId = (int) ($data_travel[count($data_travel) - 1]->id ?? 0);
+            if ($activeTravelId > 0) {
+                return redirect('reimbursement-travel/add-item/'.$id_main.'/'.$activeTravelId);
+            }
+        }
+
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = !empty($data_travel) ? $data_travel[0]->id : 0;
         $travel_detail = $id_detail > 0
@@ -1715,7 +1764,7 @@ class TravelReimbursementController extends Controller
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelMoneyValue($request->amount[$i] ?? '');
+            $new->amount = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -1871,12 +1920,12 @@ class TravelReimbursementController extends Controller
               $return = redirect()->back()->with(['success' => "Reimbursement Successfully Saved as Draft"]);
           } else if (isset($_POST['save_item'])) {
               $status = 10;
-              $return = redirect('reimbursement-travel/add-item/'.$id_main.'');
+              $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
           }
         } else {
             if (isset($_POST['save_item'])) {
                 $status = $currentStatus;
-                $return = redirect('reimbursement-travel/add-item/'.$id_main.'');
+                $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
             } else
           
 			if (isset($_POST['save_owner'])) {
@@ -1917,6 +1966,13 @@ class TravelReimbursementController extends Controller
         Reimbursement::whereId($id_main)->update($form_data);
 
         $this->syncTripRatesFromMainForm($request, (int) $id_main);
+
+        $tripRateMap = TravelTripRate::where('reimbursement_id', $id_main)
+            ->get()
+            ->mapWithKeys(function ($row) {
+                return [strtoupper((string) $row->currency) => (float) $row->rate];
+            })
+            ->toArray();
 
         //Update table  reimbursement_travel
 
@@ -1972,9 +2028,17 @@ class TravelReimbursementController extends Controller
             $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i] ?? '';
             $new->payment_type = $request->payment_type[$i] ?? '';
-            $new->currency = $request->currency[$i] ?? '';
-            $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelMoneyValue($request->amount[$i] ?? '');
+            $currencyCode = strtoupper(trim((string) ($request->currency[$i] ?? '')));
+            if ($currencyCode === '') {
+                $currencyCode = 'IDR';
+            }
+            $amountValue = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+            $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
+            $computedIdrRate = $amountValue * $rateValue;
+
+            $new->currency = $currencyCode;
+            $new->amount = $amountValue;
+            $new->idr_rate = $computedIdrRate;
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -2203,7 +2267,7 @@ class TravelReimbursementController extends Controller
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelMoneyValue($request->amount[$i] ?? '');
+            $new->amount = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -2428,7 +2492,7 @@ class TravelReimbursementController extends Controller
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelMoneyValue($request->amount[$i] ?? '');
+            $new->amount = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -3245,7 +3309,7 @@ class TravelReimbursementController extends Controller
                         'payment_type' => $v['payment_type'],
                         'cost_type_id' => $v['cost_type_id'],
                         'currency' => !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR',
-                        'amount' => $this->normalizeTravelMoneyValue($v['amount'] ?? ''),
+                        'amount' => $this->normalizeTravelAmountInteger($v['amount'] ?? ''),
                         'idr_rate' => $this->normalizeTravelMoneyValue($v['idr_rate'] ?? ''),
                         'tax' => $this->normalizeTravelMoneyValue($v['tax'] ?? '0'),
                     ];
