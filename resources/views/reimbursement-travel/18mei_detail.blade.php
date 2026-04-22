@@ -2,10 +2,18 @@
 
 @section('content')
 
-<?php function rupiah($angka)
+<?php
+function rupiah($angka)
 {
-    return number_format($angka, 0, ',', '.');
-} ?>
+    return number_format((float) $angka, 0, ',', '.');
+}
+if (!function_exists('travel_detail_idr')) {
+    function travel_detail_idr($angka)
+    {
+        return number_format((float) $angka, 2, ',', '.');
+    }
+}
+?>
 
 @php
 if (!function_exists('travel_attachment_rows')) {
@@ -97,7 +105,7 @@ if (!function_exists('travel_attachment_rows')) {
                             </div>
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Total</label>
-                                <input type="text" class="form-control" value="{{number_format($data->nominal_pengajuan,0,',','.')}}" readonly>
+                                <input type="text" class="form-control" value="{{ travel_detail_idr($data->nominal_pengajuan) }}" readonly>
                             </div>
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Approved by Head Department</label>
@@ -172,7 +180,7 @@ if (!function_exists('travel_attachment_rows')) {
                     <tr>
                         @foreach ($data->rates as $item)
                         <th>{{$item->currency}} Rate</th>
-                        <td class="bg-secondary">{{number_format($item->rate,0,',','.')}}</td>                        
+                        <td class="bg-secondary">{{ travel_detail_idr($item->rate) }}</td>                        
                         @endforeach
                     </tr>
                 </table>
@@ -191,7 +199,7 @@ if (!function_exists('travel_attachment_rows')) {
                         <th>Hotel At</th>
                         <td class="bg-secondary">{{$item->hotelCondition->name}}</td>
                         <th>Allowance</th>
-                        <td class="bg-secondary">{{$item->tripType->currency}} {{number_format($item->allowance,0,',','.')}}</td>
+                        <td class="bg-secondary">{{$item->tripType->currency}} {{ travel_detail_idr($item->allowance) }}</td>
                         <th>Allowance (IDR)</th>
                         <td class="bg-secondary">
                             @php
@@ -210,7 +218,7 @@ if (!function_exists('travel_attachment_rows')) {
 
                                 
 
-                                echo number_format($item->allowance * $currency,0,',','.');
+                                echo travel_detail_idr($item->allowance * $currency);
                             @endphp
                         </td>
                     </tr>
@@ -249,8 +257,8 @@ if (!function_exists('travel_attachment_rows')) {
                     <td>{{$dt->costType->name}}</td>
                     <td>{{$dt->destination}}</td>
                     <td>{{$dt->currency}}</td>
-                    <td>{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
-                    <td>{{number_format($dt->idr_rate,0,',','.')}}</td>
+                    <td>{{$dt->currency}} {{ (int) floor((float) $dt->amount) }}</td>
+                    <td>{{ travel_detail_idr($dt->idr_rate) }}</td>
                     
                     <td>{{$dt->payment_type}}</td>
                     <td>
@@ -274,7 +282,7 @@ if (!function_exists('travel_attachment_rows')) {
                 <tfoot>
                     <tr>
                         <td>Total</td>
-                        <td class="bg-secondary text-right" colspan="6">{{number_format($item->total,0,',','.')}}</td>
+                        <td class="bg-secondary text-right" colspan="6">{{ travel_detail_idr($item->total) }}</td>
                     </tr>
                 </tfoot>
                 </table>
@@ -323,7 +331,7 @@ if (!function_exists('travel_attachment_rows')) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($bdc,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ travel_detail_idr($bdc) }}" />
                             </div>
                         </div>
                     </div>
@@ -362,7 +370,7 @@ if (!function_exists('travel_attachment_rows')) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($allowance,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ travel_detail_idr($allowance) }}" />
                             </div>
                         </div>
                     </div>
@@ -401,7 +409,7 @@ if (!function_exists('travel_attachment_rows')) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($cash,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ travel_detail_idr($cash) }}" />
                             </div>
                         </div>
                     </div>  

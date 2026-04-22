@@ -307,7 +307,7 @@ function rupiah($angka){
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control currency amount0 change-amount" value="{{rupiah($travel_detail['0']->amount)}}" name="amount[]">
+                                                <input type="text" class="form-control currency amount-input amount0 change-amount" value="{{ (int) floor((float) $travel_detail['0']->amount) }}" name="amount[]">
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control currency number-format idr_rate_main change-rate" value="{{rupiah($travel_detail['0']->idr_rate)}}" name="idr_rate[]" readonly>
@@ -367,7 +367,7 @@ function rupiah($angka){
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control amount{{$key}} currency change-amount" value="{{rupiah($row->amount)}}" name="amount[]">
+                                                <input type="text" class="form-control amount{{$key}} currency amount-input change-amount" value="{{ (int) floor((float) $row->amount) }}" name="amount[]">
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control number-format currency idr_rate_{{$key}} change-rate" value="{{rupiah($row->idr_rate)}}" name="idr_rate[]" readonly>
@@ -490,6 +490,18 @@ $(document).ready(function(){
     
     function numberWithCommas(x) {
         return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
+    }
+
+    function parseTravelAmountInteger(raw) {
+        var s = String(raw || '').trim();
+        if (!s) return 0;
+        var c = s.lastIndexOf(',');
+        if (c !== -1) {
+            s = s.substring(0, c);
+        }
+        s = s.replace(/\./g, '').replace(/[^\d-]/g, '');
+        var n = parseInt(s, 10);
+        return isNaN(n) ? 0 : n;
     }
   
    
@@ -672,7 +684,7 @@ $(document).ready(function(){
             var idr_7 = 0;
         }
         
-        if ($('.idr_rate_8').val()) {i
+        if ($('.idr_rate_8').val()) {
             var idr_8 = $('.idr_rate_8').val().split(".").join("");    
         } else {
             var idr_8 = 0;
@@ -697,9 +709,11 @@ $(document).ready(function(){
         
     });
     
-    $('.currency').mask("#.##0", {
+    $('.currency').not('input[name="amount[]"]').mask("#.##0", {
       reverse: true
     });
+    $('input[name="amount[]"]').maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+    $('input[name="amount[]"]').maskMoney('mask');
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     
@@ -726,7 +740,7 @@ $(document).ready(function(){
          
           var fieldHTML = '<br><div class="row fieldGroup"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
-          $('.currency').mask("#.##0", {
+          $('.currency').not('input[name="amount[]"]').mask("#.##0", {
               reverse: true
           });
       } else{
@@ -753,14 +767,16 @@ $(document).ready(function(){
          
           var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+'" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
           $('body').find('.fieldGroupDetail:last').after(fieldHTML);
-          $('.currency').mask("#.##0", {
+          $('.currency').not('input[name="amount[]"]').mask("#.##0", {
               reverse: true
           });
+          $('body').find('.fieldGroupDetail:last input[name="amount[]"]').maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+          $('body').find('.fieldGroupDetail:last input[name="amount[]"]').maskMoney('mask');
           
             $(".amount0").change(function(){
                 currency = $('.currency0').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount0').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount0').val());
                 cost_type = $('.cost_type_id0').val();
                 
                 $.ajax({
@@ -783,7 +799,7 @@ $(document).ready(function(){
             $(".amount1").change(function(){
                 currency = $('.currency1').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount1').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount1').val());
                 cost_type = $('.cost_type_id1').val();
                 
                 $.ajax({
@@ -806,7 +822,7 @@ $(document).ready(function(){
             $(".amount2").change(function(){
                 currency = $('.currency2').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount2').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount2').val());
                 cost_type = $('.cost_type_id2').val();
                 
                 $.ajax({
@@ -829,7 +845,7 @@ $(document).ready(function(){
             $(".amount3").change(function(){
                 currency = $('.currency3').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount3').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount3').val());
                 cost_type = $('.cost_type_id3').val();
                 
                 $.ajax({
@@ -852,7 +868,7 @@ $(document).ready(function(){
             $(".amount4").change(function(){
                 currency = $('.currency4').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount4').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount4').val());
                 cost_type = $('.cost_type_id4').val();
                 
                 $.ajax({
@@ -875,7 +891,7 @@ $(document).ready(function(){
             $(".amount5").change(function(){
                 currency = $('.currency5').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount5').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount5').val());
                 cost_type = $('.cost_type_id5').val();
                 
                 $.ajax({
@@ -898,7 +914,7 @@ $(document).ready(function(){
             $(".amount6").change(function(){
                 currency = $('.currency6').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount6').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount6').val());
                 cost_type = $('.cost_type_id6').val();
                 
                 $.ajax({
@@ -921,7 +937,7 @@ $(document).ready(function(){
             $(".amount7").change(function(){
                 currency = $('.currency7').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount7').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount7').val());
                 cost_type = $('.cost_type_id7').val();
                 
                 $.ajax({
@@ -944,7 +960,7 @@ $(document).ready(function(){
             $(".amount8").change(function(){
                 currency = $('.currency8').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount8').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount8').val());
                 cost_type = $('.cost_type_id8').val();
                 
                 $.ajax({
@@ -967,7 +983,7 @@ $(document).ready(function(){
             $(".amount9").change(function(){
                 currency = $('.currency9').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount9').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount9').val());
                 cost_type = $('.cost_type_id9').val();
                 
                 $.ajax({
@@ -990,7 +1006,7 @@ $(document).ready(function(){
             $(".amount10").change(function(){
                 currency = $('.currency10').val();
                 id = "{{Request::segment(3)}}";
-                amount = $('.amount10').val().split(".").join("");
+                amount = parseTravelAmountInteger($('.amount10').val());
                 cost_type = $('.cost_type_id10').val();
                 
                 $.ajax({
@@ -1277,7 +1293,7 @@ $(document).ready(function(){
     $(".amount0").change(function(){
         currency = $('.currency0').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount0').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount0').val());
         cost_type = $('.cost_type_id0').val();
         
         $.ajax({
@@ -1301,7 +1317,7 @@ $(document).ready(function(){
     $(".amount1").change(function(){
         currency = $('.currency1').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount1').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount1').val());
         cost_type = $('.cost_type_id1').val();
         
         $.ajax({
@@ -1324,7 +1340,7 @@ $(document).ready(function(){
     $(".amount2").change(function(){
         currency = $('.currency2').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount2').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount2').val());
         cost_type = $('.cost_type_id2').val();
         
         $.ajax({
@@ -1347,7 +1363,7 @@ $(document).ready(function(){
     $(".amount3").change(function(){
         currency = $('.currency3').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount3').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount3').val());
         cost_type = $('.cost_type_id3').val();
         
         $.ajax({
@@ -1370,7 +1386,7 @@ $(document).ready(function(){
     $(".amount4").change(function(){
         currency = $('.currency4').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount4').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount4').val());
         cost_type = $('.cost_type_id4').val();
         
         $.ajax({
@@ -1393,7 +1409,7 @@ $(document).ready(function(){
     $(".amount5").change(function(){
         currency = $('.currency5').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount5').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount5').val());
         cost_type = $('.cost_type_id5').val();
         
         $.ajax({
@@ -1416,7 +1432,7 @@ $(document).ready(function(){
     $(".amount6").change(function(){
         currency = $('.currency6').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount6').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount6').val());
         cost_type = $('.cost_type_id6').val();
         
         $.ajax({
@@ -1439,7 +1455,7 @@ $(document).ready(function(){
     $(".amount7").change(function(){
         currency = $('.currency7').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount7').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount7').val());
         cost_type = $('.cost_type_id7').val();
         
         $.ajax({
@@ -1462,7 +1478,7 @@ $(document).ready(function(){
     $(".amount8").change(function(){
         currency = $('.currency8').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount8').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount8').val());
         cost_type = $('.cost_type_id8').val();
         
         $.ajax({
@@ -1485,7 +1501,7 @@ $(document).ready(function(){
     $(".amount9").change(function(){
         currency = $('.currency9').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount9').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount9').val());
         cost_type = $('.cost_type_id9').val();
         
         $.ajax({
@@ -1508,7 +1524,7 @@ $(document).ready(function(){
     $(".amount10").change(function(){
         currency = $('.currency10').val();
         id = "{{Request::segment(3)}}";
-        amount = $('.amount10').val().split(".").join("");
+        amount = parseTravelAmountInteger($('.amount10').val());
         cost_type = $('.cost_type_id10').val();
         
         $.ajax({
@@ -1719,7 +1735,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
@@ -1871,7 +1887,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
@@ -1895,7 +1911,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());
