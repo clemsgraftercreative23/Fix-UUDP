@@ -417,6 +417,18 @@
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
+                        @if ($data->status == 5 && auth()->user()->jabatan == 'Owner')
+                            @if (!empty($data->accurate_synced_at))
+                                <button type="button" class="btn btn-success" disabled>
+                                    Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
+                                </button>
+                            @else
+                                <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" style="display:inline;">
+                                    @csrf
+                                    <button type="submit" class="btn btn-warning">Sync Accurate</button>
+                                </form>
+                            @endif
+                        @endif
                     </center>
                     <br><br><br>
             </div>

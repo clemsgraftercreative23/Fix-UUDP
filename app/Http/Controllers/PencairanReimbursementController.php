@@ -18,6 +18,11 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use DB;
 class PencairanReimbursementController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -240,256 +245,7 @@ class PencairanReimbursementController extends Controller
             $department = \App\Departemen::find($data->reimbursement_department_id);
             $nominal = $data->nominal_pengajuan;
             $cek_type = DB::select(DB::raw("SELECT reimbursement_type FROM reimbursement WHERE id='$data->id'"))['0']->reimbursement_type;
-            $token = Api::where('id', 1)->get()->pluck('token');
-            $session = Api::where('id', 1)->get()->pluck('session');
-
-            if($cek_type==2) {
-
-                $url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
-                $detailJournalVoucher = [];
-                // Total allowance
-                $total_allowance = (int) str_replace(".", "", $request->total_allowance);
-                $total_cash = (int) str_replace(".", "", $request->total_cash);
-
-                // Allowance
-                if ($total_allowance > 0) {
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->akun_perkiraan_allowance,
-                        'amount' => $total_allowance,
-                        'amountType' => 'DEBIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->metode_allowance,
-                        'amount' => $total_allowance,
-                        'amountType' => 'CREDIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-                }
-
-                // Cash
-                if ($total_cash > 0) {
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->akun_perkiraan_cash,
-                        'amount' => $total_cash,
-                        'amountType' => 'DEBIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->metode_cash,
-                        'amount' => $total_cash,
-                        'amountType' => 'CREDIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-                }
-
-                // Payload only if there are journal details
-                if (!empty($detailJournalVoucher)) {
-                    $payload = [
-                        'detailJournalVoucher' => $detailJournalVoucher,
-                        'transDate' => date('d/m/Y'),
-                        'description' => $data->no_reimbursement . " - " . $data->remark . " (CASH)",
-                    ];
-                }
-
-                // $payload = array (
-                //  'detailJournalVoucher' =>
-                //      array (
-                //      0 =>
-                //      array (
-                //          'accountNo' => $request->akun_perkiraan_allowance,
-                //          'amount' => str_replace(".", "", $request->total_allowance),
-                //          'amountType' => 'DEBIT',
-                //          'subsidiaryType' => 'EMPLOYEE',
-                //          'employeeNo' => $request->employeeNo,
-                //          'departmentName' => $nama_department,
-                //      ),
-                //      1 =>
-                //      array (
-                //          'accountNo' => $request->metode_allowance,
-                 //         'amount' => str_replace(".", "", $request->total_allowance),
-                 //         'amountType' => 'CREDIT',
-                //          'subsidiaryType' => 'EMPLOYEE',
-                //          'employeeNo' => $request->employeeNo,
-                //          'departmentName' => $nama_department,
-                //      ),
-                //      2 =>
-                //      array (
-                //          'accountNo' => $request->akun_perkiraan_cash,
-                //          'amount' => str_replace(".", "", $request->total_cash),
-                //          'amountType' => 'DEBIT',
-                //          'subsidiaryType' => 'EMPLOYEE',
-                //          'employeeNo' => $request->employeeNo,
-                 //         'departmentName' => $nama_department,
-                //      ),
-                //      3 =>
-                //      array (
-                //          'accountNo' => $request->metode_cash,
-                //         'amount' => str_replace(".", "", $request->total_cash),
-                //          'amountType' => 'CREDIT',
-                //          'subsidiaryType' => 'EMPLOYEE',
-                //          'employeeNo' => $request->employeeNo,
-                //          'departmentName' => $nama_department,
-                //      ),
-                //
-                //      ),
-                //      'transDate' => date('d/m/Y'),
-                //      'description' => $data->no_reimbursement." - ".$data->remark." (CASH)",
-                //);
-                $postData =  json_encode($payload,JSON_UNESCAPED_SLASHES);
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-                curl_setopt($ch, CURLOPT_POST, 1);
-                curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-                curl_setopt($ch, CURLOPT_ENCODING , 1);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                  "Content-Type: application/json",
-                  'header' => "Authorization: Bearer ".$token['0'],
-                  'X-Session-ID: '.$session['0']));
-                $result = curl_exec($ch);
-                curl_close($ch);
-
-            } else if($cek_type==3) {
-                if($request->total != 0) {
-                  
-                  $url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
-                  $payload = array (
-                    'detailJournalVoucher' =>
-                        array (
-                        0 =>
-                        array (
-                            'accountNo' => $request->akun_perkiraan,
-                            'amount' => str_replace(".", "", $request->total),
-                            'amountType' => 'DEBIT',
-                            'subsidiaryType' => 'EMPLOYEE',
-                            'employeeNo' => $request->employeeNo,
-                            'departmentName' => $nama_department,
-                        ),
-                        1 =>
-                            array (
-                            'accountNo' => $request->metode_cash,
-                            'amount' => str_replace(".", "", $request->total),
-                            'amountType' => 'CREDIT',
-                            'subsidiaryType' => 'EMPLOYEE',
-                            'employeeNo' => $request->employeeNo,
-                            'departmentName' => $nama_department,
-                        ),
-                        ),
-                        'transDate' => date('d/m/Y'),
-                        'description' => $data->no_reimbursement." - ".$data->remark." (CASH)",
-                  );
-                  $postData =  json_encode($payload,JSON_UNESCAPED_SLASHES);
-                  $ch = curl_init($url);
-                  curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-                  curl_setopt($ch, CURLOPT_POST, 1);
-                  curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-                  curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-                  curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-                  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-                  curl_setopt($ch, CURLOPT_ENCODING , 1);
-                  curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                    "Content-Type: application/json",
-                    'header' => "Authorization: Bearer ".$token['0'],
-                    'X-Session-ID: '.$session['0']));
-                  $result = curl_exec($ch);
-                  curl_close($ch);
-              }
-
-            } else {
-
-                $total_cash = str_replace(".", "", $request->total_cash);
-                $total_fleet = str_replace(".", "", $request->total_fleet);
-
-                $url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
-                
-                $detailJournalVoucher = [];
-
-                if ($total_cash > 0) {
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->akun_perkiraan,
-                        'amount' => $total_cash,
-                        'amountType' => 'DEBIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->metode_cash,
-                        'amount' => $total_cash,
-                        'amountType' => 'CREDIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-                }
-
-                if ($total_fleet > 0) {
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->akun_perkiraan_fleet,
-                        'amount' => $total_fleet,
-                        'amountType' => 'DEBIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-
-                    $detailJournalVoucher[] = [
-                        'accountNo' => $request->metode_fleet,
-                        'amount' => $total_fleet,
-                        'amountType' => 'CREDIT',
-                        'subsidiaryType' => 'EMPLOYEE',
-                        'employeeNo' => $request->employeeNo,
-                        'departmentName' => $nama_department,
-                    ];
-                }
-
-                $payload = [
-                    'detailJournalVoucher' => $detailJournalVoucher,
-                    'transDate' => date('d/m/Y'),
-                    'description' => $data->no_reimbursement . " - " . $data->remark,
-                ];
-
-              
-                $postData =  json_encode($payload,JSON_UNESCAPED_SLASHES);
-                
-                
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-                curl_setopt($ch, CURLOPT_POST, 1);
-                curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-                curl_setopt($ch, CURLOPT_ENCODING , 1);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                  "Content-Type: application/json",
-                  'header' => "Authorization: Bearer ".$token['0'],
-                  'X-Session-ID: '.$session['0']));
-                $result = curl_exec($ch);
-                curl_close($ch);
-                
-              	
-            }
+            $accuratePayload = $this->buildAccuratePayloadForSettlement($data, $request, $nama_department);
 
             if($cek_type==1) {
 
@@ -509,12 +265,15 @@ class PencairanReimbursementController extends Controller
                     'bank_fleet' => $request->bank_fleet,
                     'no_rek_fleet' => $request->no_rek_fleet,
                     'total_fleet' => str_replace(".", "", $request->total_fleet),
-                    'total_cash' => str_replace(".", "", $request->total_cash)
+                    'total_cash' => str_replace(".", "", $request->total_cash),
+                    'accurate_payload_json' => $accuratePayload ? json_encode($accuratePayload, JSON_UNESCAPED_SLASHES) : null,
+                    'accurate_synced_at' => null,
+                    'accurate_sync_status' => $accuratePayload ? 'pending' : null,
+                    'accurate_sync_message' => null,
                 ]);
 
             } else {
-
-                $data->update([
+                $updatePayload = [
                     'status' => 5,
                     'tgl_pencairan' => date('Y-m-d H:i:s'),
                     'metode_allowance' => $request->metode_allowance,
@@ -524,7 +283,17 @@ class PencairanReimbursementController extends Controller
                     'bank' => $request->bank,
                     'no_rek' => $request->no_rek,
                     'akun_perkiraan' => $request->akun_perkiraan,
-                ]);
+                    'accurate_payload_json' => $accuratePayload ? json_encode($accuratePayload, JSON_UNESCAPED_SLASHES) : null,
+                    'accurate_synced_at' => null,
+                    'accurate_sync_status' => $accuratePayload ? 'pending' : null,
+                    'accurate_sync_message' => null,
+                ];
+
+                if ($cek_type == 2) {
+                    $updatePayload['metode_bdc'] = $request->metode_bdc;
+                }
+
+                $data->update($updatePayload);
 
             }
 
@@ -565,6 +334,303 @@ class PencairanReimbursementController extends Controller
         }
        
 
+    }
+
+    public function syncAccurate($id)
+    {
+        $data = Reimbursement::findOrFail($id);
+
+        if (auth()->user()->jabatan !== 'Owner') {
+            return redirect()->back()->withErrors(['Hanya Owner yang dapat melakukan sync Accurate.']);
+        }
+
+        if ((int) $data->status !== 5) {
+            return redirect()->back()->withErrors(['Reimbursement belum berstatus SETTLED.']);
+        }
+
+        if (!empty($data->accurate_synced_at)) {
+            return redirect()->back()->withErrors(['Data ini sudah tersinkron ke Accurate.']);
+        }
+
+        $payload = json_decode($data->accurate_payload_json ?? '', true);
+        if (!is_array($payload) || empty($payload['detailJournalVoucher'])) {
+            return redirect()->back()->withErrors(['Payload Accurate belum tersedia. Silakan lakukan settlement ulang terlebih dahulu.']);
+        }
+
+        try {
+            $syncResult = $this->postAccurateJournal($payload);
+
+            if (!($syncResult['success'] ?? false)) {
+                $message = $syncResult['message'] ?? 'Sync ke Accurate gagal.';
+                $data->update([
+                    'accurate_sync_status' => 'failed',
+                    'accurate_sync_message' => $message,
+                ]);
+                return redirect()->back()->withErrors([$message]);
+            }
+
+            $data->update([
+                'accurate_synced_at' => date('Y-m-d H:i:s'),
+                'accurate_sync_status' => 'synced',
+                'accurate_sync_message' => null,
+            ]);
+
+            return redirect()->back()->with(['success' => 'Sinkronisasi Accurate berhasil.']);
+        } catch (\Throwable $th) {
+            $data->update([
+                'accurate_sync_status' => 'failed',
+                'accurate_sync_message' => $th->getMessage(),
+            ]);
+
+            return redirect()->back()->withErrors([$th->getMessage()]);
+        }
+    }
+
+    private function normalizeMoney($value)
+    {
+        if ($value === null) {
+            return 0;
+        }
+
+        return (int) preg_replace('/[^0-9]/', '', (string) $value);
+    }
+
+    private function buildAccuratePayloadForSettlement(Reimbursement $data, Request $request, $nama_department)
+    {
+        $detailJournalVoucher = [];
+        $description = $data->no_reimbursement . " - " . $data->remark;
+        $reimbursementType = (int) $data->reimbursement_type;
+
+        if ($reimbursementType === 2) {
+            $description .= " (SETTLEMENT TRAVEL)";
+            $detailJournalVoucher = $this->buildTravelJournalVoucherLines($request, $nama_department);
+        } elseif ($reimbursementType === 3) {
+            $total = $this->normalizeMoney($request->total);
+            if ($total > 0) {
+                $detailJournalVoucher[] = [
+                    'accountNo' => $request->akun_perkiraan,
+                    'amount' => $total,
+                    'amountType' => 'DEBIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+                $detailJournalVoucher[] = [
+                    'accountNo' => $request->metode_cash,
+                    'amount' => $total,
+                    'amountType' => 'CREDIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+            }
+        } else {
+            $totalCash = $this->normalizeMoney($request->total_cash);
+            $totalFleet = $this->normalizeMoney($request->total_fleet);
+            if ($totalCash > 0) {
+                $detailJournalVoucher[] = [
+                    'accountNo' => $request->akun_perkiraan,
+                    'amount' => $totalCash,
+                    'amountType' => 'DEBIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+                $detailJournalVoucher[] = [
+                    'accountNo' => $request->metode_cash,
+                    'amount' => $totalCash,
+                    'amountType' => 'CREDIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+            }
+            if ($totalFleet > 0) {
+                $detailJournalVoucher[] = [
+                    'accountNo' => $request->akun_perkiraan_fleet,
+                    'amount' => $totalFleet,
+                    'amountType' => 'DEBIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+                $detailJournalVoucher[] = [
+                    'accountNo' => $request->metode_fleet,
+                    'amount' => $totalFleet,
+                    'amountType' => 'CREDIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+            }
+        }
+
+        if (empty($detailJournalVoucher)) {
+            return null;
+        }
+
+        return [
+            'detailJournalVoucher' => $detailJournalVoucher,
+            'transDate' => date('d/m/Y'),
+            'description' => $description,
+        ];
+    }
+
+    private function buildTravelJournalVoucherLines(Request $request, $nama_department)
+    {
+        $detailJournalVoucher = [];
+        $breakdownEntries = (array) $request->input('breakdown_entries', []);
+        $groupTotals = [
+            'BDC' => 0,
+            'ALLOWANCE' => 0,
+            'CASH' => 0,
+        ];
+
+        if (!empty($breakdownEntries)) {
+            foreach ($breakdownEntries as $entry) {
+                $group = strtoupper(trim((string) ($entry['group'] ?? '')));
+                $amount = (int) ($entry['amount'] ?? 0);
+                $accountNo = trim((string) ($entry['account_no'] ?? ''));
+
+                if ($amount <= 0 || !array_key_exists($group, $groupTotals)) {
+                    continue;
+                }
+
+                if ($accountNo === '') {
+                    throw new \Exception('Akun perkiraan per cost type wajib diisi.');
+                }
+
+                $groupTotals[$group] += $amount;
+                $detailJournalVoucher[] = [
+                    'accountNo' => $accountNo,
+                    'amount' => $amount,
+                    'amountType' => 'DEBIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+            }
+
+            $creditAccounts = [
+                'BDC' => trim((string) $request->metode_bdc),
+                'ALLOWANCE' => trim((string) $request->metode_allowance),
+                'CASH' => trim((string) $request->metode_cash),
+            ];
+
+            foreach ($groupTotals as $group => $totalAmount) {
+                if ($totalAmount <= 0) {
+                    continue;
+                }
+
+                if (empty($creditAccounts[$group])) {
+                    throw new \Exception('Settlement method untuk ' . $group . ' wajib diisi.');
+                }
+
+                $detailJournalVoucher[] = [
+                    'accountNo' => $creditAccounts[$group],
+                    'amount' => $totalAmount,
+                    'amountType' => 'CREDIT',
+                    'subsidiaryType' => 'EMPLOYEE',
+                    'employeeNo' => $request->employeeNo,
+                    'departmentName' => $nama_department,
+                ];
+            }
+
+            return $detailJournalVoucher;
+        }
+
+        // Backward compatibility for old form payload.
+        $totalAllowance = $this->normalizeMoney($request->total_allowance);
+        $totalCash = $this->normalizeMoney($request->total_cash);
+        if ($totalAllowance > 0) {
+            $detailJournalVoucher[] = [
+                'accountNo' => $request->akun_perkiraan_allowance,
+                'amount' => $totalAllowance,
+                'amountType' => 'DEBIT',
+                'subsidiaryType' => 'EMPLOYEE',
+                'employeeNo' => $request->employeeNo,
+                'departmentName' => $nama_department,
+            ];
+            $detailJournalVoucher[] = [
+                'accountNo' => $request->metode_allowance,
+                'amount' => $totalAllowance,
+                'amountType' => 'CREDIT',
+                'subsidiaryType' => 'EMPLOYEE',
+                'employeeNo' => $request->employeeNo,
+                'departmentName' => $nama_department,
+            ];
+        }
+        if ($totalCash > 0) {
+            $detailJournalVoucher[] = [
+                'accountNo' => $request->akun_perkiraan_cash,
+                'amount' => $totalCash,
+                'amountType' => 'DEBIT',
+                'subsidiaryType' => 'EMPLOYEE',
+                'employeeNo' => $request->employeeNo,
+                'departmentName' => $nama_department,
+            ];
+            $detailJournalVoucher[] = [
+                'accountNo' => $request->metode_cash,
+                'amount' => $totalCash,
+                'amountType' => 'CREDIT',
+                'subsidiaryType' => 'EMPLOYEE',
+                'employeeNo' => $request->employeeNo,
+                'departmentName' => $nama_department,
+            ];
+        }
+
+        return $detailJournalVoucher;
+    }
+
+    private function postAccurateJournal(array $payload)
+    {
+        $url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
+        $token = Api::where('id', 1)->get()->pluck('token');
+        $session = Api::where('id', 1)->get()->pluck('session');
+
+        $postData = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+        curl_setopt($ch, CURLOPT_ENCODING, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+            "Content-Type: application/json",
+            'header' => "Authorization: Bearer " . $token['0'],
+            'X-Session-ID: ' . $session['0']
+        ));
+        $result = curl_exec($ch);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($result === false || !empty($curlError)) {
+            return [
+                'success' => false,
+                'message' => 'Gagal terhubung ke Accurate: ' . $curlError,
+            ];
+        }
+
+        $decoded = json_decode($result, true);
+        if (is_array($decoded)) {
+            if ((array_key_exists('success', $decoded) && !$decoded['success']) || (array_key_exists('s', $decoded) && !$decoded['s'])) {
+                $message = $decoded['d'] ?? $decoded['message'] ?? 'Accurate menolak payload.';
+                return [
+                    'success' => false,
+                    'message' => is_string($message) ? $message : 'Accurate menolak payload.',
+                ];
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => 'ok',
+            'raw' => $result,
+        ];
     }
 
     

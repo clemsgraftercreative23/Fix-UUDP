@@ -143,6 +143,7 @@
 
   Route::resource('reimbursement', 'ReimbursementController');
   Route::resource('pencairan-reimbursement', 'PencairanReimbursementController');
+Route::post('pencairan-reimbursement/{id}/sync-accurate', 'PencairanReimbursementController@syncAccurate')->name('pencairan-reimbursement.sync-accurate');
   Route::post('reimbursement/approve/{id}', 'ReimbursementController@approve');
   Route::post('reimbursement/reject/{id}', 'ReimbursementController@reject');
 

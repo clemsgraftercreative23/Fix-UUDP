@@ -246,7 +246,7 @@
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Method</label>
-                                <input readonly type="text" class="form-control"/>
+                                <input readonly type="text" class="form-control" value="{{$data->metode_bdc}}" />
                             </div>
                         </div>
                         
@@ -361,203 +361,173 @@
 
 
                     @if ($data->status == 3 && auth()->user()->jabatan == 'Owner')
+                    @php
+                        $coaOptions = [
+                            '6-1051' => '6-1051 (Transportation)',
+                            '6-1055' => '6-1055 (Transportation BIK)',
+                            '6-1052' => '6-1052 (Business Trip - Domestic)',
+                            '6-1053' => '6-1053 (Business Trip - Overseas)',
+                            '6-1054' => '6-1054 (Travel Allowance BIK)',
+                            '6-2021' => '6-2021 (Entertainment Fee)',
+                            '1-1940' => '1-1940 (Temporary Payment)',
+                            '1-1960' => '1-1960 (Flash Fleet BCA)',
+                        ];
+
+                        $costTypeLabels = [
+                            'allowance' => 'Allowance',
+                            'simcard' => 'SIM Card',
+                            'flight' => 'Flight',
+                            'rentalcar' => 'Rental Car',
+                            'hotel' => 'Hotel',
+                            'toll' => 'Toll',
+                            'gasoline' => 'Gasoline',
+                            'taxi' => 'Taxi',
+                            'train' => 'Train',
+                            'others' => 'Others',
+                        ];
+
+                        $bdcBreakdown = [];
+                        foreach ($costTypeLabels as $key => $label) {
+                            $field = $key . '_bdc';
+                            $amount = (int) ($data->{$field} ?? 0);
+                            if ($amount > 0) {
+                                $bdcBreakdown[] = ['key' => $key, 'label' => $label, 'amount' => $amount];
+                            }
+                        }
+
+                        $cashBreakdown = [];
+                        foreach ($costTypeLabels as $key => $label) {
+                            if ($key === 'allowance') {
+                                continue;
+                            }
+                            $field = $key . '_cash';
+                            $amount = (int) ($data->{$field} ?? 0);
+                            if ($amount > 0) {
+                                $cashBreakdown[] = ['key' => $key, 'label' => $label, 'amount' => $amount];
+                            }
+                        }
+
+                        $allowanceBreakdown = [];
+                        $allowanceAmount = (int) ($allowance ?? 0);
+                        if ($allowanceAmount > 0) {
+                            $allowanceBreakdown[] = ['key' => 'allowance', 'label' => 'Allowance', 'amount' => $allowanceAmount];
+                        }
+
+                        $groups = [
+                            'BDC' => [
+                                'method_name' => 'metode_bdc',
+                                'items' => $bdcBreakdown,
+                                'total' => array_sum(array_column($bdcBreakdown, 'amount')),
+                            ],
+                            'ALLOWANCE' => [
+                                'method_name' => 'metode_allowance',
+                                'items' => $allowanceBreakdown,
+                                'total' => array_sum(array_column($allowanceBreakdown, 'amount')),
+                            ],
+                            'CASH' => [
+                                'method_name' => 'metode_cash',
+                                'items' => $cashBreakdown,
+                                'total' => array_sum(array_column($cashBreakdown, 'amount')),
+                            ],
+                        ];
+                        $breakdownIndex = 0;
+                    @endphp
+
                     <form action="{{url('/').'/pencairan-reimbursement/'.$data->id}}" method="POST">
                         <input type="hidden" name="employeeNo" value="{{$empNo}}">
-                        <h6>BDC</h6>
                         <div class="row">
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Settlement Method</label>
-                                    <select class="form-control cst-select" required disabled>
-                                        <option value="">--Select Settlement Method--</option>
-                                        @foreach($kasbank as $row)
-                                        <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Akun Perkiraan (Accurate)</label>
-                                    <select class="form-control cst-select" required disabled>
-                                        <option value="">--Select Akun Perkiraan--</option>
-                                        <option value="6-1051">6-1051 (Transportation)</option>
-                                        <option value="6-1055">6-1055 (Transportation BIK)</option>
-                                        <option value="6-1052">6-1052 (Business Trip - Domestic)</option>
-                                        <option value="6-1053">6-1053 (Business Trip - Overseas)</option>
-                                        <option value="6-1054">6-1054 (Travel Allowance BIK)</option>
-                                        <option value="6-2021">6-2021 (Entertainment Fee)</option>
-                                        <option value="1-1940">1-1940 (Temporary Payment)</option>
-                                        <option value="1-1960">1-1960 (Flash Fleet BCA)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Bank Account Name</label>
-                                    <input type="text" class="form-control" value="{{$data->user->name}}" readonly required/>
-                                </div>
-                            </div>
-
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Bank Account Number</label>
-                                    <input type="text" class="form-control" value="{{$data->user->bankAccount}}" readonly required/>
-                                </div>
-                            </div>
-
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Bank</label>
-                                    <input type="text" class="form-control" value="{{$data->user->bankName}}" readonly required/>
-                                </div>
-                            </div>
-
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Total</label>
-                                    <input type="text" class="form-control"  value="{{number_format($bdc,0,',','.')}}" readonly required/>
-                                </div>
-                            </div>
-
-                        </div>
-
-                        <hr>
-						@if($allowance!=0)		
-                        <h6>ALLOWANCE</h6>
-                        <div class="row">
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Settlement Method</label>
-                                    <select class="form-control cst-select" name="metode_allowance" required>
-                                        <option value="">--Select Settlement Method--</option>
-                                        @foreach($kasbank as $row)
-                                        <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Akun Perkiraan (Accurate)</label>
-                                    <select class="form-control cst-select" name="akun_perkiraan_allowance" required>
-                                        <option value="">--Select Akun Perkiraan--</option>
-                                        <option value="6-1051">6-1051 (Transportation)</option>
-                                        <option value="6-1055">6-1055 (Transportation BIK)</option>
-                                        <option value="6-1052">6-1052 (Business Trip - Domestic)</option>
-                                        <option value="6-1053">6-1053 (Business Trip - Overseas)</option>
-                                        <option value="6-1054">6-1054 (Travel Allowance BIK)</option>
-                                        <option value="6-2021">6-2021 (Entertainment Fee)</option>
-                                        <option value="1-1940">1-1940 (Temporary Payment)</option>
-                                        <option value="1-1960">1-1960 (Flash Fleet BCA)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-2">
+                            <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Bank Account Name</label>
                                     <input type="text" class="form-control" name="penerima" value="{{$data->user->name}}" required/>
                                 </div>
                             </div>
-
-                            <div class="col-md-2">
+                            <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Bank Account Number</label>
                                     <input type="text" class="form-control" name="no_rek" value="{{$data->user->bankAccount}}" required/>
                                 </div>
                             </div>
-
-                            <div class="col-md-2">
+                            <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Bank</label>
                                     <input type="text" class="form-control" name="bank" value="{{$data->user->bankName}}" required/>
                                 </div>
                             </div>
+                        </div>
+                        <input type="hidden" name="total_allowance" value="{{$groups['ALLOWANCE']['total']}}">
+                        <input type="hidden" name="total_cash" value="{{$groups['CASH']['total']}}">
+                        <input type="hidden" name="total_bdc" value="{{$groups['BDC']['total']}}">
 
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Total</label>
-                                    <input type="text" class="form-control" name="total_allowance" value="{{number_format($allowance,0,',','.')}}" required/>
+                        @foreach ($groups as $groupLabel => $group)
+                            @if($group['total'] > 0)
+                            <hr>
+                            <h6>{{$groupLabel}}</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Settlement Method</label>
+                                        <select class="form-control cst-select" name="{{$group['method_name']}}" required>
+                                            <option value="">--Select Settlement Method--</option>
+                                            @foreach($kasbank as $row)
+                                            <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Total Breakdown</label>
+                                        <input type="text" class="form-control" value="{{number_format($group['total'],0,',','.')}}" readonly />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        @endif
-						
-                        @if($cash!=0)
-                        <hr>
-                        <h6>CASH</h6>
-                        <div class="row">
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Settlement Method</label>
-                                    <select class="form-control cst-select" name="metode_cash" required>
-                                        <option value="">--Select Settlement Method--</option>
-                                        @foreach($kasbank as $row)
-                                        <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
+
+                            <div class="table-responsive">
+                                <table class="table table-bordered mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 30%;">Cost Type</th>
+                                            <th style="width: 25%;">Nominal</th>
+                                            <th style="width: 45%;">Akun Perkiraan (Accurate)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($group['items'] as $itemBreakdown)
+                                        <tr>
+                                            <td>{{$itemBreakdown['label']}}</td>
+                                            <td>{{number_format($itemBreakdown['amount'],0,',','.')}}</td>
+                                            <td>
+                                                <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][group]" value="{{$groupLabel}}">
+                                                <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][cost_key]" value="{{$itemBreakdown['key']}}">
+                                                <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][amount]" value="{{$itemBreakdown['amount']}}">
+                                                <select class="form-control cst-select" name="breakdown_entries[{{$breakdownIndex}}][account_no]" required>
+                                                    <option value="">--Select Akun Perkiraan--</option>
+                                                    @foreach($coaOptions as $coaCode => $coaLabel)
+                                                    <option value="{{$coaCode}}">{{$coaLabel}}</option>
+                                                    @endforeach
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        @php $breakdownIndex++; @endphp
                                         @endforeach
-                                    </select>
-                                </div>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Akun Perkiraan (Accurate)</label>
-                                    <select class="form-control cst-select" name="akun_perkiraan_cash" required>
-                                        <option value="">--Select Akun Perkiraan--</option>
-                                        <option value="6-1051">6-1051 (Transportation)</option>
-                                        <option value="6-1055">6-1055 (Transportation BIK)</option>
-                                        <option value="6-1052">6-1052 (Business Trip - Domestic)</option>
-                                        <option value="6-1053">6-1053 (Business Trip - Overseas)</option>
-                                        <option value="6-1054">6-1054 (Travel Allowance BIK)</option>
-                                        <option value="6-2021">6-2021 (Entertainment Fee)</option>
-                                        <option value="1-1940">1-1940 (Temporary Payment)</option>
-                                        <option value="1-1960">1-1960 (Flash Fleet BCA)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Bank Account Name</label>
-                                    <input type="text" class="form-control" name="penerima" value="{{$data->user->name}}" required/>
-                                </div>
-                            </div>
-
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Bank Account Number</label>
-                                    <input type="text" class="form-control" name="no_rek" value="{{$data->user->bankAccount}}" required/>
-                                </div>
-                            </div>
-
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Bank</label>
-                                    <input type="text" class="form-control" name="bank" value="{{$data->user->bankName}}" required/>
-                                </div>
-                            </div>
-                             <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Total</label>
-                                    <input type="text" class="form-control" name="total_cash" value="{{number_format($cash,0,',','.')}}" required/>
-                                </div>
-                            </div>
-                        </div>
-                        @endif
+                            @endif
+                        @endforeach
 
                         <br>
                         <hr>
                         <br>
                         <center>
                             @csrf @method('PUT')
-                            
                             <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Process Settlement</button>
                         </center>
                     </form>
                     <br>
                     @else
-                    
+
                     @endif
                     <br>
                     <center>
@@ -591,6 +561,18 @@
                                     <a href="{!!url('edit-travel-inquiry')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
                                 @else
                                     <a href="{!!url('edit-travel-overseas')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
+                                @endif
+                            @endif
+                            @if ($data->status == 5 && auth()->user()->jabatan == 'Owner')
+                                @if (!empty($data->accurate_synced_at))
+                                    <button type="button" class="btn btn-success" disabled>
+                                        Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
+                                    </button>
+                                @else
+                                    <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" style="display:inline;">
+                                        @csrf
+                                        <button type="submit" class="btn btn-warning">Sync Accurate</button>
+                                    </form>
                                 @endif
                             @endif
                         </center>
