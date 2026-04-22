@@ -12,6 +12,7 @@ use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use DB;
+use App\Support\ActivityLogger;
 class MedicalReimbursementController extends Controller
 {
 
@@ -148,6 +149,15 @@ class MedicalReimbursementController extends Controller
             }
     
             $data = Reimbursement::create($data);
+            ActivityLogger::log(
+                'reimbursement-medical',
+                'create',
+                'Reimbursement medical dibuat',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => 0]
+            );
             $datas = [];
             foreach ($request->details as $key => $value) {
                 if(($value) != null) {
@@ -296,6 +306,15 @@ class MedicalReimbursementController extends Controller
             ]);
 
         }
+        ActivityLogger::log(
+            'reimbursement-medical',
+            'approve',
+            'Reimbursement medical disetujui',
+            $data->no_reimbursement,
+            'reimbursement',
+            $data->id,
+            ['status' => $data->status]
+        );
         return redirect()->back()->with(['success' => "Berhasil disetujui"]);
     }
 }

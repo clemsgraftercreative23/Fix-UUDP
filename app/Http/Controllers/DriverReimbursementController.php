@@ -14,6 +14,7 @@ use App\Master_daftar_rencana;
 use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use App\Support\ActivityLogger;
 class DriverReimbursementController extends Controller
 {
     public function __construct()
@@ -511,6 +512,15 @@ class DriverReimbursementController extends Controller
 
         DB::beginTransaction();
         try {
+            ActivityLogger::log(
+                'reimbursement-driver',
+                'delete',
+                'Reimbursement driver dihapus',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $data->status]
+            );
             ReimbursementDriver::where('reimbursement_id', $id)->delete();
             $data->delete();
             DB::commit();
@@ -560,6 +570,15 @@ class DriverReimbursementController extends Controller
             ];
 
             $data = Reimbursement::create($data);
+            ActivityLogger::log(
+                'reimbursement-driver',
+                $status == 10 ? 'draft' : 'create',
+                $status == 10 ? 'Reimbursement driver disimpan sebagai draft' : 'Reimbursement driver dibuat',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $status]
+            );
             for ($i = 0; $i < count($request->toll); $i++) {
                 $payload = [
                     'reimbursement_id' => $data->id,
@@ -701,6 +720,15 @@ class DriverReimbursementController extends Controller
             $data = Reimbursement::find($id);
 
             $data->update($payload);
+            ActivityLogger::log(
+                'reimbursement-driver',
+                'update',
+                'Reimbursement driver diperbaharui',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $data->status]
+            );
 
             DB::select(DB::raw("UPDATE reimbursement_driver SET status=0  WHERE reimbursement_id = '$id'"));
 
@@ -834,6 +862,15 @@ class DriverReimbursementController extends Controller
               $data = Reimbursement::find($id);
 
               $data->update($payload);
+              ActivityLogger::log(
+                  'reimbursement-driver',
+                  $status == 10 ? 'draft' : 'update',
+                  $status == 10 ? 'Reimbursement driver diperbaharui sebagai draft' : 'Reimbursement driver diperbaharui',
+                  $data->no_reimbursement,
+                  'reimbursement',
+                  $data->id,
+                  ['status' => $status]
+              );
 
               DB::select(DB::raw("UPDATE reimbursement_driver SET status=0  WHERE reimbursement_id = '$id'"));
 
@@ -909,6 +946,15 @@ class DriverReimbursementController extends Controller
               $data = Reimbursement::find($id);
 
               $data->update($payload);
+              ActivityLogger::log(
+                  'reimbursement-driver',
+                  'update',
+                  'Reimbursement driver diperbaharui oleh approver',
+                  $data->no_reimbursement,
+                  'reimbursement',
+                  $data->id,
+                  ['status' => $data->status]
+              );
 
               DB::select(DB::raw("UPDATE reimbursement_driver SET status=0  WHERE reimbursement_id = '$id'"));
 
@@ -1002,6 +1048,15 @@ class DriverReimbursementController extends Controller
                 'mengetahui_owner' => $user->name,
             ]);
         }
+        ActivityLogger::log(
+            'reimbursement-driver',
+            'approve',
+            'Reimbursement driver disetujui',
+            $data->no_reimbursement,
+            'reimbursement',
+            $data->id,
+            ['status' => $data->status]
+        );
         return redirect()
             ->back()
             ->with(['success' => "Berhasil disetujui"]);
@@ -1043,6 +1098,15 @@ class DriverReimbursementController extends Controller
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 3)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }
+        ActivityLogger::log(
+            'reimbursement-driver',
+            'approve_multiple',
+            'Reimbursement driver disetujui secara massal',
+            null,
+            'reimbursement',
+            null,
+            ['ids' => $idsArray, 'status' => $status]
+        );
         
         
         // Ambil id_user dari tabel pengajuan

@@ -9,6 +9,7 @@ use App\Pencairan;
 use App\Tmp;
 use App\Listpengajuan;
 use Auth;
+use App\Support\ActivityLogger;
 
 // use \Yajra\Datatables\Datatables;
 
@@ -542,6 +543,15 @@ class PengajuanController extends Controller
 
                 
         $dt = Pengajuan::find($request->id_pengajuan);
+        ActivityLogger::log(
+          'pengajuan',
+          'update',
+          'Pengajuan diperbaharui dan disetujui Head Department',
+          $dt ? $dt->no_pengajuan : null,
+          'pengajuan',
+          $request->id_pengajuan,
+          ['status' => 1]
+        );
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
@@ -601,6 +611,15 @@ class PengajuanController extends Controller
 
         
         $dt = Pengajuan::find($request->id_pengajuan);
+        ActivityLogger::log(
+          'pengajuan',
+          'approve',
+          'Pengajuan disetujui Finance',
+          $dt ? $dt->no_pengajuan : null,
+          'pengajuan',
+          $request->id_pengajuan,
+          ['status' => 2]
+        );
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
@@ -654,6 +673,15 @@ class PengajuanController extends Controller
         DB::insert('insert into notif (data, created_at, created_by) values (?, ?, ?)', ['Pengajuan Telah Disetujui Oleh Finance Supervisor dengan ID '.$c[0], $date, $id_user]);
 
         $dt = Pengajuan::find($request->id_pengajuan);
+        ActivityLogger::log(
+          'pengajuan',
+          'approve',
+          'Pengajuan disetujui Finance Supervisor',
+          $dt ? $dt->no_pengajuan : null,
+          'pengajuan',
+          $request->id_pengajuan,
+          ['status' => 3]
+        );
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
@@ -718,6 +746,15 @@ class PengajuanController extends Controller
         }
  
         $dt = Pengajuan::find($request->id_pengajuan);
+        ActivityLogger::log(
+          'pengajuan',
+          'approve',
+          'Pengajuan disetujui Owner',
+          $dt ? $dt->no_pengajuan : null,
+          'pengajuan',
+          $request->id_pengajuan,
+          ['status' => 4]
+        );
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
@@ -796,6 +833,15 @@ class PengajuanController extends Controller
         }
 
         $pengajuan = Pengajuan::find($cek_hasil);
+        ActivityLogger::log(
+          'pengajuan',
+          'create',
+          'Pengajuan baru dibuat',
+          $pengajuan ? $pengajuan->no_pengajuan : $request->no_pengajuan,
+          'pengajuan',
+          $cek_hasil,
+          ['status' => 0]
+        );
 
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([

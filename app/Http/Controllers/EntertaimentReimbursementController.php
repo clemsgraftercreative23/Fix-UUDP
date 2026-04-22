@@ -14,6 +14,7 @@ use App\Master_daftar_rencana;
 use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use App\Support\ActivityLogger;
 class EntertaimentReimbursementController extends Controller
 {
 
@@ -474,6 +475,15 @@ class EntertaimentReimbursementController extends Controller
             ];
     
             $data = Reimbursement::create($data);
+            ActivityLogger::log(
+                'reimbursement-entertaiment',
+                $status == 10 ? 'draft' : 'create',
+                $status == 10 ? 'Reimbursement entertainment disimpan sebagai draft' : 'Reimbursement entertainment dibuat',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $status]
+            );
             $id_reim  = DB::select( DB::raw("SELECT max(id) AS id FROM reimbursement"))['0']->id;
 
             for ($i = 0; $i < count($request->empty_zone); $i++) {
@@ -645,6 +655,15 @@ class EntertaimentReimbursementController extends Controller
             $data = Reimbursement::find($id);
     
             $data->update($payload);
+            ActivityLogger::log(
+                'reimbursement-entertaiment',
+                $status == 10 ? 'draft' : 'update',
+                $status == 10 ? 'Reimbursement entertainment diperbaharui sebagai draft' : 'Reimbursement entertainment diperbaharui',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $status]
+            );
             
             
             DB::select(DB::raw("UPDATE reimbursement_entertaiments SET status=0  WHERE reimbursement_id = '$id'"));
@@ -782,6 +801,15 @@ class EntertaimentReimbursementController extends Controller
                 $data = Reimbursement::find($id);
         
                 $data->update($payload);
+                ActivityLogger::log(
+                    'reimbursement-entertaiment',
+                    $status == 10 ? 'draft' : 'update',
+                    $status == 10 ? 'Reimbursement entertainment diperbaharui sebagai draft' : 'Reimbursement entertainment diperbaharui',
+                    $data->no_reimbursement,
+                    'reimbursement',
+                    $data->id,
+                    ['status' => $status]
+                );
                 
                 
                 DB::select(DB::raw("UPDATE reimbursement_entertaiments SET status=0  WHERE reimbursement_id = '$id'"));
@@ -859,6 +887,15 @@ class EntertaimentReimbursementController extends Controller
                 $data = Reimbursement::find($id);
         
                 $data->update($payload);
+                ActivityLogger::log(
+                    'reimbursement-entertaiment',
+                    'update',
+                    'Reimbursement entertainment diperbaharui oleh approver',
+                    $data->no_reimbursement,
+                    'reimbursement',
+                    $data->id,
+                    ['status' => $data->status]
+                );
                 
                 
                 DB::select(DB::raw("UPDATE reimbursement_entertaiments SET status=0  WHERE reimbursement_id = '$id'"));
@@ -954,6 +991,15 @@ class EntertaimentReimbursementController extends Controller
 
         DB::beginTransaction();
         try {
+            ActivityLogger::log(
+                'reimbursement-entertaiment',
+                'delete',
+                'Reimbursement entertainment dihapus',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $data->status]
+            );
             ReimbursementEntertaiment::where('reimbursement_id', $id)->delete();
             $data->delete();
             DB::commit();
@@ -990,6 +1036,15 @@ class EntertaimentReimbursementController extends Controller
             ]);
 
         }
+        ActivityLogger::log(
+            'reimbursement-entertaiment',
+            'approve',
+            'Reimbursement entertainment disetujui',
+            $data->no_reimbursement,
+            'reimbursement',
+            $data->id,
+            ['status' => $data->status]
+        );
         return redirect()->back()->with(['success' => "Berhasil disetujui"]);
     }
     
@@ -1144,6 +1199,15 @@ class EntertaimentReimbursementController extends Controller
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }
+        ActivityLogger::log(
+            'reimbursement-entertaiment',
+            'approve_multiple',
+            'Reimbursement entertainment disetujui secara massal',
+            null,
+            'reimbursement',
+            null,
+            ['ids' => $idsArray, 'status' => $status]
+        );
         
         // Ambil id_user dari tabel pengajuan
         $userIds = Reimbursement::whereIn('id', $idsArray)->pluck('id_user')->toArray();

@@ -8,10 +8,28 @@ use App\ReimbursementDetail;
 use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
+use App\Support\ActivityLogger;
 use DB;
 use App\User;
 class ReimbursementController extends Controller
 {
+    private function resolveReimbursementModule($type)
+    {
+        if ((int) $type === 1) {
+            return 'reimbursement-driver';
+        }
+        if ((int) $type === 2) {
+            return 'reimbursement-travel';
+        }
+        if ((int) $type === 3) {
+            return 'reimbursement-entertaiment';
+        }
+        if ((int) $type === 4) {
+            return 'reimbursement-medical';
+        }
+        return 'reimbursement';
+    }
+
     public function __construct()
     {
         $this->middleware('auth');
@@ -121,6 +139,15 @@ class ReimbursementController extends Controller
             ];
 
             $data = Reimbursement::create($data);
+            ActivityLogger::log(
+                'reimbursement',
+                'create',
+                'Reimbursement baru dibuat',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => 0]
+            );
             for ($i = 0; $i < count($request->id_kelompok); $i++) {
                 $payload = [
                     'id_reimbursement' => $data->id,
@@ -412,6 +439,15 @@ class ReimbursementController extends Controller
         }
 
         if ($processed) {
+            ActivityLogger::log(
+                $this->resolveReimbursementModule($data->reimbursement_type),
+                'approve',
+                'Reimbursement disetujui',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $data->status]
+            );
             return redirect()
                 ->back()
                 ->with(['success' => "Berhasil disetujui"]);
@@ -450,6 +486,15 @@ class ReimbursementController extends Controller
             'reject_reason' => $request->reason,
             'reject_by' => $user->id,
         ]);
+        ActivityLogger::log(
+            $this->resolveReimbursementModule($data->reimbursement_type),
+            'reject',
+            'Reimbursement ditolak',
+            $data->no_reimbursement,
+            'reimbursement',
+            $data->id,
+            ['status' => 9, 'reason' => $request->reason]
+        );
 
         $nama_penolak = ucfirst(auth()->user()->name);
         if (auth()->user()->jabatan=='Direktur Operasional') {

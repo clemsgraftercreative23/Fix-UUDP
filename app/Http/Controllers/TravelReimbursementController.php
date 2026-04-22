@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Redirect;
+use App\Support\ActivityLogger;
 
 class TravelReimbursementController extends Controller
 {
@@ -872,6 +873,15 @@ class TravelReimbursementController extends Controller
             ];
     
             $data = Reimbursement::create($data);
+            ActivityLogger::log(
+                'reimbursement-travel',
+                $status == 10 ? 'draft' : 'create',
+                $status == 10 ? 'Reimbursement travel disimpan sebagai draft' : 'Reimbursement travel dibuat',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $status]
+            );
             foreach ($request->rates as $key => $value) {
                 TravelTripRate::create([
                     'reimbursement_id' => $data->id,
@@ -2068,6 +2078,16 @@ class TravelReimbursementController extends Controller
         );
 
         Reimbursement::where('id', $id_main)->update($form_data);
+        $logRowReject = Reimbursement::find($id_main);
+        ActivityLogger::log(
+            'reimbursement-travel',
+            $status == 9 ? 'reject' : 'update',
+            $status == 9 ? 'Item reimbursement travel ditolak/diperbaharui' : 'Item reimbursement travel diperbaharui',
+            $logRowReject ? $logRowReject->no_reimbursement : null,
+            'reimbursement',
+            $id_main,
+            ['status' => $status]
+        );
 
 
         $id_max = DB::select( DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_travel'"))['0']->id_max;
@@ -2297,6 +2317,16 @@ class TravelReimbursementController extends Controller
         );
 
         Reimbursement::where('id', $id_main)->update($form_data);
+        $logRowApproval = Reimbursement::find($id_main);
+        ActivityLogger::log(
+            'reimbursement-travel',
+            'approve',
+            'Item reimbursement travel disetujui/diperbaharui',
+            $logRowApproval ? $logRowApproval->no_reimbursement : null,
+            'reimbursement',
+            $id_main,
+            ['status' => $status]
+        );
 
 
         $id_max = DB::select( DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_travel'"))['0']->id_max;
@@ -2754,6 +2784,15 @@ class TravelReimbursementController extends Controller
             ]);
 
         }
+        ActivityLogger::log(
+            'reimbursement-travel',
+            'approve',
+            'Reimbursement travel disetujui',
+            $data->no_reimbursement,
+            'reimbursement',
+            $data->id,
+            ['status' => $data->status]
+        );
         return redirect()->back()->with(['success' => "Berhasil disetujui"]);
     }
 
@@ -3054,6 +3093,15 @@ class TravelReimbursementController extends Controller
 
         DB::beginTransaction();
         try {
+            ActivityLogger::log(
+                'reimbursement-travel',
+                'delete',
+                'Reimbursement travel dihapus',
+                $data->no_reimbursement,
+                'reimbursement',
+                $data->id,
+                ['status' => $data->status]
+            );
             ReimbursementTravelDetail::where('reimbursement_id', $id)->delete();
             ReimbursementTravel::where('reimbursement_id', $id)->delete();
             TravelTripRate::where('reimbursement_id', $id)->delete();
@@ -3109,6 +3157,15 @@ class TravelReimbursementController extends Controller
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }
+        ActivityLogger::log(
+            'reimbursement-travel',
+            'approve_multiple',
+            'Reimbursement travel disetujui secara massal',
+            null,
+            'reimbursement',
+            null,
+            ['ids' => $idsArray, 'status' => $status]
+        );
         
         // Ambil id_user dari tabel pengajuan
         $userIds = Reimbursement::whereIn('id', $idsArray)->pluck('id_user')->toArray();

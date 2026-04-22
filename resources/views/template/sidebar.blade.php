@@ -85,6 +85,13 @@
                              </li> --}}
                          </ul>
                         </li>
+                        @if($segment1 == 'activity-log')
+                        <li class="active-page">
+                        @else
+                        <li>
+                        @endif
+                            <a href="{{url('activity-log')}}"><i class="material-icons">history</i>Activity Log</a>
+                        </li>
                         
                         @if($segment1 == 'profile')
                           <li class="active-page">
@@ -494,6 +501,13 @@
                     <li>
                         <a href="{{url('accurate/authorize')}}" target="_blank"><i class="material-icons">share</i>Sync Accurate</a>
                     </li>  
+                    @if($segment1 == 'activity-log')
+                    <li class="active-page">
+                      @else
+                      <li>
+                      @endif
+                        <a href="{{url('activity-log')}}"><i class="material-icons">history</i>Activity Log</a>
+                    </li>
                     
                         @if($segment1 == 'profile')
                         <li class="active-page">

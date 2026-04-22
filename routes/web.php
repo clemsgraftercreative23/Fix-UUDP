@@ -138,6 +138,8 @@
   Route::get('/test', 'TestController@index')->middleware('guest');
   Route::resource('/otorisasi', 'OtorisasiController');
   Route::resource('/jurnal', 'JurnalController');
+  Route::get('/activity-log', 'ActivityLogController@index');
+  Route::get('/activity-log/data', 'ActivityLogController@data');
 
   Route::resource('reimbursement', 'ReimbursementController');
   Route::resource('pencairan-reimbursement', 'PencairanReimbursementController');
