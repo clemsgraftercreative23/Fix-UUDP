@@ -358,7 +358,7 @@ $(document).ready(function(){
     function formatTravelIdrMoney(num) {
         var n = Number(num);
         if (isNaN(n)) n = 0;
-        return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
 
     function parseTravelAmountInteger(raw) {
@@ -515,11 +515,16 @@ $(document).ready(function(){
 
     const notStayHotelConditionId = @json($not_stay_hotel_condition_id);
 
-    function syncNoneTripTypeFields() {
-        const tripTypeId = $('#trip_type_id').val();
-        const hotelSelect = $('#hotel_condition_id');
-        const startInput = $('#start_time');
-        const endInput = $('#end_time');
+    function syncNoneTripTypeFields(scopeEl) {
+        const $scope = (scopeEl && scopeEl.length) ? scopeEl : $('#rt-travel-item-pane');
+        const tripTypeInput = $scope.find('#trip_type_id').first();
+        const hotelSelect = $scope.find('#hotel_condition_id').first();
+        const startInput = $scope.find('#start_time').first();
+        const endInput = $scope.find('#end_time').first();
+        if (!tripTypeInput.length || !hotelSelect.length || !startInput.length || !endInput.length) {
+            return;
+        }
+        const tripTypeId = tripTypeInput.val();
 
         if (!tripTypeId) {
             const notStayOption = hotelSelect.find('option').filter(function () {
@@ -544,8 +549,9 @@ $(document).ready(function(){
     }
 
     $(document).on('change', '#rt-travel-item-pane #trip_type_id', function () {
-	    const id = $('#trip_type_id').val();
-        syncNoneTripTypeFields();
+        const $scope = $(this).closest('#rt-travel-item-pane');
+	    const id = $(this).val();
+        syncNoneTripTypeFields($scope);
         if (!id) {
             $('.allowance').val(formatTravelIdrMoney(0));
             total_nominal();
@@ -560,9 +566,10 @@ $(document).ready(function(){
                 type = data.data[0].type;
                 currency = data.data[0].currency;
               
-              	// Ambil semua input currency dan rate
-	            const currencyInputs = document.querySelectorAll('[name="currency_rate[]"]');
-	            const rateInputs = document.querySelectorAll('[name="rate[]"]');
+              	// Ambil semua input currency dan rate pada pane aktif.
+                const scopeNode = ($scope && $scope.length) ? $scope[0] : document;
+	            const currencyInputs = scopeNode.querySelectorAll('[name="currency_rate[]"]');
+	            const rateInputs = scopeNode.querySelectorAll('[name="rate[]"]');
 	            let usdRate = 1; // Default
 	            // Cari nilai rate untuk USD
 	            currencyInputs.forEach((input, index) => {
@@ -589,7 +596,7 @@ $(document).ready(function(){
 	    });
     });
 
-    syncNoneTripTypeFields();
+    syncNoneTripTypeFields($('#rt-travel-item-pane'));
 
     
     $(document).on('change', '.change-rate', function(){
@@ -1071,7 +1078,7 @@ $(document).ready(function(){
         var rtSkipVueTravelPane = function (event) {
             return $(event.target).closest('#rt-travel-item-pane').length > 0;
         };
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
         $('.idr-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();

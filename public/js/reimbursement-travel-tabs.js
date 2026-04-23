@@ -666,6 +666,8 @@
     }
 
     const domTravelIds = collectDomTravelTabIds($pane);
+    const domTravelIdCount = Object.keys(domTravelIds).length;
+    const trustDomAsCompleteSource = domTravelIdCount > 1;
     const persisted = readTravelItemsState(mainId);
     if ($pane && $pane.length && $pane.attr('data-rt-new-item') === '1') {
       idSet[NEW_ITEM_DRAFT_KEY] = true;
@@ -677,7 +679,10 @@
         rememberId(it.id);
         return;
       }
-      if (isValidTravelTabId(it.id) && domTravelIds[String(it.id)]) rememberId(it.id);
+      if (!isValidTravelTabId(it.id)) return;
+      if (!trustDomAsCompleteSource || domTravelIds[String(it.id)]) {
+        rememberId(it.id);
+      }
     });
 
     if ($pane && $pane.length) {
@@ -698,7 +703,10 @@
           rememberId(seg);
           continue;
         }
-        if (isValidTravelTabId(seg) && domTravelIds[String(seg)]) rememberId(seg);
+        if (!isValidTravelTabId(seg)) continue;
+        if (!trustDomAsCompleteSource || domTravelIds[String(seg)]) {
+          rememberId(seg);
+        }
       }
     } catch (e2) { /* ignore */ }
 

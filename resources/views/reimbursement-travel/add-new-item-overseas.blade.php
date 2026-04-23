@@ -224,7 +224,7 @@ function rupiah($angka){
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" class="form-control currency" name="rate[]" value="{{ rupiah($row->rate) }}">
+                                        <input type="text" inputmode="decimal" class="form-control currency exchange-rate-input" name="rate[]" value="{{ rupiah($row->rate) }}">
                                     </div>
                                     <div class="col-md-3">
                                         @if($loop->first)
@@ -499,11 +499,32 @@ $(document).ready(function(){
         return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
     }
 
+    function normalizeEuropeanNumberString(raw) {
+        var x = String(raw || '').trim().replace(/\s/g, '');
+        if (!x) return '0';
+        var lastC = x.lastIndexOf(',');
+        var lastD = x.lastIndexOf('.');
+        if (lastC > lastD) {
+            x = x.replace(/\./g, '').replace(',', '.');
+            return (x.replace(/[^\d.]/g, '') || '0');
+        }
+        x = x.replace(/,/g, '');
+        var idx = x.lastIndexOf('.');
+        if (idx === -1) {
+            return (x.replace(/[^\d]/g, '') || '0');
+        }
+        var intRaw = x.slice(0, idx);
+        var frac = x.slice(idx + 1).replace(/\D/g, '');
+        var intPart = intRaw.replace(/\./g, '');
+        if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
+            return intPart + frac;
+        }
+        return (intPart || '0') + (frac ? '.' + frac : '');
+    }
+
     function parseTravelMoney(raw) {
-        var s = String(raw || '').trim();
-        if (!s) return 0;
-        s = s.replace(/\./g, '').replace(',', '.');
-        var n = parseFloat(s);
+        var canonical = normalizeEuropeanNumberString(String(raw || '').trim());
+        var n = parseFloat(String(canonical || '0'));
         return isNaN(n) ? 0 : n;
     }
 
@@ -519,6 +540,53 @@ $(document).ready(function(){
         return isNaN(n) ? 0 : n;
     }
 
+    function sanitizeExchangeRateInput(value, finalize) {
+        var s = (value || '').toString().trim().replace(/\s/g, '');
+        if (!s) return '';
+        var lastC = s.lastIndexOf(',');
+        var lastD = s.lastIndexOf('.');
+        if (lastC > lastD) {
+            s = s.replace(/\./g, '').replace(',', '.');
+        } else {
+            s = s.replace(/,/g, '');
+        }
+        s = s.replace(/[^0-9.]/g, '');
+        var firstDot = s.indexOf('.');
+        if (firstDot !== -1) {
+            s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '');
+        }
+        var parts = s.split('.');
+        var intPart = parts[0] || '';
+        var decPart = parts[1] || '';
+        if (decPart.length > 2) {
+            decPart = decPart.slice(0, 2);
+        }
+        if (finalize && intPart.length > 1) {
+            intPart = intPart.replace(/^0+/, '') || '0';
+        }
+        if (finalize && parts.length > 1 && parts[1] === '' && s.slice(-1) === '.') {
+            return intPart;
+        }
+        return parts.length > 1 ? (intPart + '.' + decPart) : intPart;
+    }
+
+    function normalizeExchangeRateValue(value) {
+        var s = sanitizeExchangeRateInput(value, true);
+        if (s === '') return '0,00';
+        var canonical = normalizeEuropeanNumberString(s);
+        var n = parseFloat(canonical);
+        if (isNaN(n)) return '0,00';
+        n = Math.round(n * 100) / 100;
+        return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function parseExchangeRateNumber(value) {
+        var canonical = normalizeEuropeanNumberString(String(value || '').trim());
+        var n = parseFloat(canonical);
+        if (isNaN(n)) return 0;
+        return Math.round(n * 100) / 100;
+    }
+
     function applyOverseasNewItemAllCurrencyMasks() {
         var $all = $('.currency');
         try {
@@ -528,7 +596,7 @@ $(document).ready(function(){
         } catch (e) { /* ignore */ }
         var optsRate = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
         var optsAmount = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
-        var optsIdrTax = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
+        var optsIdrTax = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
         var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
         var $amt = $all.filter('input[name="amount[]"]');
         var $idrTax = $all.filter('input[name="idr_rate[]"], input[name="tax[]"]');
@@ -700,6 +768,14 @@ $(document).ready(function(){
         total_nominal();
         
     });
+
+    $(document).on('input', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
+        this.value = sanitizeExchangeRateInput(this.value, false);
+    });
+
+    $(document).on('blur', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
+        this.value = normalizeExchangeRateValue(this.value);
+    });
     
     $(function() {
         applyOverseasNewItemAllCurrencyMasks();
@@ -728,7 +804,7 @@ $(document).ready(function(){
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
          
-          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" class="form-control currency" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
+          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" inputmode="decimal" class="form-control currency exchange-rate-input" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
           $(function() {
             applyOverseasNewItemAllCurrencyMasks();
@@ -747,7 +823,9 @@ $(document).ready(function(){
 
         let id_rate = $group.find(".id_rate").val();
         let reim_id = "{{Request::segment('3')}}";
-        let rate = $group.find('input[name="rate[]"]').val().replace(/\./g, '');
+        let displayRate = normalizeExchangeRateValue($group.find('input[name="rate[]"]').val());
+        $group.find('input[name="rate[]"]').val(displayRate);
+        let rate = parseExchangeRateNumber(displayRate).toFixed(2);
         let currency = $group.find('input[name="currency_rate[]"]').val();
 
         
@@ -1222,11 +1300,13 @@ $(document).ready(function(){
   });
 
 
-    $(document).on('blur', 'input[name="rate[]"]', function () {
+    $(document).on('blur', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
         let $group = $(this).closest('.fieldGroup');
 
         let id_rate = $group.find('.id_rate').val();
-        let rate = $(this).val().replace(/\./g, '');
+        let displayRate = normalizeExchangeRateValue($(this).val());
+        $(this).val(displayRate);
+        let rate = parseExchangeRateNumber(displayRate).toFixed(2);
         let currency = $group.find('input[name="currency_rate[]"]').val();
         let reim_id = "{{Request::segment('3')}}";
 
