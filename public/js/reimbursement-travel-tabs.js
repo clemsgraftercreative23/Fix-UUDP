@@ -522,6 +522,10 @@
     if (m && m[1]) {
       return m[1] + 'add-item/' + mid + '/' + tid;
     }
+    const mNew = path.match(/^(.*\/reimbursement-travel\/)(?:add-item(?:-overseas)?)\/\d+$/i);
+    if (mNew && mNew[1]) {
+      return mNew[1] + 'add-item/' + mid + '/' + tid;
+    }
     return '';
   }
 
@@ -667,8 +671,12 @@
 
     const domTravelIds = collectDomTravelTabIds($pane);
     const domTravelIdCount = Object.keys(domTravelIds).length;
-    const trustDomAsCompleteSource = domTravelIdCount > 1;
     const persisted = readTravelItemsState(mainId);
+    const persistedValidCount = persisted.filter(function (it) {
+      return it && isValidTravelTabId(it.id);
+    }).length;
+    const trustDomAsCompleteSource =
+      domTravelIdCount > 1 && (persistedValidCount === 0 || domTravelIdCount >= persistedValidCount);
     if ($pane && $pane.length && $pane.attr('data-rt-new-item') === '1') {
       idSet[NEW_ITEM_DRAFT_KEY] = true;
     }
@@ -747,6 +755,7 @@
 
       return { id: id, date: date || id, href: href };
     });
+
 
     return sortTravelTabItems(items);
   }

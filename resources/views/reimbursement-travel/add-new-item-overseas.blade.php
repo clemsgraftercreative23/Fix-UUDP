@@ -254,7 +254,7 @@ function rupiah($angka){
                              data-main-id="{{ $data['0']->id }}"
                              data-travel-id="0"
                              data-rt-new-item="1"
-                             data-rt-new-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id) !!}"
+                             data-rt-new-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'?new=1') !!}"
                              data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
                         <div class="nav-tabs-container">
                             <ul class="nav nav-tabs">
