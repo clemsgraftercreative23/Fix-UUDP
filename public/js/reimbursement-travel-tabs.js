@@ -978,6 +978,40 @@
 
   window.rtTravelSyncFileUploadWarning = rtTravelSyncFileUploadWarning;
 
+  /**
+   * Terapkan aturan Trip Type None pada pane aktif saja.
+   * Saat kosong/None: Hotel + Start + Arrival disabled.
+   */
+  function rtSyncTripTypeNoneFields($pane) {
+    if (!$pane || !$pane.length) {
+      $pane = $('#rt-travel-item-pane');
+    }
+    if (!$pane || !$pane.length) return;
+    const $tripType = $pane.find('#trip_type_id').first();
+    const $hotel = $pane.find('#hotel_condition_id').first();
+    const $start = $pane.find('#start_time').first();
+    const $arrival = $pane.find('#end_time').first();
+    if (!$tripType.length || !$hotel.length || !$start.length || !$arrival.length) return;
+
+    const tripTypeId = String($tripType.val() || '').trim();
+    if (!tripTypeId) {
+      const $notStayOption = $hotel.find('option').filter(function () {
+        return String($(this).text() || '').trim().toLowerCase() === 'not stay';
+      }).first();
+      if ($notStayOption.length) {
+        $hotel.val($notStayOption.val());
+      }
+      $hotel.prop('disabled', true);
+      $start.prop('disabled', true).val('');
+      $arrival.prop('disabled', true).val('');
+      return;
+    }
+
+    $hotel.prop('disabled', false);
+    $start.prop('disabled', false);
+    $arrival.prop('disabled', false);
+  }
+
   function afterPaneHydrated($pane) {
     if (typeof window.rtCalculateTimeDifference === 'function') {
       window.rtCalculateTimeDifference();
@@ -985,6 +1019,7 @@
     if (typeof window.rtTotalNominalTravel === 'function') {
       window.rtTotalNominalTravel();
     }
+    rtSyncTripTypeNoneFields($pane);
     rtTravelSyncFileUploadWarning($pane);
   }
 
@@ -1064,6 +1099,11 @@
 
     $(document).on('input change', '#rt-travel-item-pane input[name="date"]', function () {
       syncActiveTravelTabDateFromInput($('#rt-travel-item-pane'));
+    });
+
+    $(document).on('change', '#rt-travel-item-pane #trip_type_id', function () {
+      const $pane = $(this).closest('#rt-travel-item-pane');
+      rtSyncTripTypeNoneFields($pane);
     });
 
     $(document).on('click', '#rt-travel-item-pane .travel-item-link[data-rt-tab="1"]', function (e) {
