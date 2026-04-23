@@ -1118,6 +1118,10 @@
     $(document).on('click', '#rt-travel-item-pane .travel-item-link[data-rt-tab="1"]', function (e) {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.which === 2) return;
       e.preventDefault();
+      var $focusedRate = $('input.exchange-rate-input[name="rate[]"]:focus').first();
+      if ($focusedRate.length) {
+        $focusedRate.trigger('blur');
+      }
       const newTravelId = String($(this).attr('data-travel-id') || '');
       const $pane = $('#rt-travel-item-pane');
       const currentId = readTravelIdAttr($pane);

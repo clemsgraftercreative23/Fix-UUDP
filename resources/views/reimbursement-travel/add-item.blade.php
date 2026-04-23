@@ -1364,6 +1364,7 @@ $(document).ready(function(){
         var id_rate = parseInt($group.find('.id_rate').val(), 10) || 0;
         var rateVal = $group.find('input[name="rate[]"]').val();
         var rate = normalizeExchangeRateValue(rateVal);
+        $group.find('input[name="rate[]"]').val(rate);
         var currency = ($group.find('input[name="currency_rate[]"]').val() || '').trim();
         var reim_id = "{{ Request::segment(3) }}";
         if (!currency) {
@@ -1411,6 +1412,14 @@ $(document).ready(function(){
         }
     }
 
+    function normalizeAllTripRateInputs() {
+        $('.fieldGroup input.exchange-rate-input[name="rate[]"]').each(function () {
+            var raw = (this.value || '').trim();
+            if (!raw) return;
+            this.value = normalizeExchangeRateValue(raw);
+        });
+    }
+
     $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
         var $g = $(this).closest('.fieldGroup');
         clearTripRateDebounce($g);
@@ -1424,6 +1433,8 @@ $(document).ready(function(){
     $(document).on('input', '.fieldGroup input[name="currency_rate[]"], input.exchange-rate-input[name="rate[]"]', function () {
         debouncePersistTripRate($(this).closest('.fieldGroup'), 500);
     });
+
+    normalizeAllTripRateInputs();
 
     $(document).on('focus', '.currency-select', function () {
         let $select = $(this);

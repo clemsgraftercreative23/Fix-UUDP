@@ -1325,6 +1325,14 @@ $(document).ready(function(){
       },
   });
 
+    function normalizeAllTripRateInputs() {
+        $('.fieldGroup input.exchange-rate-input[name="rate[]"]').each(function () {
+            var raw = (this.value || '').trim();
+            if (!raw) return;
+            this.value = normalizeExchangeRateValue(raw);
+        });
+    }
+
     $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
         let $group = $(this).closest('.fieldGroup');
 
@@ -1352,6 +1360,8 @@ $(document).ready(function(){
             }
         });
     });
+
+    normalizeAllTripRateInputs();
 
     $(document).on('focus', '.currency-select', function () {
         let $select = $(this);
