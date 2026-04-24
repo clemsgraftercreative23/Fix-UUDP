@@ -1138,8 +1138,10 @@ class TravelReimbursementController extends Controller
             $form_data = array(
                 'remark'        =>  $request->remark,
                 'reimbursement_department_id'        =>  $request->reimbursement_department_id,
-                'date'        =>  $request->date,
-            ); 
+            );
+            if (!$allowIncomplete || trim((string) $request->date) !== '') {
+                $form_data['date'] = $request->date;
+            }
             
             Reimbursement::whereId($id_main)->update($form_data);
 
@@ -1152,29 +1154,78 @@ class TravelReimbursementController extends Controller
                 })
                 ->toArray();
 
-            // Insert table reimbursement_travel
-
-            $form_travel = array(
-                'reimbursement_id'        =>  $id_main,
-                'date'        =>  $request->date,
-                'purpose'        =>  $request->purpose,
-                'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
-                'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
-                'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
-                'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
-                'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
-                'total'        =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
+            $transactionDate = trim((string) $request->date);
+            $purpose = trim((string) ($request->purpose ?? ''));
+            $tripTypeRaw = trim((string) ($request->trip_type_id ?? ''));
+            $allowanceRaw = trim((string) ($request->allowance ?? ''));
+            $costTypeRows = is_array($request->cost_type_id) ? $request->cost_type_id : [];
+            $destinationRows = is_array($request->destination) ? $request->destination : [];
+            $currencyRows = is_array($request->currency) ? $request->currency : [];
+            $amountRows = is_array($request->amount) ? $request->amount : [];
+            $paymentRows = is_array($request->payment_type) ? $request->payment_type : [];
+            $taxRows = is_array($request->tax) ? $request->tax : [];
+            $maxRows = max(
+                count($costTypeRows),
+                count($destinationRows),
+                count($currencyRows),
+                count($amountRows),
+                count($paymentRows),
+                count($taxRows)
             );
+            $hasDetailInput = false;
+            for ($ri = 0; $ri < $maxRows; $ri++) {
+                $hasUploadedEvidence = count($this->getUploadedFilesByRow($request, $ri)) > 0;
+                $hasAnyField =
+                    trim((string) ($costTypeRows[$ri] ?? '')) !== '' ||
+                    trim((string) ($destinationRows[$ri] ?? '')) !== '' ||
+                    trim((string) ($currencyRows[$ri] ?? '')) !== '' ||
+                    trim((string) ($amountRows[$ri] ?? '')) !== '' ||
+                    trim((string) ($paymentRows[$ri] ?? '')) !== '' ||
+                    trim((string) ($taxRows[$ri] ?? '')) !== '';
+                if ($hasAnyField || $hasUploadedEvidence) {
+                    $hasDetailInput = true;
+                    break;
+                }
+            }
+            $hasMeaningfulHeader = ($purpose !== '' || $tripTypeRaw !== '' || $allowanceRaw !== '');
+            $hasMeaningfulInput = $hasMeaningfulHeader || $hasDetailInput;
 
-            DB::table('reimbursement_travel')->insert($form_travel);
+            $shouldCreateTravelRow = true;
+            if ($allowIncomplete && $transactionDate === '') {
+                if ($hasMeaningfulInput) {
+                    throw ValidationException::withMessages([
+                        'date' => 'Tanggal transaksi wajib diisi sebelum item dapat disimpan.',
+                    ]);
+                }
+                $shouldCreateTravelRow = false;
+            }
 
-            $id_detail = DB::select( DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id_max;
+            $id_detail = null;
+            if ($shouldCreateTravelRow) {
+                $form_travel = array(
+                    'reimbursement_id'        =>  $id_main,
+                    'date'        =>  $request->date,
+                    'purpose'        =>  $request->purpose,
+                    'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
+                    'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
+                    'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
+                    'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
+                    'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
+                    'total'        =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
+                );
+
+                DB::table('reimbursement_travel')->insert($form_travel);
+                $id_detail = DB::select(DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id_max;
+            }
 
             $currencies = is_array($request->currency) ? $request->currency : [];
             $count_ = count($currencies);
             $draftFallbackCostTypeId = (int) (TravelType::min('id') ?: 0);
 
             for ($i=0; $i < $count_; $i++) {
+                if (!$id_detail) {
+                    break;
+                }
                 $costTypeId = isset($request->cost_type_id[$i]) ? trim((string) $request->cost_type_id[$i]) : '';
                 $hasUploadedEvidence = count($this->getUploadedFilesByRow($request, $i)) > 0;
                 if ($costTypeId === '') {
@@ -1634,10 +1685,6 @@ class TravelReimbursementController extends Controller
             $remainingTravelCount = ReimbursementTravel::where('reimbursement_id', $id_main)->count();
 
             if ($remainingTravelCount === 0) {
-                if ((int) $reimbursement->status !== 10) {
-                    DB::rollback();
-                    return redirect()->back()->withErrors(['Minimal harus ada 1 tab perjalanan pada pengajuan non-draft']);
-                }
                 TravelTripRate::where('reimbursement_id', $id_main)->delete();
                 $reimbursement->delete();
                 DB::commit();

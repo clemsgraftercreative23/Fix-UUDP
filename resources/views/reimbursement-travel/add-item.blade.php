@@ -1480,7 +1480,7 @@ $(document).ready(function(){
 
 
 </script>
-<script src="{{ asset('js/reimbursement-travel-tabs.js') }}"></script>
+<script src="{{ asset('js/reimbursement-travel-tabs.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-tabs.js')) }}"></script>
 
 @endpush
 @endsection

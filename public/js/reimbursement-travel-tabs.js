@@ -292,12 +292,26 @@
     };
   }
 
+  function stripTempFilesFromRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows.map(function (r) {
+      if (!r || typeof r !== 'object') return r;
+      const out = Object.assign({}, r);
+      out.temp_file = null;
+      return out;
+    });
+  }
+
   function persistCurrentPane($pane) {
     const mainId = readMainIdAttr($pane);
     const draftTid = resolveDraftTravelId($pane);
     if (mainId && draftTid) {
       try {
         const state = collectStateV2($pane);
+        // "new item" harus selalu mulai upload file dari kosong.
+        if (isDraftNewTravelItemId(draftTid)) {
+          state.rows = stripTempFilesFromRows(state.rows);
+        }
         localStorage.setItem(storageKeyV2(mainId, draftTid), JSON.stringify(state));
         try {
           sessionStorage.removeItem(storageKeyV1(mainId, draftTid));
@@ -351,6 +365,9 @@
       if (rawV2) {
         const state = JSON.parse(rawV2);
         if (state && state.v === 2 && Array.isArray(state.rows)) {
+          if (isDraftNewTravelItemId(draftTid)) {
+            state.rows = stripTempFilesFromRows(state.rows);
+          }
           reconcileDetailRows($pane, state.rows.length);
           if (state.header) applyHeader($pane, state.header);
           const $rows = $pane.find('tbody tr.fieldGroupDetail');
@@ -393,6 +410,21 @@
     try {
       const items = readTravelItemsState(mainId).filter(function (it) {
         return it && !isDraftNewTravelItemId(it.id);
+      });
+      writeTravelItemsState(mainId, items);
+    } catch (e2) { /* ignore */ }
+  }
+
+  function clearStorageForTravelId(mainId, travelId) {
+    const tid = String(travelId || '');
+    if (!mainId || !isValidTravelTabId(tid)) return;
+    try {
+      localStorage.removeItem(storageKeyV2(mainId, tid));
+      sessionStorage.removeItem(storageKeyV1(mainId, tid));
+    } catch (e1) { /* ignore */ }
+    try {
+      const items = readTravelItemsState(mainId).filter(function (it) {
+        return it && String(it.id) !== tid;
       });
       writeTravelItemsState(mainId, items);
     } catch (e2) { /* ignore */ }
@@ -441,6 +473,49 @@
     try {
       writeTravelItemsState(mainId, buildMergedTravelTabItems(mainId, $pane));
     } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Purge local draft/state for travel ids that no longer exist in DOM/server.
+   * Prevents stale deleted tabs from reappearing after redirect/reload.
+   */
+  function pruneDeletedTravelTabState($pane, mainId) {
+    if (!mainId || !$pane || !$pane.length) return;
+    const domIds = collectDomTravelTabIds($pane);
+    const currentItems = readTravelItemsState(mainId);
+    const keptItems = currentItems.filter(function (it) {
+      if (!it) return false;
+      const sid = String(it.id || '');
+      if (isDraftNewTravelItemId(sid)) return true;
+      return !!domIds[sid];
+    });
+    writeTravelItemsState(mainId, keptItems);
+
+    const v2Prefix = STORAGE_V2_PREFIX + mainId + ':';
+    const staleIds = {};
+    currentItems.forEach(function (it) {
+      if (!it) return;
+      const sid = String(it.id || '');
+      if (!isValidTravelTabId(sid)) return;
+      if (!domIds[sid]) staleIds[sid] = true;
+    });
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || k.indexOf(v2Prefix) !== 0) continue;
+        const sid = String(k.slice(v2Prefix.length) || '');
+        if (isValidTravelTabId(sid) && !domIds[sid]) staleIds[sid] = true;
+      }
+    } catch (e) { /* ignore */ }
+
+    Object.keys(staleIds).forEach(function (sid) {
+      try {
+        localStorage.removeItem(storageKeyV2(mainId, sid));
+      } catch (e1) { /* ignore */ }
+      try {
+        sessionStorage.removeItem(storageKeyV1(mainId, sid));
+      } catch (e2) { /* ignore */ }
+    });
   }
 
   function refreshTravelTabLabelsFromV2Drafts($pane, mainId) {
@@ -499,6 +574,13 @@
       });
     }
     return out + parts.hash;
+  }
+
+  function travelIdFromDeleteHref(href) {
+    const s = String(href || '');
+    const m = s.match(/\/delete-item\/\d+\/(\d+)(?:\/|$|\?|#)/i);
+    if (!m || !m[1]) return '';
+    return isValidTravelTabId(m[1]) ? String(m[1]) : '';
   }
 
   /**
@@ -672,11 +754,12 @@
     const domTravelIds = collectDomTravelTabIds($pane);
     const domTravelIdCount = Object.keys(domTravelIds).length;
     const persisted = readTravelItemsState(mainId);
-    const persistedValidCount = persisted.filter(function (it) {
-      return it && isValidTravelTabId(it.id);
-    }).length;
-    const trustDomAsCompleteSource =
-      domTravelIdCount > 1 && (persistedValidCount === 0 || domTravelIdCount >= persistedValidCount);
+    /**
+     * Existing travel tabs must always follow current DOM (server truth),
+     * including when server currently has zero tabs.
+     * This prevents stale localStorage entries from reviving deleted items.
+     */
+    const trustDomAsCompleteSource = !!($pane && $pane.length);
     if ($pane && $pane.length && $pane.attr('data-rt-new-item') === '1') {
       idSet[NEW_ITEM_DRAFT_KEY] = true;
     }
@@ -756,6 +839,17 @@
       return { id: id, date: date || id, href: href };
     });
 
+
+    // Final guard: existing tab ids must exist in current DOM snapshot.
+    if ($pane && $pane.length) {
+      const domOnly = items.filter(function (it) {
+        if (!it) return false;
+        const sid = String(it.id || '');
+        if (isDraftNewTravelItemId(sid)) return true;
+        return isValidTravelTabId(sid) && !!domTravelIds[sid];
+      });
+      return sortTravelTabItems(domOnly);
+    }
 
     return sortTravelTabItems(items);
   }
@@ -903,6 +997,7 @@
         if ($form.length) {
           updateFormTravelAction($form, newTravelId);
         }
+        pruneDeletedTravelTabState($pane, mainId);
         refreshTravelTabLabelsFromV2Drafts($pane, mainId);
         renderTravelTabsFromState($pane, mainId, newTravelId);
         restorePaneFull($pane);
@@ -1038,6 +1133,7 @@
 
     restorePaneFull($pane0);
     const main0 = readMainIdAttr($pane0);
+    pruneDeletedTravelTabState($pane0, main0);
     syncTravelItemsStateFromDom($pane0, main0);
     refreshTravelTabLabelsFromV2Drafts($pane0, main0);
     syncActiveTravelTabDateFromInput($pane0);
@@ -1154,15 +1250,55 @@
       const mainId = readMainIdAttr($pane);
       clearStorageForNewItem(mainId);
 
-      const back = String($pane.attr('data-rt-new-item-url') || '').trim();
-      const isOnNewPane = $pane.attr('data-rt-new-item') === '1' || !isValidTravelTabId(readTravelIdAttr($pane));
+      /**
+       * Jangan kembali ke URL ?new=1 (itu hanya akan menampilkan ulang tab "New Item"
+       * dan membuat user merasa hapus tidak jalan). Prioritas:
+       *  1) Pindah ke tab existing pertama yang ada di DOM.
+       *  2) Ke endpoint addNewItem tanpa ?new=1 (server redirect ke item terakhir).
+       *  3) Fallback: bersihkan ?new=1 dari URL sekarang.
+       */
+      let targetUrl = '';
+      $pane.find('.travel-item-link[data-rt-tab="1"]').each(function () {
+        const tid = travelIdFromTabLink($(this));
+        if (isValidTravelTabId(tid)) {
+          const u = tabItemUrlAttr($(this));
+          if (u) {
+            targetUrl = u.split('#')[0];
+            return false;
+          }
+        }
+      });
 
-      if (isOnNewPane && back) {
-        window.location.href = back.split('#')[0];
+      if (!targetUrl) {
+        const hrefPrefix = String($pane.attr('data-rt-href-prefix') || '').trim();
+        if (hrefPrefix) {
+          targetUrl = hrefPrefix.replace(/\/+$/, '').split('#')[0];
+        }
+      }
+
+      if (!targetUrl) {
+        const isOnNewPane = $pane.attr('data-rt-new-item') === '1' || !isValidTravelTabId(readTravelIdAttr($pane));
+        if (isOnNewPane) {
+          targetUrl = String(window.location.pathname || '/');
+        }
+      }
+
+      if (targetUrl) {
+        window.location.href = targetUrl;
         return;
       }
 
       renderTravelTabsFromState($pane, mainId, readTravelIdAttr($pane));
+    });
+
+    $(document).on('click', '#rt-travel-item-pane a.tab-close-link:not(.js-rt-remove-new-item)', function () {
+      const href = String(this.getAttribute('href') || '');
+      const tid = travelIdFromDeleteHref(href);
+      if (!tid) return true;
+      const $pane = $('#rt-travel-item-pane');
+      const mainId = readMainIdAttr($pane);
+      clearStorageForTravelId(mainId, tid);
+      return true;
     });
 
     window.addEventListener('popstate', function () {

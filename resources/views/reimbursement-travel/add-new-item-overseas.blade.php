@@ -245,6 +245,22 @@ function rupiah($angka){
             </div>
         </div>
          
+        @php
+            $statusInt = (int) ($data[0]->status ?? 0);
+            $jabatan = (string) (auth()->user()->jabatan ?? '');
+            $canManageTabs = false;
+            if ($statusInt === 10) {
+                $canManageTabs = true;
+            } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+                $canManageTabs = true;
+            } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'superadmin'], true)) {
+                $canManageTabs = true;
+            } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+                $canManageTabs = true;
+            } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'superadmin'], true)) {
+                $canManageTabs = true;
+            }
+        @endphp
         <div class="row" v-for="(data,i) in reimburses">
             <div class="col-xl">
                 <div class="card">
@@ -265,7 +281,7 @@ function rupiah($angka){
                                                 data-rt-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/'.$item->id.'') !!}"
                                                 data-rt-tab="1"
                                                 data-travel-id="{{ $item->id }}"><span class="item-1">{{$item->date}}</span></button>
-                                        @if($data['0']->status == 10)
+                                        @if($canManageTabs)
                                         <a class="tab-close-link" href="{{ route('reimbursement-travel.delete-item', [$data['0']->id, $item->id]) }}" onclick="return confirm('Hapus tab ini dan semua datanya?')">x</a>
                                         @endif
                                     </div>
@@ -351,7 +367,7 @@ function rupiah($angka){
                                     <tbody>
                                         <tr class="fieldGroupDetail">
                                             <td>
-                                                <input type="hidden" name="id_detail[]" value="{{ isset($travel_detail[0]) ? $travel_detail[0]->id : '' }}">
+                                                <input type="hidden" name="id_detail[]" value="">
                                                 <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
                                                     <option value="">Select...</option>
                                                     @foreach ($types as $item)
@@ -393,7 +409,7 @@ function rupiah($angka){
                                                 <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                                                     <i class="fa fa-camera"></i>
                                                 </button>
-                                                <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
+                                                <input type="file" accept="image/*" name="file[]" multiple style="display: none;" class="file-input file1">
                                                 <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                                             </td>
                                             <td>
@@ -879,7 +895,7 @@ $(document).ready(function(){
         }
         count++;
         ct++;
-        var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+        var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+' currency-select" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]" multiple style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+ct+'"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
         $root.find('.fieldGroupDetail:last').after(fieldHTML);
         $(function() {
             applyOverseasNewItemAllCurrencyMasks();
@@ -1368,7 +1384,7 @@ $(document).ready(function(){
 
 
 </script>
-<script src="{{ asset('js/reimbursement-travel-tabs.js') }}"></script>
+<script src="{{ asset('js/reimbursement-travel-tabs.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-tabs.js')) }}"></script>
 
 @endpush
 @endsection
