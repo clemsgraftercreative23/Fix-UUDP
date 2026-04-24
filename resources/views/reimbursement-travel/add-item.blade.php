@@ -913,6 +913,13 @@ $(document).ready(function(){
             $(".warning-upload").hide();
 
             let previewDiv = getPreviewDivFromRow(row);
+            previewDiv.find('a[href^="blob:"]').each(function () {
+              try {
+                var h = $(this).attr('href');
+                if (h) URL.revokeObjectURL(h);
+              } catch (eRev) { /* ignore */ }
+            });
+            previewDiv.empty();
 
             let fileType = file.type;
 
@@ -997,9 +1004,17 @@ $(document).ready(function(){
                             const dataTransfer = new DataTransfer();
                             dataTransfer.items.add(file);
                             fileInput[0].files = dataTransfer.files;
+                            fileInput.trigger('change');
 
                             const imageURL = URL.createObjectURL(file);
                             let previewDiv = getPreviewDivFromRow(row);
+                            previewDiv.find('a[href^="blob:"]').each(function () {
+                              try {
+                                var h = $(this).attr('href');
+                                if (h) URL.revokeObjectURL(h);
+                              } catch (eRev) { /* ignore */ }
+                            });
+                            previewDiv.empty();
                             previewDiv.append(createPreviewImage(imageURL));
                             btn.find("i").removeClass("fa-camera").addClass("fa-check");
 

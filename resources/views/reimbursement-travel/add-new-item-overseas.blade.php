@@ -906,7 +906,6 @@ $(document).ready(function(){
       $("body").on("click", ".addFile", function () {
         let btn = $(this);
         let row = btn.closest("tr");
-        let idx = row.index();
         let fileInput = row.find(".file-input");
 
         fileInput.click();
@@ -919,7 +918,13 @@ $(document).ready(function(){
             $("#action_button_draft").prop("disabled", false);
             $(".warning-upload").hide();
 
-            let previewDiv = row.find("#preview_" + (idx + 1));
+            let previewDiv = row.find('[id^="preview_"]').first();
+            previewDiv.find('a[href^="blob:"]').each(function () {
+              try {
+                var h = $(this).attr('href');
+                if (h) URL.revokeObjectURL(h);
+              } catch (eRev) { /* ignore */ }
+            });
             previewDiv.empty();
 
             let fileType = file.type;
@@ -977,7 +982,6 @@ $(document).ready(function(){
     $("body").on("click", ".addCamera", function () {
         let btn = $(this);
         let row = btn.closest("tr");
-        let idx = row.index();
         let fileInput = row.find(".camera-input");
 
         if (navigator.mediaDevices.getUserMedia) {
@@ -1017,7 +1021,13 @@ $(document).ready(function(){
                             fileInput.trigger('change');
 
                             const imageURL = URL.createObjectURL(file);
-                            let previewDiv = row.find("#preview_" + (idx + 1)); 
+                            let previewDiv = row.find('[id^="preview_"]').first();
+                            previewDiv.find('a[href^="blob:"]').each(function () {
+                              try {
+                                var h = $(this).attr('href');
+                                if (h) URL.revokeObjectURL(h);
+                              } catch (eRev) { /* ignore */ }
+                            });
                             previewDiv.empty().append(
                                 $('<img>').attr('src', imageURL).css({
                                     maxWidth: '75px',
