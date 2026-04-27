@@ -636,16 +636,14 @@
         if (raw) {
           const old = JSON.parse(raw);
           if (Array.isArray(old)) {
-            const items = sortTravelTabItems(
-              old
-                .map(function (e) {
-                  if (!e || !e.id) return null;
-                  return { id: String(e.id), date: e.label || String(e.id), href: e.href || '' };
-                })
-                .filter(function (e) {
-                  return e && (isValidTravelTabId(e.id) || isDraftNewTravelItemId(e.id));
-                })
-            );
+            const items = old
+              .map(function (e) {
+                if (!e || !e.id) return null;
+                return { id: String(e.id), date: e.label || String(e.id), href: e.href || '' };
+              })
+              .filter(function (e) {
+                return e && (isValidTravelTabId(e.id) || isDraftNewTravelItemId(e.id));
+              });
             writeTravelItemsState(mainId, items);
             try {
               localStorage.removeItem(LEGACY_TABBAR_REGISTRY_PREFIX + mainId);
@@ -657,11 +655,9 @@
       }
       const o = JSON.parse(raw);
       if (o && Array.isArray(o.items)) {
-        return sortTravelTabItems(
-          o.items.filter(function (e) {
-            return e && (isValidTravelTabId(e.id) || isDraftNewTravelItemId(e.id));
-          })
-        );
+        return o.items.filter(function (e) {
+          return e && (isValidTravelTabId(e.id) || isDraftNewTravelItemId(e.id));
+        });
       }
       return [];
     } catch (e) {
@@ -676,38 +672,64 @@
     } catch (e) { /* quota */ }
   }
 
-  /** Nilai numerik untuk urut tanggal (utamakan YYYY-MM-DD; fallback Date.parse untuk label lain). */
-  function travelTabDateSortKey(dateStr) {
-    const s = String(dateStr || '').trim();
-    if (!s) return 0;
-    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) {
-      const t = Date.UTC(parseInt(iso[1], 10), parseInt(iso[2], 10) - 1, parseInt(iso[3], 10));
-      return isNaN(t) ? 0 : t;
-    }
-    const p = Date.parse(s);
-    return isNaN(p) ? 0 : p;
-  }
+  /**
+   * Urutan tab natural: (1) urutan elemen di DOM (sesuai server / partial), (2) urutan di localStorage state,
+   * (3) sisa id (tie-break numerik id; draft "new" terakhir). Tidak sort by tanggal — mengubah tanggal tidak
+   * menggeser posisi tab sehingga tidak membingungkan user.
+   */
+  function orderTravelTabIdsNaturally($pane, persisted, idSet, domTravelIds, trustDomAsCompleteSource) {
+    const seen = {};
+    const ordered = [];
 
-  /** Urut tab: tanggal paling awal → akhir; tie-break by travel id. Tidak memutasi array asal. */
-  function sortTravelTabItems(arr) {
-    if (!Array.isArray(arr) || !arr.length) {
-      return arr || [];
+    function allowedInOutput(sid) {
+      if (!idSet[sid]) return false;
+      if (!trustDomAsCompleteSource) return true;
+      if (isDraftNewTravelItemId(sid)) return true;
+      return isValidTravelTabId(sid) && !!domTravelIds[sid];
     }
-    const copy = arr.slice();
-    copy.sort(function (a, b) {
-      const ka = travelTabDateSortKey(a && a.date);
-      const kb = travelTabDateSortKey(b && b.date);
-      if (ka !== kb) return ka - kb;
-      const idKey = function (id) {
-        const s = String(id);
-        if (isDraftNewTravelItemId(s)) return 9007199254740992;
-        const n = parseInt(s, 10);
-        return isNaN(n) ? 0 : n;
-      };
-      return idKey(a && a.id) - idKey(b && b.id);
+
+    function push(sid) {
+      sid = String(sid || '');
+      if (!sid || seen[sid]) return;
+      if (!allowedInOutput(sid)) return;
+      seen[sid] = true;
+      ordered.push(sid);
+    }
+
+    if ($pane && $pane.length) {
+      $pane.find('.travel-item-link').each(function () {
+        const $btn = $(this);
+        if ($btn.attr('data-rt-tab') !== '1' && !$btn.attr('data-travel-id')) return;
+        const tid = travelIdFromTabLink($btn);
+        if (tid) push(tid);
+      });
+    }
+
+    if (persisted && persisted.length) {
+      persisted.forEach(function (it) {
+        if (it && it.id) push(String(it.id));
+      });
+    }
+
+    const remaining = [];
+    Object.keys(idSet).forEach(function (sid) {
+      if (seen[sid]) return;
+      if (!allowedInOutput(sid)) return;
+      remaining.push(sid);
     });
-    return copy;
+    remaining.sort(function (a, b) {
+      if (isDraftNewTravelItemId(a)) return 1;
+      if (isDraftNewTravelItemId(b)) return -1;
+      const na = parseInt(a, 10);
+      const nb = parseInt(b, 10);
+      if (String(na) === a && String(nb) === b && !isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    });
+    remaining.forEach(function (sid) {
+      push(sid);
+    });
+
+    return ordered;
   }
 
   /** Resolve travel id from tab control; supports data-rt-item-url / legacy href (add-item paths). */
@@ -812,7 +834,8 @@
       }
     });
 
-    const items = Object.keys(idSet).map(function (id) {
+    const itemById = {};
+    Object.keys(idSet).forEach(function (id) {
       const base = fromPersist[id] || { id: id, date: id, href: '' };
       let date = base.date || id;
       let href = base.href || '';
@@ -836,22 +859,20 @@
         }
       } catch (e1) { /* ignore */ }
 
-      return { id: id, date: date || id, href: href };
+      itemById[id] = { id: id, date: date || id, href: href };
     });
 
+    const orderedIds = orderTravelTabIdsNaturally(
+      $pane,
+      persisted,
+      idSet,
+      domTravelIds,
+      trustDomAsCompleteSource
+    );
 
-    // Final guard: existing tab ids must exist in current DOM snapshot.
-    if ($pane && $pane.length) {
-      const domOnly = items.filter(function (it) {
-        if (!it) return false;
-        const sid = String(it.id || '');
-        if (isDraftNewTravelItemId(sid)) return true;
-        return isValidTravelTabId(sid) && !!domTravelIds[sid];
-      });
-      return sortTravelTabItems(domOnly);
-    }
-
-    return sortTravelTabItems(items);
+    return orderedIds.map(function (sid) {
+      return itemById[sid];
+    }).filter(Boolean);
   }
 
   /**
