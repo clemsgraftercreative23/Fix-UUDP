@@ -77,7 +77,8 @@ if (!function_exists('travel_attachment_rows')) {
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">DETAIL REIMBURSEMENT TRAVEL {{$data->travel_type}}</h5><hr>
-                        <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p><hr>
+                        <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
+                        <hr>
                         @if(session()->has('success'))
                         <div class="alert alert-success">
                             {{ session()->get('success') }}
@@ -162,7 +163,12 @@ if (!function_exists('travel_attachment_rows')) {
                                 <input type="text" class="form-control" value="{{$data->reject_reason}}" readonly >
                             </div>
                             @endif
-                          <div>
+                        </div>
+                        <div class="form-row mt-2">
+                            <div class="form-group col-md-12 mb-0">
+                                <label for="travel_detail_summary_remarks">Remarks</label>
+                                <input type="text" id="travel_detail_summary_remarks" class="form-control" value="{{ $data->remark ?? '' }}" readonly>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -245,6 +251,7 @@ if (!function_exists('travel_attachment_rows')) {
                 <thead>
                     <th>Cost Type</th>
                     <th>Destination</th>
+                    <th>Remarks</th>
                     <th>Currency</th>
                     <th>Amount</th>
                     <th>Amount (IDR)</th>
@@ -256,6 +263,7 @@ if (!function_exists('travel_attachment_rows')) {
                 <tr>
                     <td>{{$dt->costType->name}}</td>
                     <td>{{$dt->destination}}</td>
+                    <td>{{ $data->remark ?? '' }}</td>
                     <td>{{$dt->currency}}</td>
                     <td>{{$dt->currency}} {{ (int) floor((float) $dt->amount) }}</td>
                     <td>{{ travel_detail_idr($dt->idr_rate) }}</td>
@@ -282,10 +290,11 @@ if (!function_exists('travel_attachment_rows')) {
                 <tfoot>
                     <tr>
                         <td>Total</td>
-                        <td class="bg-secondary text-right" colspan="6">{{ travel_detail_idr($item->total) }}</td>
+                        <td class="bg-secondary text-right" colspan="7">{{ travel_detail_idr($item->total) }}</td>
                     </tr>
                 </tfoot>
                 </table>
+                @include('reimbursement-travel.partials.travel-checker-sheets', ['travelItem' => $item])
                 <hr>
                 @endforeach
 

@@ -164,7 +164,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
             <thead style="width: 100%">
                 <tr>
                     <th width="200">Cost Type</th>
-                    <th width="200">Remarks</th>
+                    <th width="200">Destination</th>
                     <th width="200">Currency</th>
                     <th width="200">Amount</th>
                     <th width="200">IDR Rate</th>

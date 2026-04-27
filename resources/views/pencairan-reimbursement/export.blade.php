@@ -692,7 +692,7 @@ $exportedAt = \Carbon\Carbon::now()->format('Y-m-d H:i');
                                 <td class="text-right">{{ export_nominal($dt->idr_rate ?? 0) }}</td>
                                 <td class="text-right">{{ export_nominal($dt->tax ?? 0) }}</td>
                                 <td>{{ $dt->payment_type ?? '' }}</td>
-                                <td>{{ $dt->remarks ?? '' }}</td>
+                                <td>{{ $row->remark ?? '' }}</td>
                                 <td class="text-center">{!! export_evidence_cell($dt->evidence ?? '') !!}</td>
                             </tr>
                         @empty

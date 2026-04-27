@@ -131,6 +131,7 @@
             <tr>
                 <th colspan="2">Cost Type</th>
                 <th colspan="2">Destination</th>
+                <th colspan="2">Remarks</th>
                 <th>Currency</th>
                 <th colspan="2">Amount</th>
                 <th colspan="2">Amount (IDR)</th>
@@ -140,6 +141,7 @@
             <tr>
                 <td colspan="2">{{$dt->costType->name}}</td>
                 <td colspan="2">{{$dt->destination}}</td>
+                <td colspan="2">{{ $data->remark ?? '' }}</td>
                 <td>{{$dt->currency}}</td>
                 <td colspan="2" align="right">{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
                 <td colspan="2" align="right">{{number_format($dt->idr_rate,0,',','.')}}</td>
@@ -150,7 +152,7 @@
             
                 <tr>
                     <td colspan="2">Total</td>
-                    <td class="bg-secondary text-right" align="right" colspan="7">{{number_format($item->total,0,',','.')}}</td>
+                    <td class="bg-secondary text-right" align="right" colspan="9">{{number_format($item->total,0,',','.')}}</td>
                     <td style="background: #f0f0f0" >&nbsp;</td>
                 </tr>
             @endforeach
