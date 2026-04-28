@@ -104,23 +104,41 @@ if (!function_exists('travel_attachment_rows')) {
                                 </div>
                             @endforeach
                         @endif
+                        @php
+                            $bdcTotalFmt = travel_detail_idr(isset($bdc) ? (float) $bdc : (float) ($data->total_bdc ?? 0));
+                            $cashTotalFmt = travel_detail_idr(isset($cash) ? (float) $cash : (float) ($data->total_cash ?? 0));
+                            $travelEditTab = optional($data->travels->sortByDesc('id')->first() ?? null)->id ?? optional($data->travels->first() ?? null)->id;
+                            $editTravelItemUrl = $travelEditTab
+                                ? url('reimbursement-travel/add-item/'.$data->id.'/'.$travelEditTab)
+                                : url('reimbursement-travel/add-item/'.$data->id);
+                        @endphp
                         <div class="form-row">
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
                                 <label for="inputEmail4">Apply Date</label>
                                 <input type="text" class="form-control" value="{{ date('d F Y', strtotime($data->created_at))}}" readonly>
                             </div>
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
                                 <label for="inputEmail4">Transaction Date</label>
                                 <input type="text" class="form-control" id="date" value="{{ date('d F Y', strtotime($data->date))}}" readonly>
                             </div>
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
                                 <label for="inputEmail4">Number</label>
                                 <input type="text" class="form-control" value="{{$data->no_reimbursement}}" readonly>
                             </div>
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
                                 <label for="inputEmail4">Total</label>
                                 <input type="text" class="form-control" value="{{ travel_detail_idr($data->nominal_pengajuan) }}" readonly>
                             </div>
+                            <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
+                                <label>BDC</label>
+                                <input type="text" class="form-control" value="{{ $bdcTotalFmt }}" readonly>
+                            </div>
+                            <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
+                                <label>Cash</label>
+                                <input type="text" class="form-control" value="{{ $cashTotalFmt }}" readonly>
+                            </div>
+                        </div>
+                        <div class="form-row">
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Approved by Head Department</label>
                                 <input type="text" class="form-control" value="{{strtoupper($data->mengetahui_op)}}" readonly>
@@ -187,13 +205,11 @@ if (!function_exists('travel_attachment_rows')) {
                 </div>
         </div>
     </div>
-</div>
 
-
-<div class="row">
-    <div class="col-lg-12">
-        <div class="card">
-            <div class="card-body" style="display: block;width: 100%;overflow-x: auto;">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body" style="display: block;width: 100%;overflow-x: auto;">
                 <hr><span style="color:#66da90;"><h5>Detail Reimbursement</h5></span><hr>
                 <table class="table table-bordered mb-2">
                     <tr>
@@ -210,7 +226,6 @@ if (!function_exists('travel_attachment_rows')) {
                     <tr>
                         <th>Transaction Date</th>
                         <td class="bg-secondary">
-                            <!-- {{$data->date}} -->
                             {{$item->date}}
                         </td>
                         <th>Trip Type</th>
@@ -233,24 +248,6 @@ if (!function_exists('travel_attachment_rows')) {
                         </td>
                         <th>Allowance (IDR)</th>
                         <td class="bg-secondary">
-                            {{-- @php
-                                $currency = App\TravelTripRate::where('reimbursement_id',$data->id)->where('currency',$item->tripType->currency)->first();
-                                if ($currency) {
-                                    $currency = $currency->rate;
-                                }
-
-                                if (!$currency && $item->tripType->currency == "IDR") {
-                                    $currency = 1;
-                                }
-
-                                if (!$currency && $item->tripType->currency == "USD") {
-                                    $currency = 16400;
-                                }
-
-                                
-
-                                echo number_format($item->allowance * $currency,0,',','.');
-                                                            @endphp --}}
                             {{ travel_detail_idr($item->allowance) }}
                         </td>
                     </tr>
@@ -320,13 +317,21 @@ if (!function_exists('travel_attachment_rows')) {
                     </tr>
                 </tfoot>
                 </table>
-                @include('reimbursement-travel.partials.travel-checker-sheets', ['travelItem' => $item])
                 <hr>
                 @endforeach
 
+                </div>
             </div>
+        </div>
+    </div>
 
-            <div class="col-lg-12">
+</div>
+
+
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-body">
 
                     @if ($data->status == 5)
 
@@ -456,7 +461,7 @@ if (!function_exists('travel_attachment_rows')) {
                             @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
-                                    <a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-warning">Edit</a>
+                                    <a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
                                     <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
@@ -465,7 +470,7 @@ if (!function_exists('travel_attachment_rows')) {
                             @if ($data->status == 1 && (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
-                                  	<a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-warning">Edit</a>
+                                  	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
                                     <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
@@ -474,30 +479,30 @@ if (!function_exists('travel_attachment_rows')) {
                             @if (in_array((int) $data->status, [2, 3], true) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
-                                  	<a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-warning">Edit</a>
+                                  	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
                                     <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
                             @endif
                             
-                            @if ($data->status == 9 && auth()->user()->id == $data->id_user)                                
+                            @if ($data->status == 9 && auth()->user()->id == $data->id_user)
                                 @if($data->travel_type=='Domestic')
                                     <!--
                                     <a href="{!!url('edit-travel-inquiry')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
 									-->
-                      				<a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-primary">Edit</a>
+                      				<a href="{{ $editTravelItemUrl }}"  class="btn btn-primary">Edit</a>
                                 @else
                                     <!-- <a href="{!!url('edit-travel-overseas')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a> -->
-                      				<a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-primary">Edit</a>
+                      				<a href="{{ $editTravelItemUrl }}"  class="btn btn-primary">Edit</a>
                                 @endif
                             @endif
 
                             @if ($data->status == 10 && auth()->user()->id == $data->id_user) 
                                 @if($data->travel_type=='Domestic')
-                                    <a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-primary">Edit</a>
+                                    <a href="{{ $editTravelItemUrl }}"  class="btn btn-primary">Edit</a>
                                 @else
                                     <!-- <a href="{!!url('edit-travel-overseas')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a> -->
-                                    <a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-primary">Edit</a>
+                                    <a href="{{ $editTravelItemUrl }}"  class="btn btn-primary">Edit</a>
                                 @endif
                             @endif
                         </center>
