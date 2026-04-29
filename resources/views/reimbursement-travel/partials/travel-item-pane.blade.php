@@ -70,9 +70,9 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         $canManageTabs = true;
     } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
         $canManageTabs = true;
-    } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'superadmin'], true)) {
+    } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin'], true)) {
         $canManageTabs = true;
-    } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+    } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Manager', 'Finance Supervisor', 'superadmin'], true)) {
         $canManageTabs = true;
     } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'superadmin'], true)) {
         $canManageTabs = true;
@@ -450,11 +450,11 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
     @endif
 
-    @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor') && $data['0']->status==1)
+    @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && $data['0']->status==1)
         <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
     @endif
 
-    @if(auth()->user()->jabatan == 'Owner' && $data['0']->status==2)
+    @if((auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'Finance Manager') && $data['0']->status==2)
         <button class="btn btn-warning" type="submit" id="edit_owner" name="edit_owner">Update</button>&nbsp;
     @endif
 </div>

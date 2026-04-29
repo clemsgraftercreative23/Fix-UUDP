@@ -110,11 +110,11 @@ class TravelReimbursementController extends Controller
             return true;
         }
 
-        if ($status === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'superadmin'], true)) {
+        if ($status === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin'], true)) {
             return true;
         }
 
-        if ($status === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+        if ($status === 2 && in_array($jabatan, ['Owner', 'Finance Manager', 'Finance Supervisor', 'superadmin'], true)) {
             return true;
         }
 
