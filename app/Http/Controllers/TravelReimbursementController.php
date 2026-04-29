@@ -1503,7 +1503,7 @@ class TravelReimbursementController extends Controller
         $types = TravelType::get();
         $hotelCondition = TravelHotelCondition::get();
         $itemQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
-        $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
+        $itemQuery->orderBy('id', 'asc');
         $item = $itemQuery->get()->toArray();
         $id_reimb = $data['0']->id;
         $id_travel_int = (int) $id_travel;
@@ -1568,11 +1568,11 @@ class TravelReimbursementController extends Controller
         
         
         $itemQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
-        $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
+        $itemQuery->orderBy('id', 'asc');
         $item = $itemQuery->get()->toArray();
         $id_reimb = $data['0']->id;
         $dataTravelQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
-        $dataTravelQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
+        $dataTravelQuery->orderBy('id', 'asc');
         $data_travel = $dataTravelQuery->get()->toArray();
 
         // Saat user menekan tombol "Add New Item" kita kirim flag ?new=1 sehingga
