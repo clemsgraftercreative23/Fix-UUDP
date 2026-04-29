@@ -1502,7 +1502,15 @@ class TravelReimbursementController extends Controller
         
         $types = TravelType::get();
         $hotelCondition = TravelHotelCondition::get();
-        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
+        $isApproverView = ((int) auth()->id() !== (int) ($data[0]->id_user ?? 0));
+        $itemQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
+        if ($isApproverView) {
+            // Role approver: gunakan urutan default data (by id), bukan diurut tanggal.
+            $itemQuery->orderBy('id', 'asc');
+        } else {
+            $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
+        }
+        $item = $itemQuery->get()->toArray();
         $id_reimb = $data['0']->id;
         $id_travel_int = (int) $id_travel;
         $data_travel  = $id_travel_int > 0
@@ -1565,9 +1573,23 @@ class TravelReimbursementController extends Controller
         $hotelCondition = TravelHotelCondition::get();
         
         
-        $item  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
+        $isApproverView = ((int) auth()->id() !== (int) ($data[0]->id_user ?? 0));
+        $itemQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
+        if ($isApproverView) {
+            // Role approver: gunakan urutan default data (by id), bukan diurut tanggal.
+            $itemQuery->orderBy('id', 'asc');
+        } else {
+            $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
+        }
+        $item = $itemQuery->get()->toArray();
         $id_reimb = $data['0']->id;
-        $data_travel  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id='$id_main' ORDER BY date ASC, id ASC"));
+        $dataTravelQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
+        if ($isApproverView) {
+            $dataTravelQuery->orderBy('id', 'asc');
+        } else {
+            $dataTravelQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
+        }
+        $data_travel = $dataTravelQuery->get()->toArray();
 
         // Saat user menekan tombol "Add New Item" kita kirim flag ?new=1 sehingga
         // form kosong "new item" benar-benar ditampilkan. Tanpa flag ini,
