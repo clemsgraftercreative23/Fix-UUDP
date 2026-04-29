@@ -1502,14 +1502,8 @@ class TravelReimbursementController extends Controller
         
         $types = TravelType::get();
         $hotelCondition = TravelHotelCondition::get();
-        $isApproverView = ((int) auth()->id() !== (int) ($data[0]->id_user ?? 0));
         $itemQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
-        if ($isApproverView) {
-            // Role approver: gunakan urutan default data (by id), bukan diurut tanggal.
-            $itemQuery->orderBy('id', 'asc');
-        } else {
-            $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
-        }
+        $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
         $item = $itemQuery->get()->toArray();
         $id_reimb = $data['0']->id;
         $id_travel_int = (int) $id_travel;
@@ -1573,22 +1567,12 @@ class TravelReimbursementController extends Controller
         $hotelCondition = TravelHotelCondition::get();
         
         
-        $isApproverView = ((int) auth()->id() !== (int) ($data[0]->id_user ?? 0));
         $itemQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
-        if ($isApproverView) {
-            // Role approver: gunakan urutan default data (by id), bukan diurut tanggal.
-            $itemQuery->orderBy('id', 'asc');
-        } else {
-            $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
-        }
+        $itemQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
         $item = $itemQuery->get()->toArray();
         $id_reimb = $data['0']->id;
         $dataTravelQuery = DB::table('reimbursement_travel')->where('reimbursement_id', $id_main);
-        if ($isApproverView) {
-            $dataTravelQuery->orderBy('id', 'asc');
-        } else {
-            $dataTravelQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
-        }
+        $dataTravelQuery->orderBy('date', 'asc')->orderBy('id', 'asc');
         $data_travel = $dataTravelQuery->get()->toArray();
 
         // Saat user menekan tombol "Add New Item" kita kirim flag ?new=1 sehingga
