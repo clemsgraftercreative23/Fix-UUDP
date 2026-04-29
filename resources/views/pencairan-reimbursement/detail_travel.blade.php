@@ -237,7 +237,6 @@
                     </tr>
                 </tfoot>
                 </table>
-                @include('reimbursement-travel.partials.travel-checker-sheets', ['travelItem' => $item])
                 <hr>
                 @endforeach
 
