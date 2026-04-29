@@ -1,8 +1,7 @@
-{{-- Per-segment travel: checker summary by payment (BDC vs Cash), aligned with finance cost_type_id mapping. --}}
 @if (!empty($travelItem))
 @php
     $fmtChecker = function ($v) {
-        return number_format((float) $v, 2, ',', '.');
+        return number_format((float) $v, 0, ',', '.');
     };
     $payIs = function ($raw, $want) {
         return strcasecmp(trim((string) ($raw ?? '')), $want) === 0;
@@ -77,79 +76,77 @@
     ];
 @endphp
 <div class="mt-3 mb-2">
-    <h6 class="mb-2" style="color:#66da90;">Checker's Sheet BDC</h6>
-    <table class="table table-bordered table-sm mb-2" style="max-width:720px;">
+    <table class="table table-bordered mb-2" style="max-width: 720px;">
+        <tr>
+            <td class="bg-secondary" colspan="6"><center><strong>Checker's Sheet BDC</strong></center></td>
+        </tr>
         <tbody>
             <tr>
-                <th width="40%">Total Payment to be paid</th>
-                <td class="bg-secondary text-right">{{ $fmtChecker($totalBdcToPay) }}</td>
+                <td class="bg-secondary"><strong>Total Payment to be paid</strong></td>
+                <td class="bg-secondary"><strong>{{ $fmtChecker($totalBdcToPay) }}</strong></td>
+                <td class="bg-secondary" colspan="4"></td>
             </tr>
             <tr>
-                <th>Advanced Paid</th>
+                <td class="bg-secondary">Advanced Paid</td>
                 <td class="bg-secondary"></td>
+                <td class="bg-secondary" colspan="4"></td>
             </tr>
             <tr>
-                <th>Total Amount Paid</th>
-                <td class="bg-secondary text-right">{{ $fmtChecker($totalBdcToPay) }}</td>
+                <td class="bg-secondary">Total Amount Paid</td>
+                <td class="bg-secondary">{{ $fmtChecker($totalBdcToPay) }}</td>
+                <td class="bg-secondary" colspan="4"></td>
             </tr>
-        </tbody>
-    </table>
-    <table class="table table-bordered table-sm mb-3" style="max-width:720px;">
-        <tbody>
             @foreach ($checkerRows as $rowLabels)
                 <tr>
                     @foreach ($rowLabels as $label)
                         @if ($label === '')
-                            <td></td>
+                            <td class="bg-secondary" colspan="2"></td>
                         @else
                             @php
                                 $k = $checkerLabelKey[$label] ?? null;
                                 $val = $k ? ($bdcCats[$k] ?? 0) : 0;
                             @endphp
-                            <td>
-                                <div><strong>{{ $label }}</strong></div>
-                                <div class="text-right">{{ $fmtChecker($val) }}</div>
-                            </td>
+                            <td class="bg-secondary">{{ $label }}</td>
+                            <td class="bg-secondary">{{ $fmtChecker($val) }}</td>
                         @endif
                     @endforeach
                 </tr>
             @endforeach
         </tbody>
     </table>
-
-    <h6 class="mb-2" style="color:#66da90;">Checker's Sheet Cash</h6>
-    <table class="table table-bordered table-sm mb-2" style="max-width:720px;">
+    <br>
+    <table class="table table-bordered mb-2" style="max-width: 720px;">
+        <tr>
+            <td class="bg-secondary" colspan="6"><center><strong>Checker's Sheet Cash</strong></center></td>
+        </tr>
         <tbody>
             <tr>
-                <th width="40%">Total Payment to be paid</th>
-                <td class="bg-secondary text-right">{{ $fmtChecker($totalCashToPay) }}</td>
+                <td class="bg-secondary"><strong>Total Payment to be paid</strong></td>
+                <td class="bg-secondary"><strong>{{ $fmtChecker($totalCashToPay) }}</strong></td>
+                <td class="bg-secondary" colspan="4"></td>
             </tr>
             <tr>
-                <th>Advanced Paid</th>
+                <td class="bg-secondary">Advanced Paid</td>
                 <td class="bg-secondary"></td>
+                <td class="bg-secondary" colspan="4"></td>
             </tr>
             <tr>
-                <th>Total Amount Paid</th>
-                <td class="bg-secondary text-right">{{ $fmtChecker($totalCashToPay) }}</td>
+                <td class="bg-secondary">Total Amount Paid</td>
+                <td class="bg-secondary">{{ $fmtChecker($totalCashToPay) }}</td>
+                <td class="bg-secondary" colspan="4"></td>
             </tr>
-        </tbody>
-    </table>
-    <table class="table table-bordered table-sm mb-2" style="max-width:720px;">
-        <tbody>
             @foreach ($checkerRows as $rowLabels)
                 <tr>
                     @foreach ($rowLabels as $label)
                         @if ($label === '')
-                            <td></td>
+                            <td class="bg-secondary" colspan="2"></td>
                         @else
                             @php
                                 $k = $checkerLabelKey[$label] ?? null;
                                 $val = $k ? ($cashCats[$k] ?? 0) : 0;
                             @endphp
-                            <td>
-                                <div><strong>{{ $label }}</strong></div>
-                                <div class="text-right">{{ $fmtChecker($val) }}</div>
-                            </td>
+                            <td class="bg-secondary">{{ $label }}</td>
+                            <td class="bg-secondary">{{ $fmtChecker($val) }}</td>
                         @endif
                     @endforeach
                 </tr>
