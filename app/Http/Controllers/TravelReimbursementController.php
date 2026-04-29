@@ -446,7 +446,26 @@ class TravelReimbursementController extends Controller
     /** Draft / tambah tab baru: boleh data belum lengkap. */
     private function travelItemAllowIncompleteForm(): bool
     {
-        return isset($_POST['save_draft']) || isset($_POST['save_item']);
+        $isDraftOrNewTab = isset($_POST['save_draft']) || isset($_POST['save_item']);
+        if ($isDraftOrNewTab) {
+            return true;
+        }
+
+        // Improvement UX: di halaman update item, baris cost type pertama bisa dihapus.
+        // Maka aksi "UPDATE" (name=save) tidak boleh gagal hanya karena tidak ada cost type terisi.
+        $path = request()->path();
+        $isUpdateItemPath =
+            strpos($path, 'reimbursement-travel/update-item/') === 0 ||
+            strpos($path, 'reimbursement-travel/update-item-reject/') === 0;
+        $isPlainUpdateSave =
+            isset($_POST['save']) &&
+            !isset($_POST['save_again']) &&
+            !isset($_POST['save_owner']) &&
+            !isset($_POST['save_finance']) &&
+            !isset($_POST['edit_owner']) &&
+            !isset($_POST['edit_finance']);
+
+        return $isUpdateItemPath && $isPlainUpdateSave;
     }
 
     /** Validasi form item travel (simpan/update); cegah field kosong yang memicu error DB. */
