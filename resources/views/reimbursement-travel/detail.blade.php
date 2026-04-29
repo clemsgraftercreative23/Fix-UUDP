@@ -14,6 +14,14 @@ if (!function_exists('travel_detail_idr')) {
         return number_format((float) $angka, 2, ',', '.');
     }
 }
+
+if (!function_exists('travel_detail_round')) {
+    /** Format IDR bulat tanpa desimal (tanpa koma). */
+    function travel_detail_round($angka)
+    {
+        return number_format((float) round($angka), 0, ',', '.');
+    }
+}
 ?>
 
 @php
@@ -105,8 +113,17 @@ if (!function_exists('travel_attachment_rows')) {
                             @endforeach
                         @endif
                         @php
-                            $bdcTotalFmt = travel_detail_idr(isset($bdc) ? (float) $bdc : (float) ($data->total_bdc ?? 0));
-                            $cashTotalFmt = travel_detail_idr(isset($cash) ? (float) $cash : (float) ($data->total_cash ?? 0));
+                            $bdcSummary = isset($bdc) ? (float) $bdc : (float) ($data->total_bdc ?? 0);
+                            $cashSummary = isset($cash) ? (float) $cash : (float) ($data->total_cash ?? 0);
+                            $allowanceSummary = isset($allowance) ? (float) $allowance : (float) ($data->allowance_cash ?? 0);
+
+                            $bdcSummaryRounded = (float) round($bdcSummary);
+                            $cashSummaryRounded = (float) round($cashSummary + $allowanceSummary);
+                            $totalSummaryRounded = $bdcSummaryRounded + $cashSummaryRounded;
+
+                            $bdcTotalFmt = travel_detail_round($bdcSummaryRounded);
+                            $cashTotalFmt = travel_detail_round($cashSummaryRounded);
+                            $totalSummaryFmt = travel_detail_round($totalSummaryRounded);
                             $travelEditTab = optional($data->travels->sortByDesc('id')->first() ?? null)->id ?? optional($data->travels->first() ?? null)->id;
                             $editTravelItemUrl = $travelEditTab
                                 ? url('reimbursement-travel/add-item/'.$data->id.'/'.$travelEditTab)
@@ -127,7 +144,7 @@ if (!function_exists('travel_attachment_rows')) {
                             </div>
                             <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
                                 <label for="inputEmail4">Total</label>
-                                <input type="text" class="form-control" value="{{ travel_detail_idr($data->nominal_pengajuan) }}" readonly>
+                                <input type="text" class="form-control" value="{{ $totalSummaryFmt }}" readonly>
                             </div>
                             <div class="form-group col-6 col-md-6 col-lg-2 mb-3">
                                 <label>BDC</label>
