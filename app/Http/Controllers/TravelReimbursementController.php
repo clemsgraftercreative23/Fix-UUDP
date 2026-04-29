@@ -1133,14 +1133,17 @@ class TravelReimbursementController extends Controller
             $isSaveItem = true;
         }
 
+        $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
+        $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
+
         if ($isSave) {
-            $status = 0;
+            $status = $keepProgressStatus ? $currentStatus : 0;
             $notif = 'Reimbursement Successfully Submitted';
         } else if ($isSaveDraft) {
-            $status = 10; // DRAFT
+            $status = $keepProgressStatus ? $currentStatus : 10; // DRAFT
             $notif = 'Reimbursement Successfully Saved as Draft';
         } else if ($isSaveItem) {
-            $status = 10;
+            $status = $keepProgressStatus ? $currentStatus : 10;
             $notif = 'redirect';
         }
 
@@ -1993,15 +1996,17 @@ class TravelReimbursementController extends Controller
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
 
+        $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
+
         if($request->id_user == $request->id_editor) {
           if (isset($_POST['save'])) {
-            $status = 0;
+            $status = $keepProgressStatus ? $currentStatus : 0;
             $return = redirect('reimbursement-travel')->with(['success' => "Reimbursement Successfully Submitted"]);
           } else if (isset($_POST['save_draft'])) {
-              $status = 10; // DRAFT
+              $status = $keepProgressStatus ? $currentStatus : 10; // DRAFT
               $return = redirect()->back()->with(['success' => "Reimbursement Successfully Saved as Draft"]);
           } else if (isset($_POST['save_item'])) {
-              $status = 10;
+              $status = $keepProgressStatus ? $currentStatus : 10;
               $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
           }
         } else {
