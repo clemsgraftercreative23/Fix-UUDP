@@ -1127,10 +1127,11 @@ class TravelReimbursementController extends Controller
         $isSaveDraft = in_array('save_draft', $postKeys, true);
         $isSaveItem = in_array('save_item', $postKeys, true);
 
-        // Fallback: bila tombol submit tidak terkirim, treat sebagai "save_item"
-        // agar proses add new tab tidak terseret validasi full.
+        // Fallback: beberapa browser/flow tidak mengirim name tombol submit.
+        // Default-kan ke submit/update agar tidak salah masuk flow "Add New Item"
+        // yang memunculkan tab "New Item" lagi setelah user menekan Update.
         if (!$isSave && !$isSaveDraft && !$isSaveItem) {
-            $isSaveItem = true;
+            $isSave = true;
         }
 
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
