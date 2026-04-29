@@ -135,15 +135,18 @@ class PencairanReimbursementController extends Controller
             $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, allowance_cash, metode_allowance, metode_cash FROM reimbursement WHERE id = '$id'"));
             $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, metode_cash, metode_fleet, total_fleet FROM reimbursement WHERE id = '$id'"));
 
-            $cash = $cek['0']->total_cash;
-            $metode_cash_ = $cek['0']->metode_cash;
-            $metode_fleet_ = $cek['0']->metode_fleet;
+            $cekRow = $cek[0] ?? null;
+            $cash = $cekRow->total_cash ?? 0;
+            $metode_cash_ = $cekRow->metode_cash ?? null;
+            $metode_fleet_ = $cekRow->metode_fleet ?? null;
             if ($metode_cash_ == null) {
                 $metode_cash = "";
                 $metode_fleet = "";
             } else {
-                $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;  
-                $metode_fleet = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_fleet_'"))['0']->nama_list;    
+                $cashMethodRow = DB::table('listkasbank')->where('kode_kasbank', $metode_cash_)->first();
+                $fleetMethodRow = DB::table('listkasbank')->where('kode_kasbank', $metode_fleet_)->first();
+                $metode_cash = $cashMethodRow->nama_list ?? "";
+                $metode_fleet = $fleetMethodRow->nama_list ?? "";
             }
 
             $cash  = DB::select( DB::raw("SELECT sum(subtotal) AS total FROM reimbursement_driver WHERE reimbursement_id = '$id' AND payment_type='Cash'"))['0']->total;
@@ -161,6 +164,7 @@ class PencairanReimbursementController extends Controller
         } else if($data->reimbursement_type==2) {
             $detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel WHERE reimbursement_id = '$id'"));
             $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, allowance_cash, metode_allowance, metode_cash FROM reimbursement WHERE id = '$id'"));
+            $cekRow = $cek[0] ?? null;
             // $bdc = $cek['0']->total_bdc;
             // $cash = $cek['0']->total_cash;
             // $allowance = $cek['0']->allowance_cash;
@@ -169,18 +173,20 @@ class PencairanReimbursementController extends Controller
             $allowance  = DB::select( DB::raw("SELECT SUM(allowance) AS allowance FROM reimbursement_travel WHERE reimbursement_id = '$id'"))['0']->allowance;
             
 
-            $metode_cash_ = $cek['0']->metode_cash;
+            $metode_cash_ = $cekRow->metode_cash ?? null;
             if ($metode_cash_ == null) {
                 $metode_cash = "";
             } else {
-                $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;    
+                $cashMethodRow = DB::table('listkasbank')->where('kode_kasbank', $metode_cash_)->first();
+                $metode_cash = $cashMethodRow->nama_list ?? "";
             }
 
-            $metode_allowance_ = $cek['0']->metode_allowance;
+            $metode_allowance_ = $cekRow->metode_allowance ?? null;
             if ($metode_allowance_ == null) {
                 $metode_allowance = "";
             } else {
-                $metode_allowance = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_allowance_'"))['0']->nama_list;    
+                $allowanceMethodRow = DB::table('listkasbank')->where('kode_kasbank', $metode_allowance_)->first();
+                $metode_allowance = $allowanceMethodRow->nama_list ?? "";
             }
 
             // $metode_allowance_ = $cek['0']->metode_allowance;
@@ -207,13 +213,15 @@ class PencairanReimbursementController extends Controller
 
             $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, metode_cash FROM reimbursement WHERE id = '$id'"));
 
-            $bdc = $cek['0']->total_bdc;
-            $cash = $cek['0']->total_cash;
-            $metode_cash_ = $cek['0']->metode_cash;
+            $cekRow = $cek[0] ?? null;
+            $bdc = $cekRow->total_bdc ?? 0;
+            $cash = $cekRow->total_cash ?? 0;
+            $metode_cash_ = $cekRow->metode_cash ?? null;
             if ($metode_cash_ == null) {
                 $metode_cash = "";
             } else {
-                $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;    
+                $cashMethodRow = DB::table('listkasbank')->where('kode_kasbank', $metode_cash_)->first();
+                $metode_cash = $cashMethodRow->nama_list ?? "";
             }
             
 
@@ -585,8 +593,16 @@ class PencairanReimbursementController extends Controller
     private function postAccurateJournal(array $payload)
     {
         $url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
-        $token = Api::where('id', 1)->get()->pluck('token');
-        $session = Api::where('id', 1)->get()->pluck('session');
+        $api = Api::find(1);
+        $token = optional($api)->token;
+        $session = optional($api)->session;
+
+        if (empty($token) || empty($session)) {
+            return [
+                'success' => false,
+                'message' => 'Token/session Accurate belum tersedia. Jalankan Sync Accurate OAuth terlebih dahulu.',
+            ];
+        }
 
         $postData = json_encode($payload, JSON_UNESCAPED_SLASHES);
         $ch = curl_init($url);
@@ -601,8 +617,8 @@ class PencairanReimbursementController extends Controller
         curl_setopt($ch, CURLOPT_ENCODING, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array(
             "Content-Type: application/json",
-            'header' => "Authorization: Bearer " . $token['0'],
-            'X-Session-ID: ' . $session['0']
+            "Authorization: Bearer " . $token,
+            "X-Session-ID: " . $session
         ));
         $result = curl_exec($ch);
         $curlError = curl_error($ch);
