@@ -493,7 +493,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if (in_array((int) $data->status, [2, 3], true) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if ((($data->status == 2) && in_array(auth()->user()->jabatan, ['Finance', 'Finance Supervisor', 'Owner', 'Finance Manager', 'superadmin'], true) || (($data->status == 3) && in_array(auth()->user()->jabatan, ['Owner', 'superadmin'], true))) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
