@@ -503,6 +503,10 @@ class PencairanReimbursementController extends Controller
                 if ($amount <= 0 || !array_key_exists($group, $groupTotals)) {
                     continue;
                 }
+                // BDC dikecualikan dari pembentukan jurnal Accurate.
+                if ($group === 'BDC') {
+                    continue;
+                }
 
                 if ($accountNo === '') {
                     throw new \Exception('Akun perkiraan per cost type wajib diisi.');

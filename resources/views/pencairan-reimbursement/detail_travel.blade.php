@@ -468,6 +468,7 @@
                         <input type="hidden" name="total_bdc" value="{{$groups['BDC']['total']}}">
 
                         @foreach ($groups as $groupLabel => $group)
+                            @php $isBdcGroup = ($groupLabel === 'BDC'); @endphp
                             @if($group['total'] > 0)
                             <hr>
                             <h6>{{$groupLabel}}</h6>
@@ -475,7 +476,7 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label>Settlement Method</label>
-                                        <select class="form-control cst-select" name="{{$group['method_name']}}" required>
+                                        <select class="form-control cst-select" name="{{$group['method_name']}}" @if($isBdcGroup) disabled @else required @endif>
                                             <option value="">--Select Settlement Method--</option>
                                             @foreach($kasbank as $row)
                                             <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
@@ -509,7 +510,7 @@
                                                 <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][group]" value="{{$groupLabel}}">
                                                 <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][cost_key]" value="{{$itemBreakdown['key']}}">
                                                 <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][amount]" value="{{$itemBreakdown['amount']}}">
-                                                <select class="form-control cst-select" name="breakdown_entries[{{$breakdownIndex}}][account_no]" required>
+                                                <select class="form-control cst-select" name="breakdown_entries[{{$breakdownIndex}}][account_no]" @if($isBdcGroup) disabled @else required @endif>
                                                     <option value="">--Select Akun Perkiraan--</option>
                                                     @foreach($coaOptions as $coaCode => $coaLabel)
                                                     <option value="{{$coaCode}}">{{$coaLabel}}</option>
