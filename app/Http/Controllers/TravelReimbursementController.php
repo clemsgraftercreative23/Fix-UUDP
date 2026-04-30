@@ -615,9 +615,9 @@ class TravelReimbursementController extends Controller
                 }elseif ($data->status == 1) {
                 $button = '<button  class="view btn btn-success btn-sm">APPROVED HEAD DEPT</button>';
                 } elseif ($data->status == 2) {
-                $button = '<button   class="view btn btn-success btn-sm">APPROVED SUPERVISOR FINANCE</button>';
+                $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
                 } elseif ($data->status == 3) {
-                $button = '<button  class=" view btn btn-success btn-sm">PROCESS SETTLEMET</button>';
+                $button = '<button  class=" view btn btn-success btn-sm">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</button>';
                 } 
                 elseif ($data->status == 4){
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED</button>';
@@ -756,9 +756,9 @@ class TravelReimbursementController extends Controller
                 } elseif ($data->status == 1) {
                 $button = '<button  class="view btn btn-success btn-sm">APPROVED HEAD DEPT</button>';
                 } elseif ($data->status == 2) {
-                $button = '<button   class="view btn btn-success btn-sm">APPROVED SUPERVISOR FINANCE</button>';
+                $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
                 } elseif ($data->status == 3) {
-                $button = '<button  class=" view btn btn-success btn-sm">PROCESS SETTLEMET</button>';
+                $button = '<button  class=" view btn btn-success btn-sm">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</button>';
                 } elseif ($data->status == 4){
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED</button>';
                 } elseif ($data->status == 5){
@@ -2849,13 +2849,13 @@ class TravelReimbursementController extends Controller
                 'mengetahui_op' => $user->name
             ]);
         }
-        if($data->status == 1 && $user->jabatan == "Finance") {
+        if($data->status == 1 && in_array($user->jabatan, ["HR", "HR GA", "superadmin"], true)) {
             $data->update([
                 'status' => 2,
                 'mengetahui_finance' => $user->name
             ]);
         }
-        if($data->status == 2 && $user->jabatan == "Owner") {
+        if($data->status == 2 && in_array($user->jabatan, ["Finance Manager", "Owner"], true)) {
             $data->update([
                 'status' => 3,
                 'mengetahui_owner' => $user->name
@@ -3219,8 +3219,8 @@ class TravelReimbursementController extends Controller
         $bulkStatus = (int) $rows->first()->status;
 
         $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
-            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
-            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin'));
+            || ($bulkStatus === 1 && ($jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin'))
+            || ($bulkStatus === 2 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
         }
@@ -3228,10 +3228,10 @@ class TravelReimbursementController extends Controller
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
             $status = 1;
             Reimbursement::whereIn('id', $idsArray)->where('status', 0)->update(['status' => $status, 'mengetahui_op' => $user->name]);
-        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 1 && ($jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin')) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
-        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 2 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }
