@@ -615,7 +615,7 @@ class TravelReimbursementController extends Controller
                 }elseif ($data->status == 1) {
                 $button = '<button  class="view btn btn-success btn-sm">APPROVED HEAD DEPT</button>';
                 } elseif ($data->status == 2) {
-                $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
+                $button = '<button   class="view btn btn-success btn-sm">APPROVED SUPERVISOR FINANCE</button>';
                 } elseif ($data->status == 3) {
                 $button = '<button  class=" view btn btn-success btn-sm">PROCESS SETTLEMET</button>';
                 } 
@@ -756,7 +756,7 @@ class TravelReimbursementController extends Controller
                 } elseif ($data->status == 1) {
                 $button = '<button  class="view btn btn-success btn-sm">APPROVED HEAD DEPT</button>';
                 } elseif ($data->status == 2) {
-                $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
+                $button = '<button   class="view btn btn-success btn-sm">APPROVED SUPERVISOR FINANCE</button>';
                 } elseif ($data->status == 3) {
                 $button = '<button  class=" view btn btn-success btn-sm">PROCESS SETTLEMET</button>';
                 } elseif ($data->status == 4){
