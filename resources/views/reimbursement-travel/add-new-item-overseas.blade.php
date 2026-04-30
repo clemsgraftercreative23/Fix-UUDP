@@ -453,7 +453,7 @@ function rupiah($angka){
                               <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
                             @endif
                           
-                            @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && $data['0']->status==1)
+                            @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && in_array((int) $data['0']->status, [1, 2], true))
                                 <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
                             @endif
 

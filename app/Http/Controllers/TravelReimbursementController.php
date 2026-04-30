@@ -2024,7 +2024,7 @@ class TravelReimbursementController extends Controller
                 $return =  redirect()->to('reimbursement-travel/add-item/'.$id_main.'/'.$id_travel.'')->with('success', 'Reimbursement Successfully Updated');
                 //$return = redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);
             } else if (isset($_POST['edit_finance'])) {
-                $status = 1;
+                $status = ($currentStatus > 1) ? $currentStatus : 1;
                 $return =  redirect()->to('reimbursement-travel/add-item/'.$id_main.'/'.$id_travel.'')->with('success', 'Reimbursement Successfully Updated');
                 //$return = redirect()->back()->with(['success' => "Reimbursement Successfully Updated"]);
             } else if (isset($_POST['save_finance'])) {
