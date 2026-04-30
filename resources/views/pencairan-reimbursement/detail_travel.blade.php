@@ -476,12 +476,16 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label>Settlement Method</label>
-                                        <select class="form-control cst-select" name="{{$group['method_name']}}" @if($isBdcGroup) disabled @else required @endif>
-                                            <option value="">--Select Settlement Method--</option>
-                                            @foreach($kasbank as $row)
-                                            <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
-                                            @endforeach
-                                        </select>
+                                        @if($isBdcGroup)
+                                            <input type="text" class="form-control" value="Excluded from UUDP settlement" readonly>
+                                        @else
+                                            <select class="form-control cst-select" name="{{$group['method_name']}}" required>
+                                                <option value="">--Select Settlement Method--</option>
+                                                @foreach($kasbank as $row)
+                                                <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
+                                                @endforeach
+                                            </select>
+                                        @endif
                                     </div>
                                 </div>
                                 <div class="col-md-3">
@@ -510,12 +514,16 @@
                                                 <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][group]" value="{{$groupLabel}}">
                                                 <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][cost_key]" value="{{$itemBreakdown['key']}}">
                                                 <input type="hidden" name="breakdown_entries[{{$breakdownIndex}}][amount]" value="{{$itemBreakdown['amount']}}">
-                                                <select class="form-control cst-select" name="breakdown_entries[{{$breakdownIndex}}][account_no]" @if($isBdcGroup) disabled @else required @endif>
-                                                    <option value="">--Select Akun Perkiraan--</option>
-                                                    @foreach($coaOptions as $coaCode => $coaLabel)
-                                                    <option value="{{$coaCode}}">{{$coaLabel}}</option>
-                                                    @endforeach
-                                                </select>
+                                                @if($isBdcGroup)
+                                                    <input type="text" class="form-control" value="Excluded from Accurate journal" readonly>
+                                                @else
+                                                    <select class="form-control cst-select" name="breakdown_entries[{{$breakdownIndex}}][account_no]" required>
+                                                        <option value="">--Select Akun Perkiraan--</option>
+                                                        @foreach($coaOptions as $coaCode => $coaLabel)
+                                                        <option value="{{$coaCode}}">{{$coaLabel}}</option>
+                                                        @endforeach
+                                                    </select>
+                                                @endif
                                             </td>
                                         </tr>
                                         @php $breakdownIndex++; @endphp
