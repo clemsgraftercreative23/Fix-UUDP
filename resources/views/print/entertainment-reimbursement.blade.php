@@ -37,6 +37,18 @@
             word-break: break-all;
             font-size: 7pt;
         }
+        .paid-watermark {
+            position: fixed;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-25deg);
+            font-size: 92px;
+            font-weight: 700;
+            color: rgba(200, 30, 30, 0.22);
+            z-index: 9999;
+            pointer-events: none;
+            user-select: none;
+        }
     </style>
 </head>
 @php
@@ -59,8 +71,36 @@ function entertainmentStatusLabel($s) {
 }
 $printStatus = request('status');
 $signRow = $data->last();
+$isSettledPrint = ((int) ($signRow->reimbursement_status ?? 0) === 5) || ((int) $printStatus === 5);
+$approvalTimes = [1 => null, 2 => null, 3 => null];
+if ($signRow && !empty($signRow->id_main)) {
+    $approvalLogs = \Illuminate\Support\Facades\DB::table('activity_logs')
+        ->where('module', 'reimbursement-entertaiment')
+        ->where('action', 'approve')
+        ->where('subject_type', 'reimbursement')
+        ->where('subject_id', $signRow->id_main)
+        ->orderBy('created_at', 'asc')
+        ->get(['meta_json', 'created_at']);
+    foreach ($approvalLogs as $log) {
+        $meta = json_decode($log->meta_json ?? '', true);
+        $statusMeta = (int) ($meta['status'] ?? 0);
+        if (array_key_exists($statusMeta, $approvalTimes) && empty($approvalTimes[$statusMeta])) {
+            $approvalTimes[$statusMeta] = $log->created_at;
+        }
+    }
+}
+$formatApprovalTime = function ($statusCode) use ($approvalTimes) {
+    $raw = $approvalTimes[$statusCode] ?? null;
+    if (empty($raw)) {
+        return '-';
+    }
+    return date('d-m-Y H:i', strtotime((string) $raw));
+};
 @endphp
 <body>
+    @if($isSettledPrint)
+        <div class="paid-watermark">PAID</div>
+    @endif
     <div class="report">
 
         <center>
@@ -194,6 +234,7 @@ $signRow = $data->last();
                 </tr>
                 <tr>
                     <td style="border-bottom: 1px solid #000">
+                        <center style="margin-bottom: 4px;">{{ $formatApprovalTime(1) }}</center>
                         @if(in_array((string) $printStatus, ['1','2','3','5'], true))
                             <center><img src="{!! url('access/images/ttd.png') !!}" style="width:200px;height:100px;object-fit:contain"><br>{{ strtoupper($head_dept ?? '') }}</center>
                         @else
@@ -207,6 +248,7 @@ $signRow = $data->last();
                     <th width="2px"></th>
 
                     <td style="border-bottom: 1px solid #000">
+                        <center style="margin-bottom: 4px;">{{ $formatApprovalTime(2) }}</center>
                         @if(in_array((string) $printStatus, ['2','3','5'], true))
                             <center><img src="{!! url('access/images/ttd.png') !!}" style="width:200px;height:100px;object-fit:contain"><br>{{ strtoupper($signRow->mengetahui_finance ?? '') }}</center>
                         @else
@@ -220,6 +262,7 @@ $signRow = $data->last();
                     <th width="2px"></th>
 
                     <td style="border-bottom: 1px solid #000">
+                        <center style="margin-bottom: 4px;">{{ $formatApprovalTime(3) }}</center>
                         @if(in_array((string) $printStatus, ['3','5'], true))
                             <center><img src="{!! url('access/images/ttd.png') !!}" style="width:200px;height:100px;object-fit:contain"><br>{{ strtoupper($signRow->mengetahui_owner ?? '') }}</center>
                         @else
