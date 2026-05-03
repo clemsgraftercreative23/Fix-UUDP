@@ -393,14 +393,6 @@ if (!function_exists('driver_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if (($data->status == 3) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))
-                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
-                                @csrf
-                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
-                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
-                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                            </form>
-                        @endif
                     </center>
                     <br><br><br>
             </div>

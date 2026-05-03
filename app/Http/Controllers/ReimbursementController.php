@@ -589,13 +589,6 @@ class ReimbursementController extends Controller
                     ])
                     ->post();
             }
-        } elseif ($data->status == 3 && ($approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
-            // Keep status as settlement-ready, but allow finance manager final confirmation.
-            $processed = true;
-            $data->update([
-                'status' => 3,
-                'mengetahui_owner' => $approver->name,
-            ]);
         }
 
         if ($processed) {
