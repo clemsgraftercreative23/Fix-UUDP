@@ -4,7 +4,7 @@
   </a>
                 <div class="logo-box">
                     <center>
-                        <img src="{{asset('assets/images/logo-uudp.png')}}" alt="logo uudp" style="width: 80px; height: 80px;">
+                        <img src="{{ asset('assets/images/newv2.png') }}" alt="UUDP" class="sidebar-brand-img" style="max-width: 200px; width: 100%; height: auto; display: block; margin: 0 auto;">
                     </center>
                     
                     <br>
@@ -173,7 +173,7 @@
                        </li>
                         <li>
                         <li>
-                          <a href="{{url('accurate/authorize')}}" target="_blank"><i class="material-icons">share</i>Sync Accurate</a>
+                          <a href="{{url('accurate/authorize')}}" target="_blank" title="Konfigurasi API Token di .env"><i class="material-icons">share</i>Accurate API</a>
                         </li>
                             <br><br><br><br>
                             <a href="{{ route('logout') }}" class="btn btn-primary btn-lg btn-block" onclick="event.preventDefault(); document.getElementById('frm-logout').submit();">
@@ -420,7 +420,7 @@
                             <a href="{{url('profile')}}"><i class="material-icons">account_circle</i>Profil</a>
                         </li>
                         <!--<li>-->
-                        <!--  <a href="{{url('accurate/authorize')}}" target="_blank"><i class="material-icons">share</i>Sync Accurate</a>-->
+                        <!--  <a href="{{url('accurate/authorize')}}" target="_blank" title="Konfigurasi API Token di .env"><i class="material-icons">share</i>Accurate API</a>-->
                         <!--</li>                    -->
                         <li>
                             <br><br><br><br>
@@ -499,7 +499,7 @@
                     <!--    <a href="{{url('pencairan-reimbursement')}}"><i class="material-icons">download</i>Settlement Reimb</a>-->
                     <!--</li>-->
                     <li>
-                        <a href="{{url('accurate/authorize')}}" target="_blank"><i class="material-icons">share</i>Sync Accurate</a>
+                        <a href="{{url('accurate/authorize')}}" target="_blank" title="Konfigurasi API Token di .env"><i class="material-icons">share</i>Accurate API</a>
                     </li>  
                     @if($segment1 == 'activity-log')
                     <li class="active-page">
