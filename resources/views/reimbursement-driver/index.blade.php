@@ -34,7 +34,7 @@
 <div class="page-content" id="app">
 
 @php
-  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Finance Supervisor', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
+  $showApprovalTab = in_array(auth()->user()->jabatan, ['Owner', 'Finance', 'Finance Supervisor', 'Finance Manager', 'Direktur Operasional', 'superadmin'], true) || (int) $check_approval > 0;
 @endphp
 @if($showApprovalTab)
 <div class="clearfix">

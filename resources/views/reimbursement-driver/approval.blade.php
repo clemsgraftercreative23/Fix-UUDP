@@ -48,7 +48,8 @@
                             <select name="status" class="form-control select2 status" @change="searchStatus" v-model="status">
                                 <option value="1">APPROVED HEAD DEPT</option>
                                 <option value="2">APPROVED HR GA</option>
-                                <option value="3">APPROVED FINANCE</option>
+                                <option value="11">APPROVED FINANCE SUPERVISOR</option>
+                                <option value="3">PROCESS SETTLEMENT (FM)</option>
                                 <option value="5">SETTLED</option>
                                 <option value="9">REJECT</option>
                                 <option value="0">PENDING</option>
@@ -332,10 +333,12 @@
           show = (status == '1');
         @elseif(Auth::user()->jabatan=='Finance Supervisor')
           show = (status == '2');
+        @elseif(Auth::user()->jabatan=='Finance Manager')
+          show = (status == '11');
         @elseif(Auth::user()->jabatan=='Owner')
-          show = (status == '2' || status == '3');
+          show = (status == '2' || status == '11' || status == '3');
         @elseif(Auth::user()->jabatan=='superadmin')
-          show = (status == '0' || status == '1' || status == '2' || status == '3');
+          show = (status == '0' || status == '1' || status == '2' || status == '11' || status == '3');
         @endif
         if (show) { $('.btn-approve').show(); } else { $('.btn-approve').hide(); }
     };

@@ -271,6 +271,10 @@ class ReimbursementController extends Controller
             $level = 'Head Department';
         } else if (($approver->jabatan == 'Finance' || $approver->jabatan == 'superadmin') && (int) $data->status === 1) {
             $level = 'HR GA';
+        } else if ($approver->jabatan === 'Finance Supervisor' && (int) $data->status === 2) {
+            $level = 'Finance Supervisor';
+        } else if (in_array($approver->jabatan, ['Owner', 'Finance Manager', 'superadmin'], true) && (int) $data->status === 11) {
+            $level = 'Finance Manager';
         } else if (($approver->jabatan == 'Owner' || $approver->jabatan == 'Finance Supervisor' || $approver->jabatan == 'superadmin') && (int) $data->status === 2) {
             $level = 'Finance';
         } else {
@@ -356,10 +360,14 @@ class ReimbursementController extends Controller
                 ])
                 ->post();
 
-            $finance = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
+            $nextApprovers = in_array((int) $cek_type, [1, 3], true)
+                ? DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Supervisor'"))
+                : DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
 
-            foreach($finance as $row) {
-
+            foreach ($nextApprovers as $row) {
+                if (empty($row->phoneNumber)) {
+                    continue;
+                }
                 $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([
@@ -371,14 +379,64 @@ class ReimbursementController extends Controller
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima oleh Finance.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+                            "* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu verifikasi Finance Supervisor.\n\nTerima kasih.
                              \n\nKlik untuk melihat detail pengajuan : " .
                             url(''.$direct.'' . $data->id),
                     ])
                     ->post();
-
             }
-        } elseif ($data->status == 2 && ($approver->jabatan == 'Owner' || $approver->jabatan == 'Finance Supervisor' || $approver->jabatan == 'superadmin')) {
+        } elseif ((int) $data->status === 2 && in_array((int) $cek_type, [1, 3], true) && $approver->jabatan === 'Finance Supervisor') {
+            $processed = true;
+            $data->update([
+                'status' => 11,
+                'menyetujui_finance_supervisor' => $approver->name,
+            ]);
+
+            $user = \App\User::where('id', $data->id_user)->first();
+            if ($user && $user->phoneNumber) {
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $user->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $user->name .
+                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui oleh *" .
+                            $nama_approval .
+                            " (Finance Supervisor)*.\n\nSaat ini menunggu verifikasi Finance Manager sebelum proses settlement.\n\nTerima kasih.
+                \n\nKlik untuk melihat detail pengajuan : " .
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
+            }
+
+            $financeManagers = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Manager'"));
+            foreach ($financeManagers as $row) {
+                if (empty($row->phoneNumber)) {
+                    continue;
+                }
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $row->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $row->name .
+                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui Finance Supervisor.\n\nMenunggu verifikasi Anda sebelum proses settlement.\n\nTerima kasih.
+                             \n\nKlik untuk melihat detail pengajuan : " .
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
+            }
+        } elseif ((int) $data->status === 2 && in_array((int) $cek_type, [1, 3], true) && ($approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
             $processed = true;
             $data->update([
                 'status' => 3,
@@ -386,29 +444,32 @@ class ReimbursementController extends Controller
             ]);
 
             $user = \App\User::where('id', $data->id_user)->first();
-            $curl = \Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
-                ->withData([
-                    'target' => $user->phoneNumber,
-                    'message' =>
-                        "Hai *" .
-                        $user->name .
-                        "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
-                        $data->no_reimbursement .
-                        "* sebesar *Rp " .
-                        number_format($data->nominal_pengajuan, 0, ',', '.') .
-                        "* telah disetujui oleh *" .
-                        $nama_approval .
-                        " (".$level.")*.\n\nSaat ini sedang menunggu Proses Pencairan oleh Finance.\n\nTerima kasih.
+            if ($user && $user->phoneNumber) {
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $user->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $user->name .
+                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui oleh *" .
+                            $nama_approval .
+                            " (".$level.")*.\n\nSaat ini sedang menunggu Proses Pencairan oleh Finance.\n\nTerima kasih.
                 \n\nKlik untuk melihat detail pengajuan : " .
-                        url(''.$direct.'' . $data->id),
-                ])
-                ->post();
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
+            }
 
             $finance = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
-
-            foreach($finance as $row) {
-
+            foreach ($finance as $row) {
+                if (empty($row->phoneNumber)) {
+                    continue;
+                }
                 $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([
@@ -425,10 +486,109 @@ class ReimbursementController extends Controller
                             url(''.$direct.'' . $data->id),
                     ])
                     ->post();
+            }
+        } elseif ((int) $data->status === 11 && in_array((int) $cek_type, [1, 3], true) && ($approver->jabatan == 'Finance Manager' || $approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
+            $processed = true;
+            $data->update([
+                'status' => 3,
+                'mengetahui_owner' => $approver->name,
+            ]);
 
+            $user = \App\User::where('id', $data->id_user)->first();
+            if ($user && $user->phoneNumber) {
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $user->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $user->name .
+                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui oleh *" .
+                            $nama_approval .
+                            " (".$level.")*.\n\nSaat ini sedang menunggu Proses Pencairan oleh Finance.\n\nTerima kasih.
+                \n\nKlik untuk melihat detail pengajuan : " .
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
             }
 
-            
+            $finance = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
+            foreach ($finance as $row) {
+                if (empty($row->phoneNumber)) {
+                    continue;
+                }
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $row->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $row->name .
+                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui oleh Finance Manager.\n\nSilahkan lakukan proses Pencairan\n\nTerima kasih.
+                             \n\nKlik untuk melihat detail pengajuan : " .
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
+            }
+        } elseif ((int) $data->status === 2 && (int) $cek_type === 2 && ($approver->jabatan == 'Owner' || $approver->jabatan == 'Finance Supervisor' || $approver->jabatan == 'superadmin')) {
+            $processed = true;
+            $data->update([
+                'status' => 3,
+                'mengetahui_owner' => $approver->name,
+            ]);
+
+            $user = \App\User::where('id', $data->id_user)->first();
+            if ($user && $user->phoneNumber) {
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $user->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $user->name .
+                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui oleh *" .
+                            $nama_approval .
+                            " (".$level.")*.\n\nSaat ini sedang menunggu Proses Pencairan oleh Finance.\n\nTerima kasih.
+                \n\nKlik untuk melihat detail pengajuan : " .
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
+            }
+
+            $finance = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
+            foreach ($finance as $row) {
+                if (empty($row->phoneNumber)) {
+                    continue;
+                }
+                $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $row->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $row->name .
+                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            $data->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($data->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui oleh Finance.\n\nSilahkan lakukan proses Pencairan\n\nTerima kasih.
+                             \n\nKlik untuk melihat detail pengajuan : " .
+                            url(''.$direct.'' . $data->id),
+                    ])
+                    ->post();
+            }
         } elseif ($data->status == 3 && ($approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
             // Keep status as settlement-ready, but allow finance manager final confirmation.
             $processed = true;
@@ -501,6 +661,8 @@ class ReimbursementController extends Controller
             $level = 'Head Department';
         } else if (auth()->user()->jabatan=='Finance') {
             $level = 'HR GA';
+        } else if (auth()->user()->jabatan=='Finance Manager') {
+            $level = 'Finance Manager';
         } else if (auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='Finance Supervisor') {
             $level = 'Finance';
         } else {

@@ -133,15 +133,15 @@ if (!function_exists('driver_attachment_rows')) {
                         <h5 class="card-title">DETAIL REIMBURSEMENT DRIVER</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
                         @endphp
-                        @if($isApproverRole && in_array((int) $data->status, [0, 1, 2], true))
+                        @if($isApproverRole && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
-                          Verifikasi bertahap: status <strong>PENDING</strong> = tunggu Head Department; setelah itu HR GA lalu Finance. Anda juga bisa memproses dari halaman <a href="{{ url('reimbursement-driver-approval') }}" class="alert-link">Approval (bulk)</a>.
+                          Verifikasi bertahap: Head Department → HR GA → <strong>Finance Supervisor</strong> → <strong>Finance Manager</strong> → settlement. Direktur Utama dapat menyetujui langsung ke settlement dari tahap HR GA (melewati antrian supervisor). Anda juga bisa memproses dari halaman <a href="{{ url('reimbursement-driver-approval') }}" class="alert-link">Approval (bulk)</a>.
                         </div>
-                        @elseif(auth()->id() == $data->id_user && in_array((int) $data->status, [0, 1, 2], true))
+                        @elseif(auth()->id() == $data->id_user && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-secondary mb-0 mt-2" role="alert">
-                          Ini pengajuan Anda. Tombol <strong>Approve</strong> hanya untuk verifikator. Silakan tunggu proses dari Head Department / HR GA / Finance.
+                          Ini pengajuan Anda. Tombol <strong>Approve</strong> hanya untuk verifikator. Silakan tunggu proses dari Head Department / HR GA / Finance Supervisor / Finance Manager.
                         </div>
                         @endif
                         <hr>
@@ -183,7 +183,11 @@ if (!function_exists('driver_attachment_rows')) {
                                 <input type="text" class="form-control" id="date" value="{{strtoupper($data->mengetahui_finance)}}" readonly>
                             </div>
                             <div class="form-group col-md-3">
-                                <label for="inputEmail4">Approved by Finance</label>
+                                <label for="inputEmail4">Approved by Finance Supervisor</label>
+                                <input type="text" class="form-control" value="{{ strtoupper($data->menyetujui_finance_supervisor ?? '') }}" readonly>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label for="inputEmail4">Approved by Finance Manager</label>
                                 <input type="text" class="form-control" value="{{strtoupper($data->mengetahui_owner)}}" readonly>
                             </div>
                             <div class="form-group col-md-3">
@@ -204,6 +208,9 @@ if (!function_exists('driver_attachment_rows')) {
                                             break;
                                         case '2':
                                             $status = "APPROVED HR GA";
+                                            break;
+                                        case '11':
+                                            $status = "APPROVED FINANCE SUPERVISOR — MENUNGGU FINANCE MANAGER";
                                             break;
                                         case '3':
                                             $status = "PROCESS SETTLEMENT";
@@ -362,7 +369,31 @@ if (!function_exists('driver_attachment_rows')) {
                             </form>
                         @endif
                         
-                        @if ((($data->status == 2) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'superadmin')) || (($data->status == 3) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin')))
+                        @if ($data->status == 2 && auth()->user()->jabatan == 'Finance Supervisor')
+                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
+                                @csrf
+                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve (Finance Supervisor)</button>
+                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
+                            </form>
+                        @endif
+                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))
+                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
+                                @csrf
+                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve ke settlement (Owner)</button>
+                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
+                            </form>
+                        @endif
+                        @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true))
+                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
+                                @csrf
+                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve (Finance Manager)</button>
+                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
+                            </form>
+                        @endif
+                        @if (($data->status == 3) && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
