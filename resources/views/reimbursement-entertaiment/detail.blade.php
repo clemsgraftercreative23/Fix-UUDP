@@ -213,26 +213,26 @@ if (!function_exists('ent_attachment_rows')) {
                                     }
                                     
                                     $status = "PENDING";
-                                    switch ($data->status) {
-                                        case '1':
+                                    switch ((int) $data->status) {
+                                        case 1:
                                             $status = "APPROVED HEAD DEPARTMENT";
                                             break;
-                                        case '2':
+                                        case 2:
                                             $status = "APPROVED HR GA";
                                             break;
-                                        case '11':
-                                            $status = "APPROVED FINANCE SUPERVISOR — MENUNGGU FINANCE MANAGER";
+                                        case 11:
+                                            $status = "APPROVED FINANCE SUPERVISOR";
                                             break;
-                                        case '3':
+                                        case 3:
                                             $status = "PROCESS SETTLEMENT";
                                             break;
-                                        case '9':
+                                        case 9:
                                             $status = "REJECTED ".$meng."";
                                             break;
-                                        case '5':
+                                        case 5:
                                             $status = "SETTLED";
                                             break;
-                                        case '10':
+                                        case 10:
                                             $status = "DRAFT";
                                             break;
                                         
