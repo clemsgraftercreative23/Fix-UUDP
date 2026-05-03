@@ -9,7 +9,7 @@
         <thead>
             <tr>
                 <th scope="col">Kode / Nama Proyek</th>
-                <th scope="col">{{$proyek['0']->no_project}} / {{$proyek['0']->nama}}  </th>
+                <th scope="col">{{ !empty($proyek) && isset($proyek[0]) ? $proyek[0]->no_project.' / '.$proyek[0]->nama : '— (proyek tidak terhubung / id_project kosong)' }}</th>
             </tr>
             <tr>
                 <th scope="col">Tanggal Settlement</th>

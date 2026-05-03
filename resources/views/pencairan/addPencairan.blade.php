@@ -84,7 +84,7 @@
                               ?>
                               <td>1</td>
                               <td>{{$pengajuan['0']->nominal_pengajuan}}</td>
-                              <td>{{date('d-m-Y', strtotime($firstPencairan->date))}}</td>
+                              <td>{{ $firstPencairan->date ? date('d-m-Y', strtotime($firstPencairan->date)) : '—' }}</td>
                               <td>
                                 @if(Auth::user()->jabatan=='Finance')
                                   <button type="button" name="edit" data-toggle="modal" data-target="#formModal" id="{{$firstPencairan->id}}" class="edit btn btn-warning btn-xs"><i class="fas fa-upload"></i></button>
@@ -119,18 +119,14 @@
                           <tbody>
                               <?php
                                   $no=1;$termin=1;
-                                  function rupiah($angka){
-                                      $hasil_rupiah = number_format($angka,0,',','.');
-                                      return $hasil_rupiah;
-                                  }
                               ?>
                               @foreach($pencairan as $row)
                               <tr>
                                   <th scope="row">{{$no++}}</th>
                                   <td>Termin ke-{{$termin++}}</td>
-                                  <td>{{date('d-m-Y', strtotime($row->date))}}</td>
+                                  <td>{{ $row->date ? date('d-m-Y', strtotime($row->date)) : '—' }}</td>
                                   <td>{{$row->nominal}} %</td>
-                                  <td>{{rupiah($row->nominal/100 * $pengajuan['0']->nominal_pengajuan)}}</td>
+                                  <td>{{ number_format(((float) $row->nominal / 100) * (float) $pengajuan['0']->nominal_pengajuan, 0, ',', '.') }}</td>
                                   <td>
                                     @if(Auth::user()->jabatan=='Finance')
                                       @if($row->status==0)

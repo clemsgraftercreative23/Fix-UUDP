@@ -283,16 +283,34 @@ class PencairanController extends Controller
 
 
       public function insertPencairan($id) {
-         $pengajuan = DB::select( DB::raw("SELECT * FROM pengajuan WHERE no_pengajuan='$id'"));
-         $departemen = DB::select( DB::raw("SELECT * FROM departemen ORDER BY id DESC"));
-         $qry = DB::table("pengajuan")->where("no_pengajuan",$id)->pluck("id");
-         $id_pengajuan = $qry['0'];
-         $data = Pengajuan::where('no_pengajuan',$id)->first();
-         $karyawan = User::where('id',$data->id_user)->first();
-         // $pencairan = DB::select( DB::raw("SELECT *,(SELECT COUNT(*) FROM notif_push WHERE notif_push.id_pencairan = pencairan.id AND jabatan='Finance' AND read_at='') AS jumlah_notif FROM pencairan WHERE pencairan.id_pengajuan='$id_pengajuan'"));
-         $pencairan = DB::select( DB::raw("SELECT pencairan.*, (SELECT COUNT(*) FROM notif_push WHERE notif_push.id_pencairan = pencairan.id AND jabatan='Finance' AND read_at='') AS jumlah_notif, (SELECT COUNT(*) FROM notif_push WHERE notif_push.id_pencairan = pencairan.id AND jabatan='Owner' AND read_at='') AS jumlah_notif_owner  FROM pencairan WHERE pencairan.id_pengajuan='$id_pengajuan'"));
-         $kasbank = DB::select( DB::raw("SELECT * FROM kasbank"));
-         return view('pencairan.addPencairan',['pengajuan'=>$pengajuan,'karyawan' => $karyawan,'pencairan'=>$pencairan,'kasbank' => $kasbank,'departemen'=>$departemen]);
+         $data = Pengajuan::where('no_pengajuan', $id)->first();
+         if (!$data && is_numeric($id)) {
+             $data = Pengajuan::find((int) $id);
+         }
+         if (!$data) {
+             abort(404, 'Pengajuan tidak ditemukan. Buka halaman ini dari nomor inquiry di daftar Settlement, atau pastikan nomor inquiry / ID pengajuan benar.');
+         }
+
+         $id_pengajuan = (int) $data->id;
+         $pengajuan = DB::select('SELECT * FROM pengajuan WHERE id = ?', [$id_pengajuan]);
+         if (empty($pengajuan)) {
+             abort(404, 'Pengajuan tidak ditemukan.');
+         }
+
+         $departemen = DB::select(DB::raw("SELECT * FROM departemen ORDER BY id DESC"));
+         $karyawan = $data->id_user
+             ? User::where('id', $data->id_user)->first()
+             : null;
+
+         $pencairan = DB::select(
+             "SELECT pencairan.*, "
+             . "(SELECT COUNT(*) FROM notif_push WHERE notif_push.id_pencairan = pencairan.id AND jabatan='Finance' AND read_at='') AS jumlah_notif, "
+             . "(SELECT COUNT(*) FROM notif_push WHERE notif_push.id_pencairan = pencairan.id AND jabatan='Owner' AND read_at='') AS jumlah_notif_owner "
+             . "FROM pencairan WHERE pencairan.id_pengajuan = ?",
+             [$id_pengajuan]
+         );
+         $kasbank = DB::select(DB::raw("SELECT * FROM kasbank"));
+         return view('pencairan.addPencairan', ['pengajuan' => $pengajuan, 'karyawan' => $karyawan, 'pencairan' => $pencairan, 'kasbank' => $kasbank, 'departemen' => $departemen]);
       }
 
       public function edit($id) {
@@ -567,23 +585,48 @@ class PencairanController extends Controller
 
       public function getDetailPencairan(request $request) {
         $id = $request->id;
-        $pencairan = DB::select( DB::raw("SELECT * FROM detail_pencairan WHERE id_pencairan='$id'"));
-        $qry_metode = $pencairan['0']->metode;
-        $qry_sumber = $pencairan['0']->sumber;
-        $username = $pencairan['0']->created_by;
-        $query_sumber = DB::table("listkasbank")->where("kode_kasbank",$qry_sumber)->pluck("nama_list");
-        $query_metode = DB::table("kasbank")->where("kode_perkiraan",$qry_metode)->pluck("nama");
-        $sumber = $query_sumber['0'];
-        $metode = $query_metode['0'];
-        $query = DB::table("pencairan")->where("id",$id)->pluck("id_pengajuan");
-        $id_pengajuan = $query['0'];
-        $query_proyek = DB::table("pengajuan")->where("id",$id_pengajuan)->pluck("id_project");
-        $id_proyek  = $query_proyek['0'];
-        $pengajuan = DB::select( DB::raw("SELECT * FROM pengajuan WHERE id='$id_pengajuan'"));
-        $proyek = DB::select( DB::raw("SELECT * FROM master_project WHERE id='$id_proyek'"));
-        $user = DB::select( DB::raw("SELECT name FROM users WHERE username='$username'"));
-        $pengirim = $user['0']->name;
-        return view('pencairan/detail_pencairan',['id'=>$id,'pencairan'=>$pencairan,'pengajuan'=>$pengajuan,'proyek'=>$proyek,'metode'=>$metode,'sumber'=>$sumber,'pengirim'=>$pengirim]);
+        $pencairan = DB::select('SELECT * FROM detail_pencairan WHERE id_pencairan = ?', [$id]);
+        if (empty($pencairan)) {
+            return response(
+                '<div class="modal-body"><div class="alert alert-warning">Detail settlement belum ada di sistem.</div><hr><center><button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button></center></div>',
+                200
+            );
+        }
+        $qry_metode = $pencairan[0]->metode;
+        $qry_sumber = $pencairan[0]->sumber;
+        $username = $pencairan[0]->created_by;
+        $sumber = DB::table('listkasbank')->where('kode_kasbank', $qry_sumber)->value('nama_list');
+        $metode = DB::table('kasbank')->where('kode_perkiraan', $qry_metode)->value('nama');
+        if ($sumber === null) {
+            $sumber = '(sumber tidak ditemukan di master)';
+        }
+        if ($metode === null) {
+            $metode = '(metode tidak ditemukan di master)';
+        }
+        $query = DB::table('pencairan')->where('id', $id)->pluck('id_pengajuan');
+        if ($query->isEmpty()) {
+            return response(
+                '<div class="modal-body"><div class="alert alert-warning">Data pencairan tidak ditemukan.</div><hr><center><button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button></center></div>',
+                200
+            );
+        }
+        $id_pengajuan = $query[0];
+        $query_proyek = DB::table('pengajuan')->where('id', $id_pengajuan)->pluck('id_project');
+        $id_proyek = $query_proyek->isNotEmpty() ? $query_proyek[0] : null;
+        $pengajuan = DB::select('SELECT * FROM pengajuan WHERE id = ?', [$id_pengajuan]);
+        if (empty($pengajuan)) {
+            return response(
+                '<div class="modal-body"><div class="alert alert-warning">Pengajuan tidak ditemukan.</div><hr><center><button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button></center></div>',
+                200
+            );
+        }
+        $proyek = [];
+        if ($id_proyek !== null && $id_proyek !== '') {
+            $proyek = DB::select('SELECT * FROM master_project WHERE id = ?', [$id_proyek]);
+        }
+        $user = DB::select('SELECT name FROM users WHERE username = ?', [$username]);
+        $pengirim = !empty($user) ? $user[0]->name : ($username ?: '-');
+        return view('pencairan/detail_pencairan', ['id' => $id, 'pencairan' => $pencairan, 'pengajuan' => $pengajuan, 'proyek' => $proyek, 'metode' => $metode, 'sumber' => $sumber, 'pengirim' => $pengirim]);
       }
 
       public function project($id)
