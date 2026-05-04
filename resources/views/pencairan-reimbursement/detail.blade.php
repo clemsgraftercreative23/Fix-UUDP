@@ -4,7 +4,11 @@
 
 <?php function rupiah($angka)
 {
-    return number_format($angka, 0, ',', '.');
+    if ($angka === null || $angka === '') {
+        return '0';
+    }
+
+    return number_format((float) $angka, 0, ',', '.');
 } ?>
 
 <style>
@@ -65,7 +69,7 @@
                             </div>
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Total</label>
-                                <input type="text" class="form-control" value="{{number_format($data->nominal_pengajuan,0,',','.')}}" readonly>
+                                <input type="text" class="form-control" value="{{ rupiah($data->nominal_pengajuan) }}" readonly>
                             </div>
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Approved by Head Department</label>
@@ -154,12 +158,12 @@
                     @foreach($data->drivers as $row)
                     <tr>
                         <td width="1px">{{$no++}}</td>
-                        <td width="200px"><span>{{number_format($row->toll,0,',','.')}}</span></td>
-                        <td width="200px"><span>{{number_format($row->parking,0,',','.')}}</span></td>
-                        <td width="200px"><span>{{number_format($row->gasoline,0,',','.')}}</span></td>
-                        <td width="200px"><span>{{number_format($row->others,0,',','.')}}</span></td>
+                        <td width="200px"><span>{{ rupiah($row->toll) }}</span></td>
+                        <td width="200px"><span>{{ rupiah($row->parking) }}</span></td>
+                        <td width="200px"><span>{{ rupiah($row->gasoline) }}</span></td>
+                        <td width="200px"><span>{{ rupiah($row->others) }}</span></td>
                         <td width="200px"><span>{{$row->payment_type}}</span></td>
-                        <td width="200px"><span>{{number_format($row->subtotal,0,',','.')}}</span></td>
+                        <td width="200px"><span>{{ rupiah($row->subtotal) }}</span></td>
                         <td width="200px"><span>{{$row->remark}}</span></td>
                         <td width="200px"><a href="{{ URL::to('/') }}/images/file_bukti/{{$row->evidence}}" target="_blank"><i class="fa fa-file"></i></a></td>
 
@@ -203,7 +207,7 @@
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total (Cash)</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{ (!empty($data->total_cash) || $data->total_cash === 0) ? number_format($data->total_cash, 0, ',', '.') : '' }}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ ($data->total_cash !== null && $data->total_cash !== '') ? rupiah($data->total_cash) : '' }}" />
                             </div>
                         </div>
                     </div>
@@ -238,7 +242,7 @@
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total (Fleet)</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($data->total_fleet,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ rupiah($data->total_fleet) }}" />
                             </div>
                         </div>
                     </div>
