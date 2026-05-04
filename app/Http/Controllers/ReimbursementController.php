@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\ReimbursementAttachment;
 use App\Reimbursement;
 use App\ReimbursementDetail;
 use App\Master_project;
@@ -11,6 +12,8 @@ use App\Master_daftar_rencana;
 use App\Support\ActivityLogger;
 use DB;
 use App\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 class ReimbursementController extends Controller
 {
     private function resolveReimbursementModule($type)
@@ -33,6 +36,127 @@ class ReimbursementController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
+    }
+
+    private function attachmentTableReady(): bool
+    {
+        return Schema::hasTable('reimbursement_attachments');
+    }
+
+    private function storeAttachmentFile(?UploadedFile $file): string
+    {
+        if (!$file) {
+            return '';
+        }
+
+        $targetDir = public_path('images/file_bukti');
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+        }
+
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '') {
+            $ext = 'jpg';
+        }
+
+        $filename = uniqid('bukti_', true) . '.' . $ext;
+        $file->move($targetDir, $filename);
+
+        return $filename;
+    }
+
+    private function getRowUploadedFiles(Request $request, int $index): array
+    {
+        $files = [];
+
+        $legacyFile = data_get($request->file('file'), $index);
+        if ($legacyFile instanceof UploadedFile) {
+            $files[] = $legacyFile;
+        }
+
+        $legacyProof = data_get($request->file('proof'), $index);
+        if ($legacyProof instanceof UploadedFile) {
+            $files[] = $legacyProof;
+        }
+
+        $batch = data_get($request->file('attachments'), $index);
+        if ($batch instanceof UploadedFile) {
+            $files[] = $batch;
+        } elseif (is_array($batch)) {
+            foreach ($batch as $candidate) {
+                if ($candidate instanceof UploadedFile) {
+                    $files[] = $candidate;
+                }
+            }
+        }
+
+        return $files;
+    }
+
+    private function buildAttachmentPayload(int $reimbursementId, string $detailType, int $detailId, string $storedFile, ?UploadedFile $uploadedFile = null): array
+    {
+        $originalName = $storedFile;
+        $mimeType = null;
+        $fileSize = 0;
+
+        if ($uploadedFile) {
+            try {
+                $candidateName = (string) $uploadedFile->getClientOriginalName();
+                if ($candidateName !== '') {
+                    $originalName = $candidateName;
+                }
+            } catch (\Throwable $e) {
+                $originalName = $storedFile;
+            }
+
+            try {
+                $mimeType = $uploadedFile->getClientMimeType();
+            } catch (\Throwable $e) {
+                $mimeType = null;
+            }
+
+            try {
+                $sizeCandidate = $uploadedFile->getSize();
+                $fileSize = is_numeric($sizeCandidate) ? (int) $sizeCandidate : 0;
+            } catch (\Throwable $e) {
+                $fileSize = 0;
+            }
+        }
+
+        return [
+            'reimbursement_id' => $reimbursementId,
+            'module' => 'reimbursement',
+            'detail_type' => $detailType,
+            'detail_id' => $detailId,
+            'file_name' => $storedFile,
+            'original_name' => $originalName,
+            'mime_type' => $mimeType,
+            'file_size' => $fileSize,
+            'created_by' => auth()->id(),
+        ];
+    }
+
+    private function storeUploadedFiles(array $uploadedFiles): array
+    {
+        $stored = [];
+
+        foreach ($uploadedFiles as $file) {
+            if (!$file instanceof UploadedFile) {
+                continue;
+            }
+
+            $storedName = $this->storeAttachmentFile($file);
+            if ($storedName === '') {
+                continue;
+            }
+
+            $stored[] = [
+                'file' => $file,
+                'stored' => $storedName,
+            ];
+        }
+
+        return $stored;
     }
     /**
      * Display a listing of the resource.
@@ -149,6 +273,8 @@ class ReimbursementController extends Controller
                 ['status' => 0]
             );
             for ($i = 0; $i < count($request->id_kelompok); $i++) {
+                $uploadedFiles = $this->getRowUploadedFiles($request, $i);
+                $storedFiles = $this->storeUploadedFiles($uploadedFiles);
                 $payload = [
                     'id_reimbursement' => $data->id,
                     'id_kelompok' => $request->id_kelompok[$i],
@@ -158,21 +284,23 @@ class ReimbursementController extends Controller
                     'status_pencairan' => 0,
                 ];
 
-                if (isset($request->proof[$i])) {
-                    $image = $request->file('proof')[$i];
-                    $new_name = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $new_name);
-                    $payload['file'] = $new_name;
-                }
-
-                if (isset($request->file[$i])) {
-                    $image = $request->file('file')[$i];
-                    $new_name = rand() . '.' . $image->getClientOriginalExtension();
-                    $image->move(public_path('images/file_bukti'), $new_name);
-                    $payload['file'] = $new_name;
-                }
+                $payload['file'] = $storedFiles[0] ?? '';
 
                 $dt = ReimbursementDetail::create($payload);
+
+                if ($this->attachmentTableReady() && !empty($storedFiles)) {
+                    foreach ($storedFiles as $attachmentItem) {
+                        $file = $attachmentItem['file'] ?? null;
+                        $storedName = $attachmentItem['stored'] ?? '';
+                        if (!$file instanceof UploadedFile || $storedName === '') {
+                            continue;
+                        }
+
+                        ReimbursementAttachment::create(
+                            $this->buildAttachmentPayload($data->id, 'reimbursement_details', (int) $dt->id, $storedName, $file)
+                        );
+                    }
+                }
             }
 
             DB::commit();

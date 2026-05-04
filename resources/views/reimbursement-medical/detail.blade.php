@@ -13,6 +13,23 @@
     .dotted{
     border: dotted 2px #dee2e6;
     }
+    .attachment-preview {
+        display: inline-block;
+        margin-right: 8px;
+        margin-bottom: 8px;
+        text-align: center;
+        vertical-align: top;
+        max-width: 120px;
+    }
+    .attachment-preview img {
+        max-width: 90px;
+        max-height: 90px;
+        border: 1px solid #28a745;
+        border-radius: 5px;
+        display: block;
+        margin-bottom: 4px;
+        object-fit: cover;
+    }
 </style>
 <script src="https://cdn.rawgit.com/igorescobar/jQuery-Mask-Plugin/1ef022ab/dist/jquery.mask.min.js"></script>
 
@@ -37,6 +54,41 @@
                     @endforeach
                 @endif
                 <hr>
+                @php
+                    $approvalTimes = [1 => null, 2 => null, 3 => null];
+                    if (\Illuminate\Support\Facades\Schema::hasTable('activity_logs')) {
+                        $approvalLogs = \Illuminate\Support\Facades\DB::table('activity_logs')
+                            ->where('module', 'reimbursement-medical')
+                            ->where('action', 'approve')
+                            ->where('subject_type', 'reimbursement')
+                            ->where('subject_id', $data->id)
+                            ->orderBy('created_at', 'asc')
+                            ->get(['meta_json', 'created_at']);
+
+                        foreach ($approvalLogs as $log) {
+                            $meta = json_decode($log->meta_json ?? '', true);
+                            $statusMeta = (int) ($meta['status'] ?? 0);
+                            if (array_key_exists($statusMeta, $approvalTimes) && empty($approvalTimes[$statusMeta])) {
+                                $approvalTimes[$statusMeta] = $log->created_at;
+                            }
+                        }
+                    }
+                    $formatApprovalTime = function ($statusCode) use ($approvalTimes) {
+                        $raw = $approvalTimes[$statusCode] ?? null;
+                        if (empty($raw)) {
+                            return '-';
+                        }
+                        return date('d-m-Y H:i', strtotime((string) $raw));
+                    };
+                    $headerAttachments = collect();
+                    if (\Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
+                        $headerAttachments = \App\ReimbursementAttachment::where('reimbursement_id', $data->id)
+                            ->where('module', 'medical')
+                            ->where('detail_type', 'reimbursement_medical_header')
+                            ->orderBy('id')
+                            ->get();
+                    }
+                @endphp
                 <table border="0">
                       <thead>
                           <tr>
@@ -55,14 +107,17 @@
                         <div class="form-group col-md-4">
                             <label for="inputEmail4">Mengetahui Head Department</label>
                             <input type="text" class="form-control" value="{{$data->mengetahui_op}}" readonly>
+                            <small>Tanggal/Jam: {{ $formatApprovalTime(1) }}</small>
                         </div>
                         <div class="form-group col-md-4">
                             <label for="inputPassword4">Mengetahui HR GA</label>
                             <input type="text" class="form-control" value="{{$data->mengetahui_finance}}" readonly >
+                            <small>Tanggal/Jam: {{ $formatApprovalTime(2) }}</small>
                         </div>
                         <div class="form-group col-md-4">
                             <label for="inputPassword4">Menyetujui Finance</label>
                             <input type="text" class="form-control" value="{{$data->mengetahui_owner}}" readonly >
+                            <small>Tanggal/Jam: {{ $formatApprovalTime(3) }}</small>
                         </div>
                         <div class="form-group col-md-4">
                             <label for="inputEmail4">Status</label>
@@ -91,6 +146,9 @@
                                 }
                             @endphp
                             <input type="text" class="form-control" value="{{$status}}" readonly>
+                        </div>
+                        <div class="form-group col-md-12">
+                            <button type="button" class="btn btn-info btn-sm" onclick="window.print()">Print</button>
                         </div>
                         @if ($data->status == 9)
                             
@@ -130,7 +188,31 @@
                             <td class="bg-secondary">Diagnose</td>
                             <td>{{$data->remark}}</td>
                             <td class="bg-secondary">Attachment</td>
-                            <td><a href="{{ URL::to('/') }}/images/file_bukti/{{$data->file}}" target="_blank"><i class="fa fa-file"></i> Open Attachment</a></td>
+                            <td>
+                                @if($headerAttachments->isNotEmpty())
+                                    @foreach($headerAttachments as $attachment)
+                                        @php
+                                            $fileName = $attachment->file_name;
+                                            $display = $attachment->original_name ?: $fileName;
+                                        @endphp
+                                        <div class="attachment-preview">
+                                            <a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}" target="_blank">
+                                                <img src="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}" alt="{{ $display }}">
+                                            </a>
+                                            <div style="font-size:10px;word-break:break-all;">{{ $display }}</div>
+                                        </div>
+                                    @endforeach
+                                @elseif(!empty($data->file))
+                                    <div class="attachment-preview">
+                                        <a href="{{ URL::to('/') }}/images/file_bukti/{{$data->file}}" target="_blank">
+                                            <img src="{{ URL::to('/') }}/images/file_bukti/{{$data->file}}" alt="{{ $data->file }}">
+                                        </a>
+                                        <div style="font-size:10px;word-break:break-all;">{{ $data->file }}</div>
+                                    </div>
+                                @else
+                                    -
+                                @endif
+                            </td>
                         </tr>
                         </thead>
                         
