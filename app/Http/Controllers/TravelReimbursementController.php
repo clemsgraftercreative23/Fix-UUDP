@@ -125,11 +125,23 @@ class TravelReimbursementController extends Controller
         return false;
     }
 
-    /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400. */
+    /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400 / -1.234,50. */
     private function normalizeExchangeRateValue($value): string
     {
         $raw = trim((string) $value);
         if ($raw === '') {
+            return '0.00';
+        }
+
+        $isNegative = false;
+        if (isset($raw[0]) && $raw[0] === '-') {
+            $isNegative = true;
+            $raw = trim(substr($raw, 1));
+        } elseif (isset($raw[0]) && $raw[0] === '+') {
+            $raw = trim(substr($raw, 1));
+        }
+
+        if ($raw === '' || $raw === '.') {
             return '0.00';
         }
 
@@ -160,6 +172,9 @@ class TravelReimbursementController extends Controller
         }
 
         $num = (float) $raw;
+        if ($isNegative) {
+            $num = -$num;
+        }
 
         return number_format($num, 2, '.', '');
     }

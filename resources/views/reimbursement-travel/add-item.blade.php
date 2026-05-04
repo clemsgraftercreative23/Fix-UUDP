@@ -343,7 +343,12 @@ $(document).ready(function(){
     $(".warning-upload").hide();
     
     function numberWithCommas(x) {
-        return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
+        var n = Number(x);
+        if (isNaN(n)) return '0';
+        var neg = n < 0;
+        var absRounded = Math.abs(Math.round(n));
+        var s = String(absRounded).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return neg ? '-' + s : s;
     }
   
    
@@ -635,24 +640,40 @@ $(document).ready(function(){
     function normalizeEuropeanNumberString(raw) {
         var x = String(raw || '').trim().replace(/\s/g, '');
         if (!x) return '0';
+        var neg = false;
+        if (x.charAt(0) === '-') {
+            neg = true;
+            x = x.slice(1);
+        } else if (x.charAt(0) === '+') {
+            x = x.slice(1);
+        }
+        if (!x) return '0';
         var lastC = x.lastIndexOf(',');
         var lastD = x.lastIndexOf('.');
+        var out;
         if (lastC > lastD) {
             x = x.replace(/\./g, '').replace(',', '.');
-            return (x.replace(/[^\d.]/g, '') || '0');
+            out = (x.replace(/[^\d.]/g, '') || '0');
+        } else {
+            x = x.replace(/,/g, '');
+            var idx = x.lastIndexOf('.');
+            if (idx === -1) {
+                out = (x.replace(/[^\d]/g, '') || '0');
+            } else {
+                var intRaw = x.slice(0, idx);
+                var frac = x.slice(idx + 1).replace(/\D/g, '');
+                var intPart = intRaw.replace(/\./g, '');
+                if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
+                    out = intPart + frac;
+                } else {
+                    out = (intPart || '0') + '.' + frac;
+                }
+            }
         }
-        x = x.replace(/,/g, '');
-        var idx = x.lastIndexOf('.');
-        if (idx === -1) {
-            return (x.replace(/[^\d]/g, '') || '0');
+        if (neg && out !== '0' && out !== '') {
+            out = '-' + out;
         }
-        var intRaw = x.slice(0, idx);
-        var frac = x.slice(idx + 1).replace(/\D/g, '');
-        var intPart = intRaw.replace(/\./g, '');
-        if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
-            return intPart + frac;
-        }
-        return (intPart || '0') + '.' + frac;
+        return out;
     }
 
     function sanitizeExchangeRateInput(value, finalize) {

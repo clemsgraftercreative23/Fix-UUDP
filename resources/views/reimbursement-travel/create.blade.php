@@ -488,24 +488,40 @@ $(document).ready(function(){
         normalizeEuropeanNumberString(s) {
             let x = String(s || '').trim().replace(/\s/g, '');
             if (!x) return '0';
+            let neg = false;
+            if (x.charAt(0) === '-') {
+                neg = true;
+                x = x.slice(1);
+            } else if (x.charAt(0) === '+') {
+                x = x.slice(1);
+            }
+            if (!x) return '0';
             const lastC = x.lastIndexOf(',');
             const lastD = x.lastIndexOf('.');
+            let out;
             if (lastC > lastD) {
                 x = x.replace(/\./g, '').replace(',', '.');
-                return x.replace(/[^\d.]/g, '') || '0';
+                out = x.replace(/[^\d.]/g, '') || '0';
+            } else {
+                x = x.replace(/,/g, '');
+                const idx = x.lastIndexOf('.');
+                if (idx === -1) {
+                    out = x.replace(/[^\d]/g, '') || '0';
+                } else {
+                    const intRaw = x.slice(0, idx);
+                    const frac = x.slice(idx + 1).replace(/\D/g, '');
+                    const intPart = intRaw.replace(/\./g, '');
+                    if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
+                        out = intPart + frac;
+                    } else {
+                        out = (intPart || '0') + '.' + frac;
+                    }
+                }
             }
-            x = x.replace(/,/g, '');
-            const idx = x.lastIndexOf('.');
-            if (idx === -1) {
-                return (x.replace(/[^\d]/g, '') || '0');
+            if (neg && out !== '0' && out !== '') {
+                out = '-' + out;
             }
-            const intRaw = x.slice(0, idx);
-            const frac = x.slice(idx + 1).replace(/\D/g, '');
-            const intPart = intRaw.replace(/\./g, '');
-            if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
-                return intPart + frac;
-            }
-            return (intPart || '0') + '.' + frac;
+            return out;
         },
         numericRate(val) {
             if (val === null || val === undefined || val === '') return 0;
