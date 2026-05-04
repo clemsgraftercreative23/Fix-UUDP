@@ -660,7 +660,7 @@ class ReimbursementController extends Controller
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah disetujui oleh Finance Manager.\n\nSilahkan lakukan proses Pencairan\n\nTerima kasih.
+                            "* telah disetujui oleh Finance Manager.\n\nSaat ini sedang menunggu proses pencairan.\n\nTerima kasih.
                              \n\nKlik untuk melihat detail pengajuan : " .
                             url(''.$direct.'' . $data->id),
                     ])
