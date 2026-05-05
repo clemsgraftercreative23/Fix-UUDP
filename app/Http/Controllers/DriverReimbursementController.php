@@ -670,7 +670,39 @@ class DriverReimbursementController extends Controller
         }
     }
 
-    public function show($id)
+    /**
+     * Same rules as tombol "Edit" / modal inquiry di resources/views/reimbursement-driver/detail.blade.php
+     */
+    private function driverInquiryEditAuthorized(Reimbursement $data): bool
+    {
+        $user = auth()->user();
+        $jabatan = (string) $user->jabatan;
+        $status = (int) $data->status;
+        $isSubmitter = (int) $user->id === (int) $data->id_user;
+
+        if (in_array($jabatan, ['Direktur Operasional', 'superadmin'], true) && $status === 0) {
+            return (! $isSubmitter) || $jabatan === 'superadmin';
+        }
+        if ($isSubmitter && in_array($status, [9, 10], true)) {
+            return true;
+        }
+        if (in_array($jabatan, ['Finance', 'superadmin'], true) && $status === 1) {
+            return true;
+        }
+        if ($jabatan === 'Finance Supervisor' && $status === 2) {
+            return true;
+        }
+        if (in_array($jabatan, ['Owner', 'superadmin'], true) && $status === 2) {
+            return true;
+        }
+        if (in_array($jabatan, ['Finance Manager', 'Owner', 'superadmin'], true) && $status === 11) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function renderDriverDetail(string $id, bool $openEditModal): \Illuminate\Contracts\View\View
     {
         $data = Reimbursement::find($id);
         $meng = '';
@@ -683,7 +715,7 @@ class DriverReimbursementController extends Controller
         if ($metode_cash_ == null) {
             $metode_cash = "";
         } else {
-            $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;    
+            $metode_cash = DB::select(DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;
         }
 
         return view('reimbursement-driver.detail', [
@@ -693,13 +725,21 @@ class DriverReimbursementController extends Controller
             'detail' => $detail,
             'name' => $name,
             'metode_cash' => $metode_cash,
+            'open_edit_modal' => $openEditModal,
         ]);
+    }
+
+    public function show($id)
+    {
+        return $this->renderDriverDetail((string) $id, false);
     }
 
     public function edit($id)
     {
-        // Display the detail view which contains the editable form with all functionalities
-        return $this->show($id);
+        $data = Reimbursement::find($id);
+        $open = $data && $this->driverInquiryEditAuthorized($data);
+
+        return $this->renderDriverDetail((string) $id, $open);
     }
 
     public function update(Request $request, $id)
