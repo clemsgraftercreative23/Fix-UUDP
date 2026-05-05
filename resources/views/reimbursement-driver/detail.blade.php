@@ -661,7 +661,11 @@ if (!function_exists('driver_attachment_rows')) {
                       </div>
                       <div class="modal-footer">
                           <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
-                          @if((int) auth()->id() === (int) $data->id_user)
+                          @php
+                            $driverEditCanDraft = (int) auth()->id() === (int) $data->id_user
+                              || in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
+                          @endphp
+                          @if($driverEditCanDraft)
                           <button class="btn btn-warning" type="submit" name="save_draft">Draft</button>
                           @endif
                           <button class="btn btn-primary" type="submit" name="save">Submit</button>
