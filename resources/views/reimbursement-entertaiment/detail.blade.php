@@ -1545,5 +1545,12 @@ if (!function_exists('ent_attachment_rows')) {
   // }
 
 </script>
+@if(isset($open_edit_modal) && $open_edit_modal)
+<script>
+$(document).ready(function () {
+    $('.bd-example-modal-lg').modal('show');
+});
+</script>
+@endif
 @endpush
 @endsection

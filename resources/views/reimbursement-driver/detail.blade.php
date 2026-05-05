@@ -340,29 +340,27 @@ if (!function_exists('driver_attachment_rows')) {
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     @if($data->status == 0)
-                                        @if($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin')
-                                  		<button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                  		<button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                                         <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
                                         <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                        @endif
                                     @endif
                                 </form>
                             
                         @endif
 
                         @if ($data->status == 9 && auth()->user()->id == $data->id_user) 
-                            <button type="button" class="btn btn-primary click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                            <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                         @endif
 
                         @if ($data->status == 10 && auth()->user()->id == $data->id_user) 
-                            <button type="button" class="btn btn-primary click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                            <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                         @endif
                         
                         @if (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'superadmin')                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 @if($data->status == 1)
-                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 @endif
@@ -372,7 +370,7 @@ if (!function_exists('driver_attachment_rows')) {
                         @if ($data->status == 2 && auth()->user()->jabatan == 'Finance Supervisor')
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
-                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve (Finance Supervisor)</button>
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
@@ -380,7 +378,7 @@ if (!function_exists('driver_attachment_rows')) {
                         @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
-                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve ke settlement (Owner)</button>
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
@@ -388,7 +386,7 @@ if (!function_exists('driver_attachment_rows')) {
                         @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
-                                <button type="button" class="btn btn-warning click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
+                                <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve (Finance Manager)</button>
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
@@ -402,7 +400,7 @@ if (!function_exists('driver_attachment_rows')) {
 </div>
 
 <!-- Modal Edit-->
-<div class="modal fade" id="formModaEdit" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true" style="overflow-y: auto">>
+<div class="modal fade" id="formModaEdit" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true" style="overflow-y: auto">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <!-- @if (auth()->user()->jabatan == 'karyawan') 
@@ -1694,12 +1692,6 @@ if (!function_exists('driver_attachment_rows')) {
             $("#sum").val(numberWithCommas(total));
         }
 
-        
-        $(".click-edit").click(function(){
-            var id = $(this).attr('id');
-            $('#formModaEdit').modal('show');
-        });
-       
         $('.currency').mask("#.##0", {
           reverse: true
         }); 

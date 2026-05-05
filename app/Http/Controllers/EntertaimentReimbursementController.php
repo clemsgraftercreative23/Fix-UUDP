@@ -580,16 +580,49 @@ class EntertaimentReimbursementController extends Controller
     }
 
     /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * Same rules as tombol Edit / modal inquiry di resources/views/reimbursement-entertaiment/detail.blade.php
      */
-    public function show($id)
+    private function entertainmentInquiryEditAuthorized(?Reimbursement $data): bool
+    {
+        if (!$data || (int) $data->reimbursement_type !== 3) {
+            return false;
+        }
+
+        $user = auth()->user();
+        $jabatan = (string) $user->jabatan;
+        $status = (int) $data->status;
+        $isSubmitter = (int) $user->id === (int) $data->id_user;
+
+        if ($jabatan === 'superadmin' && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
+            return true;
+        }
+        if (in_array($jabatan, ['Direktur Operasional'], true) && $status === 0) {
+            return true;
+        }
+        if ($isSubmitter && in_array($status, [9, 10], true)) {
+            return true;
+        }
+        if (in_array($jabatan, ['Finance'], true) && $status === 1) {
+            return true;
+        }
+        if ($jabatan === 'Finance Supervisor' && $status === 2) {
+            return true;
+        }
+        if (in_array($jabatan, ['Owner'], true) && $status === 2) {
+            return true;
+        }
+        if (in_array($jabatan, ['Finance Manager', 'Owner'], true) && $status === 11) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function renderEntertainmentDetail(string $id, bool $openEditModal): \Illuminate\Contracts\View\View
     {
         $data = Reimbursement::find($id);
         $detail = DB::select(DB::raw("SELECT * FROM reimbursement_entertaiments WHERE reimbursement_id='$id'"));
-        $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, metode_cash FROM reimbursement WHERE id = '$id'"));
+        $cek  = DB::select(DB::raw("SELECT total_bdc,total_cash, metode_cash FROM reimbursement WHERE id = '$id'"));
 
         $bdc = $cek['0']->total_bdc;
         $cash = $cek['0']->total_cash;
@@ -597,16 +630,28 @@ class EntertaimentReimbursementController extends Controller
         if ($metode_cash_ == null) {
             $metode_cash = "";
         } else {
-            $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;    
+            $metode_cash = DB::select(DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;
         }
 
-        return view('reimbursement-entertaiment.detail',[
+        return view('reimbursement-entertaiment.detail', [
             'data' => $data,
             'detail' => $detail,
             'bdc' => $bdc,
             'cash' => $cash,
             'metode_cash' => $metode_cash,
+            'open_edit_modal' => $openEditModal,
         ]);
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        return $this->renderEntertainmentDetail((string) $id, false);
     }
 
     /**
@@ -617,9 +662,10 @@ class EntertaimentReimbursementController extends Controller
      */
     public function edit($id)
     {
-        // For now, edit redirects to show (detail view)
-        // Can be extended later to show edit form
-        return $this->show($id);
+        $data = Reimbursement::find($id);
+        $open = $data && $this->entertainmentInquiryEditAuthorized($data);
+
+        return $this->renderEntertainmentDetail((string) $id, $open);
     }
 
     /**
