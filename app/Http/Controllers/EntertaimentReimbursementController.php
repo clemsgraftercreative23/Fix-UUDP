@@ -994,6 +994,11 @@ class EntertaimentReimbursementController extends Controller
                 
                 DB::commit();
 
+                // Submit = teruskan ke alur approve (set status + WA); Draft = hanya simpan perubahan (sama seperti driver).
+                if ($request->has('save') && !$request->has('save_draft')) {
+                    return app(ReimbursementController::class)->approve($request, $id);
+                }
+
                 return redirect()
                   ->back()
                   ->with(['success' => 'Reimbursement Successfully Updated']);
