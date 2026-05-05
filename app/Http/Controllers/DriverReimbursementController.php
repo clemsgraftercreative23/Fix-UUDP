@@ -1041,6 +1041,12 @@ class DriverReimbursementController extends Controller
 
               DB::commit();
 
+              // Tombol Submit inquiry untuk verifikator: simpan perubahan lalu proses
+              // approval tahap yang sama dengan tombol "Approve" (WA + status).
+              if ($request->has('save') && !$request->has('save_draft')) {
+                  return app(ReimbursementController::class)->approve($request, $id);
+              }
+
               return redirect()
                   ->back()
                   ->with(['success' => 'Reimbursement Successfully Updated']);

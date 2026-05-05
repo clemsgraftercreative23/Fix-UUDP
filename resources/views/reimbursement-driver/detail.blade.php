@@ -661,7 +661,9 @@ if (!function_exists('driver_attachment_rows')) {
                       </div>
                       <div class="modal-footer">
                           <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
-                           <button class="btn btn-warning" type="submit" name="save_draft">Draft</button>
+                          @if((int) auth()->id() === (int) $data->id_user)
+                          <button class="btn btn-warning" type="submit" name="save_draft">Draft</button>
+                          @endif
                           <button class="btn btn-primary" type="submit" name="save">Submit</button>
                       </div>
                   </div>
