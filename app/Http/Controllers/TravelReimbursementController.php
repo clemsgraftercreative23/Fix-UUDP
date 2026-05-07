@@ -621,7 +621,7 @@ class TravelReimbursementController extends Controller
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
 
-            $data = $data->orderBy('reimbursement.id', 'DESC');
+            $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
             
             return datatables()->of($data)  
             ->addColumn('status_label', function ($data) {
@@ -763,7 +763,7 @@ class TravelReimbursementController extends Controller
 
             
 
-            $data = $data->orderBy('reimbursement.id', 'DESC');
+            $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
             return datatables()->of($data)
             ->addColumn('action', function ($data) {
                 if($data->status == 0 ){
