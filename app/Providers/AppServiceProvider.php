@@ -3,8 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Ixudra\Curl\Facades\Curl;
-use App\Api;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
+use App\Services\Accurate\AccurateApiTokenClient;
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -25,27 +26,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        $auth = Api::where('id',1)->first();
-        $curl = Curl::to("https://zeus.accurate.id/accurate/api/department/list.do")
-                    ->withHeaders([
-                        'Accept: application/json',
-                        'Authorization: Bearer '.$auth->token,
-                        'X-Session-ID: '.$auth->session
-                    ])
-                    ->returnResponseObject()
-                    ->get();
-        if(!$curl || $curl->status > 301) {
-           \View::share('accurate', [
-            'status' => false
-           ]);
+        $accurateClient = new AccurateApiTokenClient();
+        $curl = $accurateClient->request('GET', '/accurate/api/department/list.do');
+        if (!($curl['ok'] ?? false)) {
+            View::share('accurate', [
+                'status' => false
+            ]);
         } else {
-            \View::share('accurate', [
+            View::share('accurate', [
                 'status' => true
             ]);
         }
 
       if(config('app.env') === 'production') {
-          \URL::forceScheme('https');
+          URL::forceScheme('https');
       }
     }
 }

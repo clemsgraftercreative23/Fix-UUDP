@@ -422,6 +422,43 @@
                             </form>
                         @endif
                         @if ($data->status == 5 && auth()->user()->jabatan == 'Owner')
+                            @php
+                                $accuratePayloadPreview = json_decode($data->accurate_payload_json ?? '', true);
+                                $previewLines = [];
+                                if (is_array($accuratePayloadPreview)) {
+                                    if (!empty($accuratePayloadPreview['detailAccount']) && is_array($accuratePayloadPreview['detailAccount'])) {
+                                        $previewLines = $accuratePayloadPreview['detailAccount'];
+                                    } elseif (!empty($accuratePayloadPreview['detailJournalVoucher']) && is_array($accuratePayloadPreview['detailJournalVoucher'])) {
+                                        $previewLines = $accuratePayloadPreview['detailJournalVoucher'];
+                                    }
+                                }
+                            @endphp
+                            @if (!empty($previewLines))
+                                <div class="alert alert-secondary text-left" style="max-width:900px;margin:0 auto 12px auto;">
+                                    <strong>Preview akun perkiraan untuk Sync Accurate</strong><br>
+                                    <small>Bank No: {{ $accuratePayloadPreview['bankNo'] ?? '-' }}</small>
+                                    <div class="table-responsive" style="margin-top:8px;">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Akun Perkiraan</th>
+                                                    <th>Amount</th>
+                                                    <th>Department</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach ($previewLines as $line)
+                                                    <tr>
+                                                        <td>{{ $line['accountNo'] ?? '-' }}</td>
+                                                        <td>{{ isset($line['amount']) ? number_format((float) $line['amount'], 0, ',', '.') : '-' }}</td>
+                                                        <td>{{ $line['departmentName'] ?? '-' }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            @endif
                             @if (!empty($data->accurate_synced_at))
                                 <button type="button" class="btn btn-success" disabled>
                                     Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
@@ -430,6 +467,10 @@
                                 <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" style="display:inline;">
                                     @csrf
                                     <button type="submit" class="btn btn-warning">Sync Accurate</button>
+                                </form>
+                                <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-info">Reset Settlement</button>
                                 </form>
                             @endif
                         @endif
