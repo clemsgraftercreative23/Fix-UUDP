@@ -3,14 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\User;
-use App\Api;
 use Illuminate\Http\Request;
 use Validator;
 use DataTables;
 use Auth;
 use DB;
 use Hash;
-use Ixudra\Curl\Facades\Curl;
+use App\Services\Accurate\AccurateApiTokenClient;
 
 class KaryawanController extends Controller
 {
@@ -26,37 +25,35 @@ class KaryawanController extends Controller
     }
 
     public function store() {
+        $client = new AccurateApiTokenClient();
+        if (!$client->isConfigured()) {
+            return response()->json(['errors' => $client->configurationErrorMessages()], 422);
+        }
 
-    	$token = Api::where('id', 1)->get()->pluck('token');
-		$session = Api::where('id', 1)->get()->pluck('session');
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL,"https://zeus.accurate.id/accurate/api/employee/list.do?sp.pageSize=100");
-		curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-		'Accept: application/json',
-		'header' => "Authorization: Bearer ".$token['0'],
-		'X-Session-ID: '.$session['0']));
-		curl_setopt($ch, CURLOPT_POST, 1);
-		curl_setopt($ch, CURLOPT_POST, 1);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		$server_output = curl_exec ($ch);
-		curl_close ($ch);
-		$data = json_decode($server_output, TRUE);
+        $firstPageResponse = $client->request('GET', '/accurate/api/employee/list.do?sp.pageSize=100');
+        if (!($firstPageResponse['ok'] ?? false)) {
+            return response()->json(['errors' => ['Gagal mengambil data karyawan dari Accurate.']], 422);
+        }
 
-		$totalPage = $data['sp']['pageCount'];
+        $data = json_decode((string) ($firstPageResponse['body'] ?? ''), true);
+        $totalPage = isset($data['sp']['pageCount']) ? (int) $data['sp']['pageCount'] : 1;
+        if ($totalPage < 1) {
+            $totalPage = 1;
+        }
+
 		$listUrl = [];
 		$listData = [];
 		for($i = 1; $i <= $totalPage;$i++) {
-			$baseUrl = "https://zeus.accurate.id/accurate/api/employee/list.do?sp.pageSize=100&sp.page=".$i;
-			$record = Curl::to($baseUrl)
-                    ->withHeaders([
-                        'Accept: application/json',
-						'X-Session-ID: '.$session[0],
-						'Authorization: Bearer '.$token[0]
-                    ])
-                    ->get();
+			$baseUrl = "/accurate/api/employee/list.do?sp.pageSize=100&sp.page=".$i;
+			$recordResponse = $client->request('GET', $baseUrl);
+            if (!($recordResponse['ok'] ?? false)) {
+                continue;
+            }
 			$listUrl[] = $baseUrl;
-			$record = json_decode($record);
-			$listData = array_merge($listData, $record->d);
+			$record = json_decode((string) ($recordResponse['body'] ?? ''), true);
+            if (isset($record['d']) && is_array($record['d'])) {
+			    $listData = array_merge($listData, $record['d']);
+            }
 		}
 		$karyawan = json_decode(json_encode($listData), true);
 		$jabatan = 'karyawan';
@@ -64,16 +61,18 @@ class KaryawanController extends Controller
 		// print_r($data['d']);
 		// echo "</pre>";
 		foreach ($karyawan as $item ) {
-			$key = Curl::to("https://zeus.accurate.id/accurate/api/employee/detail.do?id=".$item['id'])
-                ->withHeaders([
-                    // 'Content-Type: application/x-www-form-urlencoded',
-                    // 'Accept: application/json',
-					'X-Session-ID: '.$session[0],
-					'Authorization: Bearer '.$token[0]
-				])->get();
-			$key = json_decode(json_encode(json_decode($key)))->d;
-
-			$key = collect($key)->toArray();
+            if (!isset($item['id'])) {
+                continue;
+            }
+			$detailResponse = $client->request('GET', '/accurate/api/employee/detail.do?id='.$item['id']);
+            if (!($detailResponse['ok'] ?? false)) {
+                continue;
+            }
+			$key = json_decode((string) ($detailResponse['body'] ?? ''), true);
+            $key = isset($key['d']) && is_array($key['d']) ? $key['d'] : [];
+            if (empty($key)) {
+                continue;
+            }
 			if (User::where('idKaryawan', '=', $key['number'])->exists()) {
 					User::where('idKaryawan', $key['number'])
 					->update([

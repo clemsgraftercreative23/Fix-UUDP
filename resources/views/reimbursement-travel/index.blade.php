@@ -421,14 +421,8 @@ $(document).ready(function(){
         $(".number-format").change(function() {
           $(this).maskMoney({ thousands:'.', decimal:',', precision:0});
         })
-        var start = moment().startOf('month');
-        var end = moment().endOf('month');
-        this.start = start.format('YYYY-MM-DD');
-        this.end = end.format('YYYY-MM-DD');
         $(function() {
             $('input.daterange').daterangepicker({
-                startDate: start,
-                endDate: end,
                 opens: 'left'
             }, function(start, end, label) {
                 console.log("A new date selection was made: " + start.format('YYYY-MM-DD') + ' to ' + end.format('YYYY-MM-DD'));
@@ -468,10 +462,9 @@ $(document).ready(function(){
         reset(){
           this.status = null
           this.user_id = null
-          var start = moment().startOf('month');
-          var end = moment().endOf('month');
-          this.start = start.format('YYYY-MM-DD');
-          this.end = end.format('YYYY-MM-DD');
+          this.start = null;
+          this.end = null;
+          $('input.daterange').val('');
           this.loadData(this.start,this.end,this.status, this.user_id);
 
         },

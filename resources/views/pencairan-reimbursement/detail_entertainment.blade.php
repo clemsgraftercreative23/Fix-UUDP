@@ -266,7 +266,7 @@
                             <div class="col-md-2">
                                 <div class="form-group">
                                     <label>Settlement Method</label>
-                                    <select class="form-control cst-select" readonly required>
+                                    <select class="form-control cst-select" disabled>
                                         <option value="">--Select Settlement Method--</option>
                                         @foreach($kasbank as $row)
                                         <option value="{{$row->kode_perkiraan}}">{{$row->nama}}</option>
@@ -277,7 +277,7 @@
                             <div class="col-md-2">
                                 <div class="form-group">
                                     <label>Akun Perkiraan (Accurate)</label>
-                                    <select class="form-control cst-select" readonly required>
+                                    <select class="form-control cst-select" disabled>
                                         <option value="">--Select Akun Perkiraan--</option>
                                         <option value="6-1051">6-1051 (Transportation)</option>
                                         <option value="6-1055">6-1055 (Transportation BIK)</option>

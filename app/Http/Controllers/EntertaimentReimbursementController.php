@@ -251,7 +251,7 @@ class EntertaimentReimbursementController extends Controller
             }
 
 
-            $data = $data->orderBy('reimbursement.id', 'DESC');
+            $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
             return datatables()->of($data)
             ->addColumn('status_label', function ($data) {
                 if($data->status == 0 ){
@@ -388,7 +388,7 @@ class EntertaimentReimbursementController extends Controller
             }
 
 
-            $data = $data->orderBy('reimbursement.id', 'DESC');
+            $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
             return datatables()->of($data)
             ->addColumn('action', function ($data) {
                 if($data->status == 0 ){
