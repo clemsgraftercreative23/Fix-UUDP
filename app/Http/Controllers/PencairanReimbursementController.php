@@ -9,15 +9,23 @@ use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use App\Kasbank;
-use App\Api;
 use App\User;
+use App\Services\Accurate\AccurateApiTokenClient;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Ixudra\Curl\Facades\Curl;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use DB;
 class PencairanReimbursementController extends Controller
 {
+    /** @var string */
+    private $debugSessionId = '566b62';
+
+    /** @var string */
+    private $debugLogPath = 'debug-566b62.log';
+
     public function __construct()
     {
         $this->middleware('auth');
@@ -67,6 +75,8 @@ class PencairanReimbursementController extends Controller
             $data = $data->orderBy('reimbursement.id', 'DESC');
             return datatables()->of($data)
             ->addColumn('action', function ($data) {
+                $button = '';
+
                 if($data->status == 0 ){
                 $button = '<button" class="edit view btn btn-secondary  btn-sm">PENDING</button>';
                 }elseif ($data->status == 1) {
@@ -80,7 +90,19 @@ class PencairanReimbursementController extends Controller
                 }elseif ($data->status == 5){
                     $button = '<button  class="view btn btn-success btn-sm">SETTLE</button>';
                 }
-                $button .= '&nbsp;&nbsp;';
+
+                if ((int) $data->status === 5 && auth()->user()->jabatan === 'Owner') {
+                    $button .= '<div style="margin-top:6px;">';
+                    if (!empty($data->accurate_synced_at)) {
+                        $button .= '<button type="button" class="btn btn-success btn-sm" disabled>Accurate Synced</button>';
+                    } else {
+                        $button .= '<form action="' . route('pencairan-reimbursement.sync-accurate', $data->id) . '" method="POST" style="display:inline;">';
+                        $button .= csrf_field();
+                        $button .= '<button type="submit" class="btn btn-warning btn-sm">Sync Accurate</button>';
+                        $button .= '</form>';
+                    }
+                    $button .= '</div>';
+                }
 
                 return $button;
 
@@ -99,7 +121,7 @@ class PencairanReimbursementController extends Controller
             ->editColumn('no_reimbursement', function ($data) {
                 return "<a href='".route('pencairan-reimbursement.show',$data->id)."'>".$data->no_reimbursement."</a>";
             })
-            ->editColumn('reimbursement_type', function ($data) {
+            ->editColumn('reimbursement_type', function ($data) {                $type = '';
                 if($data->reimbursement_type == 1 ){
                 $type = 'DRIVER';
                 }elseif ($data->reimbursement_type == 2) {
@@ -245,14 +267,21 @@ class PencairanReimbursementController extends Controller
         //
         DB::beginTransaction();
         try {
-            $data = Reimbursement::find($id);
+            $data = Reimbursement::findOrFail($id);
             $id_user = $data->id_user;
-            $id_department = DB::select( DB::raw("SELECT departmentId FROM users WHERE id='$id_user'"))['0']->departmentId;
-            $nama_department  = DB::select( DB::raw("SELECT nama_departemen FROM departemen WHERE id='$id_department'"))['0']->nama_departemen;
+            $id_department = DB::table('users')->where('id', $id_user)->value('departmentId');
+            if (empty($id_department) && !empty($data->reimbursement_department_id)) {
+                $id_department = $data->reimbursement_department_id;
+            }
+
+            $nama_department = DB::table('departemen')->where('id', $id_department)->value('nama_departemen');
+            if (empty($nama_department)) {
+                throw new \Exception('Nama department tidak ditemukan. Silakan periksa master department terlebih dahulu.');
+            }
             
             $department = \App\Departemen::find($data->reimbursement_department_id);
             $nominal = $data->nominal_pengajuan;
-            $cek_type = DB::select(DB::raw("SELECT reimbursement_type FROM reimbursement WHERE id='$data->id'"))['0']->reimbursement_type;
+            $cek_type = (int) $data->reimbursement_type;
             $accuratePayload = $this->buildAccuratePayloadForSettlement($data, $request, $nama_department);
 
             if($cek_type==1) {
@@ -316,7 +345,7 @@ class PencairanReimbursementController extends Controller
             }
             
             $user = \App\User::where('id', $data->id_user)->first();
-            $curl = \Curl::to('https://api.fonnte.com/send')
+            $curl = Curl::to('https://api.fonnte.com/send')
                 ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                 ->withData([
                     'target' => $user->phoneNumber,
@@ -346,6 +375,18 @@ class PencairanReimbursementController extends Controller
 
     public function syncAccurate($id)
     {
+        // #region agent log
+        Log::error('DBG566b62 syncAccurate entry', [
+            'reimbursement_id' => (int) $id,
+            'user_jabatan' => (string) auth()->user()->jabatan,
+        ]);
+        // #endregion
+        // #region agent log
+        $this->debugLog('pre-fix', 'H5', 'PencairanReimbursementController.php:syncAccurate:entry', 'Entered syncAccurate', [
+            'reimbursement_id' => (int) $id,
+            'user_jabatan' => (string) auth()->user()->jabatan,
+        ]);
+        // #endregion
         $data = Reimbursement::findOrFail($id);
 
         if (auth()->user()->jabatan !== 'Owner') {
@@ -361,12 +402,32 @@ class PencairanReimbursementController extends Controller
         }
 
         $payload = json_decode($data->accurate_payload_json ?? '', true);
-        if (!is_array($payload) || empty($payload['detailJournalVoucher'])) {
-            return redirect()->back()->withErrors(['Payload Accurate belum tersedia. Silakan lakukan settlement ulang terlebih dahulu.']);
+        // #region agent log
+        $this->debugLog('pre-fix', 'H5', 'PencairanReimbursementController.php:syncAccurate:payload', 'Prepared payload for Accurate sync', [
+            'has_payload' => is_array($payload),
+            'detail_count' => is_array($payload) && isset($payload['detailAccount']) && is_array($payload['detailAccount']) ? count($payload['detailAccount']) : 0,
+            'already_synced' => !empty($data->accurate_synced_at),
+            'status' => (int) $data->status,
+        ]);
+        // #endregion
+        $hasDetail = is_array($payload)
+            && (
+                (!empty($payload['detailJournalVoucher']) && is_array($payload['detailJournalVoucher']))
+                || (!empty($payload['detailAccount']) && is_array($payload['detailAccount']))
+            );
+        if (!$hasDetail) {
+            $message = 'Payload Accurate belum tersedia. Hal ini biasanya terjadi karena total amounts kosong atau tidak valid saat settlement diproses. Silakan klik tombol "Reset Settlement" untuk kembali ke tahap settlement, kemudian pastikan semua nilai nominal sudah terisi dengan benar sebelum submit ulang.';
+            return redirect()->back()->withErrors([$message]);
         }
 
         try {
             $syncResult = $this->postAccurateJournal($payload);
+            // #region agent log
+            $this->debugLog('pre-fix', 'H5', 'PencairanReimbursementController.php:syncAccurate:result', 'Received sync result from Accurate client', [
+                'success' => (bool) ($syncResult['success'] ?? false),
+                'message_preview' => substr((string) ($syncResult['message'] ?? ''), 0, 220),
+            ]);
+            // #endregion
 
             if (!($syncResult['success'] ?? false)) {
                 $message = $syncResult['message'] ?? 'Sync ke Accurate gagal.';
@@ -394,6 +455,34 @@ class PencairanReimbursementController extends Controller
         }
     }
 
+    public function resetSettlement($id)
+    {
+        $data = Reimbursement::findOrFail($id);
+
+        if (auth()->user()->jabatan !== 'Owner') {
+            return redirect()->back()->withErrors(['Hanya Owner yang dapat mereset settlement.']);
+        }
+
+        if ((int) $data->status !== 5) {
+            return redirect()->back()->withErrors(['Hanya reimbursement dengan status SETTLED yang dapat direset.']);
+        }
+
+        try {
+            $data->update([
+                'status' => 3, // Back to APPROVED_FINANCE
+                'tgl_pencairan' => null,
+                'accurate_payload_json' => null,
+                'accurate_synced_at' => null,
+                'accurate_sync_status' => null,
+                'accurate_sync_message' => null,
+            ]);
+
+            return redirect()->back()->with(['success' => 'Settlement telah direset. Silakan lakukan settlement ulang dengan pastikan semua nominal sudah terisi dengan benar.']);
+        } catch (\Throwable $th) {
+            return redirect()->back()->withErrors(['Gagal mereset settlement: ' . $th->getMessage()]);
+        }
+    }
+
     private function normalizeMoney($value)
     {
         if ($value === null) {
@@ -408,12 +497,19 @@ class PencairanReimbursementController extends Controller
         $detailJournalVoucher = [];
         $description = $data->no_reimbursement . " - " . $data->remark;
         $reimbursementType = (int) $data->reimbursement_type;
+        $debugInfo = [];
 
         if ($reimbursementType === 2) {
             $description .= " (SETTLEMENT TRAVEL)";
             $detailJournalVoucher = $this->buildTravelJournalVoucherLines($request, $nama_department);
+            $debugInfo['type'] = 'Travel';
+            $debugInfo['breakdown_entries'] = $request->input('breakdown_entries', []);
         } elseif ($reimbursementType === 3) {
+            $debugInfo['type'] = 'Entertainment';
             $total = $this->normalizeMoney($request->total);
+            $debugInfo['total'] = $request->total;
+            $debugInfo['total_normalized'] = $total;
+            
             if ($total > 0) {
                 $detailJournalVoucher[] = [
                     'accountNo' => $request->akun_perkiraan,
@@ -433,8 +529,14 @@ class PencairanReimbursementController extends Controller
                 ];
             }
         } else {
+            $debugInfo['type'] = 'Driver';
             $totalCash = $this->normalizeMoney($request->total_cash);
             $totalFleet = $this->normalizeMoney($request->total_fleet);
+            $debugInfo['total_cash_raw'] = $request->total_cash;
+            $debugInfo['total_cash_normalized'] = $totalCash;
+            $debugInfo['total_fleet_raw'] = $request->total_fleet;
+            $debugInfo['total_fleet_normalized'] = $totalFleet;
+            
             if ($totalCash > 0) {
                 $detailJournalVoucher[] = [
                     'accountNo' => $request->akun_perkiraan,
@@ -474,11 +576,66 @@ class PencairanReimbursementController extends Controller
         }
 
         if (empty($detailJournalVoucher)) {
+            // Log debug info for troubleshooting
+            Log::warning('Accurate Payload generation failed - empty detailJournalVoucher', [
+                'reimbursement_id' => $data->id,
+                'reimbursement_no' => $data->no_reimbursement,
+                'debug_info' => $debugInfo,
+            ]);
             return null;
         }
 
+        $detailAccount = [];
+        $bankNo = '';
+        foreach ($detailJournalVoucher as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+
+            $amountType = strtoupper(trim((string) ($line['amountType'] ?? '')));
+            $accountNo = trim((string) ($line['accountNo'] ?? ''));
+            $amount = (float) ($line['amount'] ?? 0);
+            if ($accountNo === '' || $amount <= 0) {
+                continue;
+            }
+
+            if ($amountType === 'CREDIT' && $bankNo === '') {
+                $bankNo = $accountNo;
+                continue;
+            }
+
+            if ($amountType === 'DEBIT' || $amountType === '') {
+                $detailRow = [
+                    'accountNo' => $accountNo,
+                    'amount' => $amount,
+                ];
+                if (!empty($line['departmentName'])) {
+                    $detailRow['departmentName'] = $line['departmentName'];
+                }
+                $detailAccount[] = $detailRow;
+            }
+        }
+
+        if (empty($detailAccount)) {
+            foreach ($detailJournalVoucher as $line) {
+                if (!is_array($line)) {
+                    continue;
+                }
+                $accountNo = trim((string) ($line['accountNo'] ?? ''));
+                $amount = (float) ($line['amount'] ?? 0);
+                if ($accountNo === '' || $amount <= 0) {
+                    continue;
+                }
+                $detailAccount[] = [
+                    'accountNo' => $accountNo,
+                    'amount' => $amount,
+                ];
+            }
+        }
+
         return [
-            'detailJournalVoucher' => $detailJournalVoucher,
+            'bankNo' => $bankNo,
+            'detailAccount' => $detailAccount,
             'transDate' => date('d/m/Y'),
             'description' => $description,
         ];
@@ -596,61 +753,231 @@ class PencairanReimbursementController extends Controller
 
     private function postAccurateJournal(array $payload)
     {
-        $url = 'https://zeus.accurate.id/accurate/api/journal-voucher/save.do';
-        $api = Api::find(1);
-        $token = optional($api)->token;
-        $session = optional($api)->session;
+        $client = new AccurateApiTokenClient();
+        $payload = $this->prepareOtherPaymentPayload($payload);
+        // #region agent log
+        $this->debugLog('pre-fix', 'H5', 'PencairanReimbursementController.php:postAccurateJournal:entry', 'Calling Accurate API client', [
+            'payload_detail_count' => isset($payload['detailAccount']) && is_array($payload['detailAccount']) ? count($payload['detailAccount']) : 0,
+            'payload_has_description' => !empty($payload['description']),
+            'payload_bank_no' => isset($payload['bankNo']) ? (string) $payload['bankNo'] : '',
+        ]);
+        // #endregion
 
-        if (empty($token) || empty($session)) {
+        if (!$client->isConfigured()) {
             return [
                 'success' => false,
-                'message' => 'Token/session Accurate belum tersedia. Jalankan Sync Accurate OAuth terlebih dahulu.',
+                'message' => implode(' ', $client->configurationErrorMessages()),
             ];
         }
 
-        $postData = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-        curl_setopt($ch, CURLOPT_ENCODING, 1);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $token,
-            "X-Session-ID: " . $session
-        ));
-        $result = curl_exec($ch);
-        $curlError = curl_error($ch);
-        curl_close($ch);
+        $result = $client->request('POST', '/accurate/api/other-payment/save.do', json_encode($payload, JSON_UNESCAPED_SLASHES));
 
-        if ($result === false || !empty($curlError)) {
-            return [
-                'success' => false,
-                'message' => 'Gagal terhubung ke Accurate: ' . $curlError,
+        if (!($result['ok'] ?? false)) {
+            $message = $result['error'] ?? 'Sync ke Accurate gagal.';
+            $body = trim((string) ($result['body'] ?? ''));
+            $debugMeta = [
+                'dbg' => '566b62',
+                'app' => (string) $client->getApplicationName(),
+                'mode' => (string) $client->getSignMode(),
+                'status' => (int) ($result['status'] ?? 0),
             ];
-        }
-
-        $decoded = json_decode($result, true);
-        if (is_array($decoded)) {
-            if ((array_key_exists('success', $decoded) && !$decoded['success']) || (array_key_exists('s', $decoded) && !$decoded['s'])) {
-                $message = $decoded['d'] ?? $decoded['message'] ?? 'Accurate menolak payload.';
-                return [
-                    'success' => false,
-                    'message' => is_string($message) ? $message : 'Accurate menolak payload.',
-                ];
+            if (isset($result['debug']) && is_array($result['debug'])) {
+                $debugMeta['configured_mode'] = (string) ($result['debug']['configured_mode'] ?? '');
+                $debugMeta['current_mode'] = (string) ($result['debug']['current_mode'] ?? '');
+                $debugMeta['attempted_modes'] = array_values((array) ($result['debug']['attempted_modes'] ?? []));
+                $debugMeta['attempt_count'] = (int) ($result['debug']['attempt_count'] ?? 0);
+                $debugMeta['key_count'] = (int) ($result['debug']['key_count'] ?? 0);
             }
+
+            if ($body !== '') {
+                $decoded = json_decode($body, true);
+                if (is_array($decoded)) {
+                    $message = $decoded['d'] ?? $decoded['message'] ?? $message;
+                    if (is_array($message)) {
+                        $message = json_encode($message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    }
+                } else {
+                    $message = $body;
+                }
+            }
+
+            // #region agent log
+            $this->debugLog('post-fix', 'H6', 'PencairanReimbursementController.php:postAccurateJournal:deptRetryCheck', 'Checking Accurate department resource rejection', [
+                'status' => (int) ($result['status'] ?? 0),
+                'message_preview' => substr((string) $message, 0, 220),
+            ]);
+            // #endregion
+
+            $isDepartmentMappingError = is_string($message)
+                && stripos($message, 'Departemen') !== false
+                && (
+                    stripos($message, 'tidak ditemukan') !== false
+                    || stripos($message, 'sudah dihapus') !== false
+                );
+
+            if ($isDepartmentMappingError) {
+                $retryPayload = $this->removeDepartmentNameFromPayload($payload);
+                $retryResult = $client->request('POST', '/accurate/api/other-payment/save.do', json_encode($retryPayload, JSON_UNESCAPED_SLASHES));
+
+                // #region agent log
+                $this->debugLog('post-fix', 'H6', 'PencairanReimbursementController.php:postAccurateJournal:deptRetryResult', 'Retried Accurate journal without departmentName', [
+                    'retry_ok' => (bool) ($retryResult['ok'] ?? false),
+                    'retry_status' => (int) ($retryResult['status'] ?? 0),
+                    'retry_body_preview' => substr((string) ($retryResult['body'] ?? ''), 0, 220),
+                ]);
+                // #endregion
+
+                if (($retryResult['ok'] ?? false) === true) {
+                    return [
+                        'success' => true,
+                        'message' => 'ok',
+                        'raw' => $retryResult['body'] ?? '',
+                    ];
+                }
+            }
+
+            if (is_string($message)) {
+                $message .= ' | dbg=' . json_encode($debugMeta, JSON_UNESCAPED_SLASHES);
+            }
+
+            return [
+                'success' => false,
+                'message' => is_string($message) ? $message : 'Sync ke Accurate gagal.',
+            ];
         }
 
         return [
             'success' => true,
             'message' => 'ok',
-            'raw' => $result,
+            'raw' => $result['body'] ?? '',
         ];
+    }
+
+    private function removeDepartmentNameFromPayload(array $payload)
+    {
+        if (!isset($payload['detailAccount']) || !is_array($payload['detailAccount'])) {
+            return $payload;
+        }
+
+        foreach ($payload['detailAccount'] as $idx => $line) {
+            if (is_array($line) && array_key_exists('departmentName', $line)) {
+                unset($line['departmentName']);
+                $payload['detailAccount'][$idx] = $line;
+            }
+        }
+
+        return $payload;
+    }
+
+    private function prepareOtherPaymentPayload(array $payload)
+    {
+        if (!empty($payload['bankNo'])) {
+            return $payload;
+        }
+
+        $bankNo = $this->extractBankNoFromDetailJournal($payload);
+        if ($bankNo !== '') {
+            $payload['bankNo'] = $bankNo;
+        }
+
+        return $payload;
+    }
+
+    private function extractBankNoFromDetailJournal(array $payload)
+    {
+        if (!empty($payload['detailAccount']) && is_array($payload['detailAccount'])) {
+            foreach ($payload['detailAccount'] as $line) {
+                if (!is_array($line)) {
+                    continue;
+                }
+                $accountNo = trim((string) ($line['accountNo'] ?? ''));
+                if ($accountNo !== '') {
+                    return $accountNo;
+                }
+            }
+        }
+
+        if (!isset($payload['detailJournalVoucher']) || !is_array($payload['detailJournalVoucher'])) {
+            return '';
+        }
+
+        foreach ($payload['detailJournalVoucher'] as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+
+            $amountType = strtoupper(trim((string) ($line['amountType'] ?? '')));
+            $accountNo = trim((string) ($line['accountNo'] ?? ''));
+            if ($amountType === 'CREDIT' && $accountNo !== '') {
+                return $accountNo;
+            }
+        }
+
+        foreach ($payload['detailJournalVoucher'] as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+
+            $accountNo = trim((string) ($line['accountNo'] ?? ''));
+            if ($accountNo !== '') {
+                return $accountNo;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Append NDJSON debug logs for this debug session.
+     *
+     * @param string $runId
+     * @param string $hypothesisId
+     * @param string $location
+     * @param string $message
+     * @param array  $data
+     * @return void
+     */
+    private function debugLog($runId, $hypothesisId, $location, $message, array $data = [])
+    {
+        $targetPath = base_path($this->debugLogPath);
+        try {
+            $payload = [
+                'sessionId' => $this->debugSessionId,
+                'runId' => $runId,
+                'hypothesisId' => $hypothesisId,
+                'location' => $location,
+                'message' => $message,
+                'data' => $data,
+                'timestamp' => round(microtime(true) * 1000),
+            ];
+            // #region agent log
+            $endpoint = 'http://127.0.0.1:7625/ingest/321bb544-7e4d-4a89-891c-42b49f2a0f34';
+            $jsonPayload = json_encode($payload, JSON_UNESCAPED_SLASHES);
+            $httpContext = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/json\r\nX-Debug-Session-Id: 566b62\r\n",
+                    'content' => $jsonPayload,
+                    'timeout' => 1,
+                    'ignore_errors' => true,
+                ],
+            ]);
+            @file_get_contents($endpoint, false, $httpContext);
+            // #endregion
+            $result = file_put_contents($targetPath, json_encode($payload, JSON_UNESCAPED_SLASHES).PHP_EOL, FILE_APPEND);
+            if ($result === false) {
+                Log::error('Agent debug log write failed', [
+                    'target' => $targetPath,
+                    'location' => $location,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Agent debug log exception', [
+                'target' => $targetPath,
+                'location' => $location,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     
