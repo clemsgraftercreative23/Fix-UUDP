@@ -49,54 +49,63 @@
 
                                                 </div>
                                                 <div class="post-body"> 
-                                                    
+                                                  <form action="{!!url('update-karyawan')!!}" method="POST">
+                                                    @csrf
+                                                    <input type="hidden" name="id" value="{{$g->id}}">
                                                     <table class="table cst-table">
                                                       <tr>
                                                         <td class="icon-row"> 
-                                                          <span class="material-icons">account_circle</span><strong>NIP</strong></td> <td>{{$g->idKaryawan}}
+                                                          <span class="material-icons">account_circle</span><strong>NIP</strong></td> <td><input type="text" class="form-control" value="{{$g->idKaryawan}}" readonly>
                                                         </td>
                                                       </tr>
                                                       <tr>
                                                         <td class="icon-row"> 
-                                                          <span class="material-icons">account_circle</span><strong>Username</strong></td> <td>{{$g->username}}
+                                                          <span class="material-icons">account_circle</span><strong>Username</strong></td> <td><input type="text" name="username" class="form-control" value="{{$g->username}}">
                                                         </td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">account_box</span><strong>Name</strong></td> <td>{{$g->name}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">account_box</span><strong>Name</strong></td> <td><input type="text" name="name" class="form-control" value="{{$g->name}}"></td>
                                                       </tr>
                                                       <tr>
                                                       <td class="icon-row"> <span class="material-icons">fact_check</span><strong>Position</strong></td> <td>{{$g->jabatan}}</td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">chrome_reader_mode</span><strong>NIK</strong></td> <td>{{$g->nik}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">chrome_reader_mode</span><strong>NIK</strong></td> <td><input type="text" name="nik" class="form-control" value="{{$g->nik}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">alternate_email</span><strong>Email</strong></td> <td>{{$g->email}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">alternate_email</span><strong>Email</strong></td> <td><input type="text" name="email" class="form-control" value="{{$g->email}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">phone</span><strong>Handphone</strong></td> <td>{{$g->phoneNumber}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">phone</span><strong>Handphone</strong></td> <td><input type="text" name="phoneNumber" class="form-control" value="{{$g->phoneNumber}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">date_range</span><strong>Join Date</strong></td> <td>{{$g->joinDate}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">date_range</span><strong>Join Date</strong></td> <td><input type="text" name="joinDate" class="form-control" value="{{$g->joinDate}}"></td>
                                                       </tr>
 
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">account_balance</span><strong>Bank Name</strong></td> <td>{{$g->bankName}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">account_balance</span><strong>Bank Name</strong></td> <td><input type="text" name="bankName" class="form-control" value="{{$g->bankName}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">account_balance_wallet</span><strong>Bank Number</strong></td> <td>{{$g->bankAccount}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">account_balance_wallet</span><strong>Bank Number</strong></td> <td><input type="text" name="bankAccount" class="form-control" value="{{$g->bankAccount}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">credit_card</span><strong>NPWP Number</strong></td> <td>{{$g->npwpNo}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">credit_card</span><strong>NPWP Number</strong></td> <td><input type="text" name="npwpNo" class="form-control" value="{{$g->npwpNo}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">verified</span><strong>Empolyee Status</strong></td> <td>{{$g->employeeWorkStatus}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">verified</span><strong>Empolyee Status</strong></td> <td><input type="text" name="employeeWorkStatus" class="form-control" value="{{$g->employeeWorkStatus}}"></td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">account_balance</span><strong>Department</strong></td> <td>{{$g->nama_departemen}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">account_balance</span><strong>Department</strong></td> <td>
+                                                        <select class="form-control" name="departmentId" id="departmentId" required>
+                                                          <option value="">-Select Departemen-</option>
+                                                          @foreach($departemen as $data)
+                                                          <option value="{{$data->id}}" @if($g->departmentId==$data->id) selected @endif>{{$data->nama_departemen}}</option>
+                                                          @endforeach
+                                                        </select>
+                                                      </td>
                                                       </tr>
                                                       <tr>
-                                                      <td class="icon-row"> <span class="material-icons">directions_car_filled</span><strong>Vehicle No</strong></td> <td>{{$g->vehicleNo}}</td>
+                                                      <td class="icon-row"> <span class="material-icons">directions_car_filled</span><strong>Vehicle No</strong></td> <td><input type="text" name="vehicleNo" class="form-control" value="{{$g->vehicleNo}}"></td>
                                                       </tr>
                                                     </table>
                                                 </div>
@@ -106,9 +115,6 @@
                                                 </div>
                                                 <h4  class="lead">Change Password</h4>
                                                 <div class="post-body">
-                                                  <form action="{!!url('update-karyawan')!!}" method="POST">
-                                                      @csrf
-                                                      <input type="hidden" name="id" value="{{$g->id}}">
                                                       <div class="row">
                                                           <div class="col">
                                                               <input type="password" name="password" class="form-control" placeholder="Enter new password" id="pass">
@@ -126,17 +132,6 @@
                                                                   <option value="{{$data->id}}" @if($g->id_approval==$data->id) selected @endif>{{$data->name}}</option>
                                                                   @endforeach
                                                               </select>
-                                                          </div>
-                                                          <div class="col">
-                                                              <select class="form-control" name="departmentId" id="departmentId" required>
-                                                                  <option value="">-Select Departemen-</option>
-                                                                  @foreach($departemen as $data)
-                                                                  <option value="{{$data->id}}" @if($g->departmentId==$data->id) selected @endif>{{$data->nama_departemen}}</option>
-                                                                  @endforeach
-                                                              </select>
-                                                          </div>
-                                                          <div class="col">
-                                                              <input type="text" name="vehicleNo" class="form-control" placeholder="Nomor Plat Kendaraan" id="vehicleNo" value="{{$g->vehicleNo}}">
                                                           </div>
                                                       </div>
                                                       <br>

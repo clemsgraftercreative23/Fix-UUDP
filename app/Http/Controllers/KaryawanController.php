@@ -185,29 +185,27 @@ class KaryawanController extends Controller
     public function updateKaryawan(Request $request)
     {   
         $nama_approval = DB::select( DB::raw("SELECT name FROM users WHERE id='$request->id_approval'"))['0']->name;
-		
+
+        $data = [
+            'id' => $request->id,
+            'id_approval' => $request->id_approval,
+            'nama_approval' => $nama_approval,
+            'username' => $request->username,
+            'name' => $request->name,
+            'nik' => $request->nik,
+            'email' => $request->email,
+            'phoneNumber' => $request->phoneNumber,
+            'joinDate' => $request->joinDate,
+            'bankName' => $request->bankName,
+            'bankAccount' => $request->bankAccount,
+            'npwpNo' => $request->npwpNo,
+            'employeeWorkStatus' => $request->employeeWorkStatus,
+            'departmentId' => $request->departmentId,
+            'vehicleNo' => $request->vehicleNo,
+        ];
+
 		if($request->password != "") {
-		    
-		    $data = [
-    			'id' => $request->id,
-    			'id_approval' => $request->id_approval,
-    			'password' => Hash::make($request->password),
-    			'nama_approval' => $nama_approval,
-    			'departmentId' => $request->departmentId,
-    			'vehicleNo' => $request->vehicleNo,
-    			
-    		];
-    		
-		} else {
-		    
-		    $data = [
-    			'id' => $request->id,
-    			'id_approval' => $request->id_approval,
-    			'nama_approval' => $nama_approval,
-    			'departmentId' => $request->departmentId,
-    			'vehicleNo' => $request->vehicleNo,
-    		];
-    		
+		    $data['password'] = Hash::make($request->password);
 		}
 
         User::whereId($request->id)->update($data);
