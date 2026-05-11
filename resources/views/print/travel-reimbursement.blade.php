@@ -85,7 +85,7 @@
         <br>
         @foreach ($datas as $data)
         <p>
-            @if(count($data->travels)!=0)
+            @if(($data->travels ?? collect())->count() != 0)
             <table style="width: 100%">
                 <tr>
                     <td>INQUIRY NO : <b>{{$data->no_reimbursement}}</b></td>
@@ -99,24 +99,24 @@
         </p>
         <table class="table-style table-bordered mb-2">
             <tr>
-                @foreach ($data->rates as $item)
-                <th>{{$item->currency}} Rate</th>
-                <td class="bg-secondary">{{number_format($item->rate,0,',','.')}}</td>                        
+                @foreach (($data->rates ?? collect()) as $rateRow)
+                <th>{{ $rateRow->currency ?? '-' }} Rate</th>
+                <td class="bg-secondary">{{ isset($rateRow->rate) ? number_format((float) $rateRow->rate, 0, ',', '.') : '0' }}</td>
                 @endforeach
             </tr>
       </table>
       <table class="table-style table-bordered mb-2">
-              @foreach ($data->travels as $item)              
+              @foreach (($data->travels ?? collect()) as $item)              
                 <tr>
                     <th>Transaction Date</th>
                     <td class="bg-secondary">{{$item->date}}</td>
                     <th>Trip Type</th>
                     <td class="bg-secondary">{{ optional($item->tripType)->name ?? 'None' }}</td>
                     <th>Hotel At</th>
-                    <td class="bg-secondary">{{$item->hotelCondition->name}}</td>
+                    <td class="bg-secondary">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
                     <th>Allowance</th>
                     <td class="bg-secondary">
-                        <!-- {{$item->tripType->currency}} {{number_format($item->allowance,0,',','.')}} -->
+                        {{-- Was HTML comment but Blade still evaluated {{ $item->tripType->currency }} and crashed when tripType was null --}}
                         @php
                             $currency = App\TravelTripType::where('id', $item->trip_type_id)->first();
                             if ($currency) {
@@ -180,9 +180,9 @@
                 <th colspan="2">Amount (IDR)</th>
                 <th>Payment</th>
             </tr>
-            @foreach ($item->details as $dt)                
+            @foreach (($item->details ?? collect()) as $dt)                
             <tr>
-                <td colspan="2">{{$dt->costType->name}}</td>
+                <td colspan="2">{{ optional($dt->costType)->name ?? '-' }}</td>
                 <td colspan="2">{{$dt->destination}}</td>
                 <td colspan="2">{{ $data->remark ?? '' }}</td>
                 <td>{{$dt->currency}}</td>

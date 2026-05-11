@@ -347,7 +347,7 @@ class EntertaimentReimbursementController extends Controller
         if(request()->ajax())
         {
 
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Finance Manager' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Finance Manager' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',3)->where('reimbursement.status', '!=',10);
@@ -602,7 +602,7 @@ class EntertaimentReimbursementController extends Controller
         if ($isSubmitter && in_array($status, [9, 10], true)) {
             return true;
         }
-        if (in_array($jabatan, ['Finance'], true) && $status === 1) {
+        if (in_array($jabatan, ['Finance', 'HR GA'], true) && $status === 1) {
             return true;
         }
         if ($jabatan === 'Finance Supervisor' && $status === 2) {
@@ -1077,7 +1077,7 @@ class EntertaimentReimbursementController extends Controller
                 'status' => 1,
                 'mengetahui_op' => $user->name
             ]);
-        } elseif($data->status == 1 && $user->jabatan == "Finance") {
+        } elseif($data->status == 1 && ($user->jabatan == "Finance" || $user->jabatan == "HR GA" || $user->jabatan == "superadmin")) {
             $data->update([
                 'status' => 2,
                 'mengetahui_finance' => $user->name
@@ -1246,7 +1246,7 @@ class EntertaimentReimbursementController extends Controller
         $status = $bulkStatus;
 
         $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
-            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
+            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
             || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
             || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
@@ -1256,7 +1256,7 @@ class EntertaimentReimbursementController extends Controller
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
             $status = 1;
             Reimbursement::whereIn('id', $idsArray)->where('status', 0)->update(['status' => $status, 'mengetahui_op' => $user->name]);
-        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
         } else if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
@@ -1335,7 +1335,7 @@ class EntertaimentReimbursementController extends Controller
                     }
                 } 
 
-                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([
