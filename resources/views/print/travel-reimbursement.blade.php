@@ -130,24 +130,8 @@
                     </td>
                     <th>Allowance (IDR)</th>
                     <td class="bg-secondary">
-                        <!-- @php
-                            $currency = App\TravelTripRate::where('reimbursement_id',$data->id)->where('currency',$item->tripType->currency)->first();
-                          
-                            if ($currency) {
-                                $currency = $currency->rate;
-                            }
-                            if (!$currency && $item->tripType->currency == "IDR") {
-                                $currency = 1;
-                            }
-
-                            if (!$currency && $item->tripType->currency == "USD") {
-                                $currency = 16400;
-                            }
-
-
-                            echo number_format($item->allowance * $currency,0,',','.');
-                        @endphp -->
-                        {{number_format($item->allowance,0,',','.')}}
+                        {{-- Blade still runs @php even inside HTML <!-- -->, which crashed on $item->tripType->currency when tripType was null. Display stored allowance only. --}}
+                        {{ number_format((float) ($item->allowance ?? 0), 0, ',', '.') }}
                     </td>
                 </tr>
                 <tr>
