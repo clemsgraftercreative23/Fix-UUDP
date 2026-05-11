@@ -341,6 +341,10 @@
           show = (status == '9' || status == '0');
         @elseif(Auth::user()->jabatan=='Finance')
           show = (status == '1');
+        @elseif(Auth::user()->jabatan=='HR')
+          show = (status == '1');
+        @elseif(Auth::user()->jabatan=='HR GA')
+          show = (status == '1');
         @elseif(Auth::user()->jabatan=='Finance Supervisor')
           show = (status == '1');
         @elseif(Auth::user()->jabatan=='Owner')

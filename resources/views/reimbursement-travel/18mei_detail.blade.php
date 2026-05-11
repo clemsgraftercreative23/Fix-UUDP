@@ -436,7 +436,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if ($data->status == 1 && auth()->user()->jabatan == 'Finance' && $data->id_user != auth()->user()->id)                                
+                            @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>

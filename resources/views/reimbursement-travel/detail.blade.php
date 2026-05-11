@@ -88,7 +88,7 @@ if (!function_exists('travel_attachment_rows')) {
                         <h5 class="card-title">DETAIL REIMBURSEMENT TRAVEL {{$data->travel_type}}</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR', 'HR GA', 'Finance Supervisor', 'Owner', 'superadmin'], true);
                         @endphp
                         @if($isApproverRole && in_array((int) $data->status, [0, 1, 2], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -484,7 +484,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if ($data->status == 1 && (auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>

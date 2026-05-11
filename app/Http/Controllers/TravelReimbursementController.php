@@ -721,7 +721,7 @@ class TravelReimbursementController extends Controller
         {
             $id_user = auth()->user()->id;           
             
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',2)->where('reimbursement.status', '!=',10);
@@ -2543,7 +2543,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Direktur Operasional') {
             $status = 1;
-        } else if (auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor') {
+        } else if (in_array(auth()->user()->jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA'], true)) {
             $status = 2;
         } else {
             $status = 3;
@@ -2864,7 +2864,7 @@ class TravelReimbursementController extends Controller
                 'mengetahui_op' => $user->name
             ]);
         }
-        if($data->status == 1 && in_array($user->jabatan, ["HR", "HR GA", "superadmin"], true)) {
+        if($data->status == 1 && in_array($user->jabatan, ["Finance", "HR", "HR GA", "superadmin"], true)) {
             $data->update([
                 'status' => 2,
                 'mengetahui_finance' => $user->name
@@ -3234,7 +3234,7 @@ class TravelReimbursementController extends Controller
         $bulkStatus = (int) $rows->first()->status;
 
         $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
-            || ($bulkStatus === 1 && ($jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin'))
+            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin'))
             || ($bulkStatus === 2 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
@@ -3243,7 +3243,7 @@ class TravelReimbursementController extends Controller
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
             $status = 1;
             Reimbursement::whereIn('id', $idsArray)->where('status', 0)->update(['status' => $status, 'mengetahui_op' => $user->name]);
-        } else if ($bulkStatus === 1 && ($jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin')) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
         } else if ($bulkStatus === 2 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) {
@@ -3313,7 +3313,7 @@ class TravelReimbursementController extends Controller
                     }
                 } 
 
-                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([

@@ -253,7 +253,7 @@ function rupiah($angka){
                 $canManageTabs = true;
             } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'superadmin'], true)) {
+            } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin'], true)) {
                 $canManageTabs = true;
             } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
                 $canManageTabs = true;
