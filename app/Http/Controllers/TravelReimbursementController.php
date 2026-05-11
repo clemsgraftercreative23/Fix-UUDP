@@ -32,6 +32,61 @@ class TravelReimbursementController extends Controller
         return Schema::hasTable('reimbursement_attachments');
     }
 
+    /**
+     * JS often builds URLs as "...start=null&end=null" (string) when Vue date range is unset.
+     */
+    private function sanitizeTravelPrintQueryDate($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $s = trim((string) $value);
+        if ($s === '' || strtolower($s) === 'null') {
+            return null;
+        }
+        return $s;
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection $rows
+     */
+    private function travelPrintPeriodLabels($request, $rows): array
+    {
+        $start = $this->sanitizeTravelPrintQueryDate($request->input('start'));
+        $end = $this->sanitizeTravelPrintQueryDate($request->input('end'));
+
+        if ($start !== null || $end !== null) {
+            return [
+                'start_date' => $start ?? '—',
+                'end_date' => $end ?? '—',
+            ];
+        }
+
+        if ($rows->isEmpty()) {
+            return ['start_date' => '—', 'end_date' => '—'];
+        }
+
+        $dates = $rows->pluck('created_at')->filter();
+        if ($dates->isEmpty()) {
+            return ['start_date' => '—', 'end_date' => '—'];
+        }
+
+        $min = $dates->min();
+        $max = $dates->max();
+        $fmt = function ($dt) {
+            try {
+                return \Carbon\Carbon::parse($dt)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                return '—';
+            }
+        };
+
+        return [
+            'start_date' => $fmt($min),
+            'end_date' => $fmt($max),
+        ];
+    }
+
     public function __construct() {
         $this->middleware('auth');
     }
@@ -3095,16 +3150,28 @@ class TravelReimbursementController extends Controller
             }
         }
       
-        if(count($data->get()) == 0) {
+        $printedRows = $data->get();
+        if ($printedRows->count() === 0) {
             echo "Data not found. Please make sure the <strong>search button has been clicked first</strong>.";
         } else {
-          
-          return view('print.travel-reimbursement',[
-              'start_date' => $request->start,
-              'end_date' => $request->end,
-              'datas' => $data->get(),
+            $period = $this->travelPrintPeriodLabels($request, $printedRows);
+
+            $driverRaw = $request->input('driver');
+            $driverId = null;
+            if ($driverRaw !== null && trim((string) $driverRaw) !== '' && strtolower(trim((string) $driverRaw)) !== 'null') {
+                $driverId = (int) $driverRaw;
+            }
+            $printUser = $driverId > 0 ? User::find($driverId) : null;
+            if (!$printUser && $printedRows->isNotEmpty()) {
+                $printUser = User::find($printedRows->first()->id_user);
+            }
+
+            return view('print.travel-reimbursement', [
+              'start_date' => $period['start_date'],
+              'end_date' => $period['end_date'],
+              'datas' => $printedRows,
               'head_dept' => $head_dept,
-              'user' => User::find($request->driver),
+              'user' => $printUser,
               'bdc' => $bdc->get()['0']->total,
               'allowance_bdc' => $allowance_bdc->get()['0']->total,
               'simcard_bdc' => $simcard_bdc->get()['0']->total,

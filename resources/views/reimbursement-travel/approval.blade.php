@@ -511,14 +511,23 @@ $(document).ready(function(){
               selectedValues.push($(this).val());
           });
 
+          var printQs = [];
+          if (this.start) {
+            printQs.push('start=' + encodeURIComponent(this.start));
+          }
+          if (this.end) {
+            printQs.push('end=' + encodeURIComponent(this.end));
+          }
+          var printRangeSuffix = printQs.length ? ('&' + printQs.join('&')) : '';
+
           if(selectedValues.length > 0){
               var id = selectedValues.join(",");
-              window.open("{{url('/')}}/reimbursement-travel-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status, "_blank")
+              window.open("{{url('/')}}/reimbursement-travel-print?selected="+encodeURIComponent(id)+"&driver="+encodeURIComponent(this.user_id)+"&status="+encodeURIComponent(this.status)+printRangeSuffix, "_blank")
 
           } else {
 
               var user_id = $('.employee').val();
-              window.open("{{url('/')}}/reimbursement-travel-print?start="+this.start+"&end="+this.end+"&driver="+user_id+"&status="+this.status, "_blank")
+              window.open("{{url('/')}}/reimbursement-travel-print?driver="+encodeURIComponent(user_id)+"&status="+encodeURIComponent(this.status)+printRangeSuffix, "_blank")
           }
 
         },
