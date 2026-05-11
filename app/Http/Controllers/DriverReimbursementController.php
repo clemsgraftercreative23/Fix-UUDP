@@ -1389,7 +1389,7 @@ class DriverReimbursementController extends Controller
             
             $selected = $request->selected;
             $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id IN ($selected)"));
-            $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, mengetahui_op, mengetahui_finance, mengetahui_owner, reimbursement.no_reimbursement, reimbursement_driver.vehicleNo FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
+            $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, mengetahui_op, mengetahui_finance, mengetahui_owner, reimbursement.no_reimbursement FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
             $requestedDriverId = ($request->driver == 'null' || $request->driver == "" || $request->driver == null)
                 ? null
                 : (int) $request->driver;
