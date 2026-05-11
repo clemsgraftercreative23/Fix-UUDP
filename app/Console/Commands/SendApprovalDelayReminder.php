@@ -44,10 +44,20 @@ class SendApprovalDelayReminder extends Command
             ? rtrim(trim($baseUrlOption), '/')
             : null;
 
+        // Jangan hanya filter `updated_at <= threshold`: jika baris disentuh (updated_at maju)
+        // tanpa berubah status, klaim tetap harus masuk agar pengingat per jam tetap jalan.
         $reimbursements = Reimbursement::query()
             ->whereIn('reimbursement_type', [1, 2, 3])
             ->whereIn('status', [0, 1, 2])
-            ->where('updated_at', '<=', $threshold)
+            ->where(function ($q) use ($threshold) {
+                $q->where('updated_at', '<=', $threshold)
+                    ->orWhereExists(function ($sub) {
+                        $sub->selectRaw('1')
+                            ->from('reimbursement_reminder_logs as rrl')
+                            ->whereColumn('rrl.reimbursement_id', 'reimbursement.id')
+                            ->whereColumn('rrl.reimbursement_status', 'reimbursement.status');
+                    });
+            })
             ->orderBy('id')
             ->get([
                 'id',
@@ -112,32 +122,28 @@ class SendApprovalDelayReminder extends Command
     }
 
     /**
-     * Skip if we are still inside the initial delay window for this stage, or if a reminder
-     * was already sent within the repeat interval for the same stage + updated_at snapshot.
+     * Skip if first reminder is too soon, or if the last reminder for this status was too recent.
+     * Uses the latest log per (reimbursement_id, status) so hourly repeats keep working even when
+     * `updated_at` is bumped without a real status change (previously that dropped rows from the query
+     * and broke the 1h cadence).
      */
     private function shouldSkipReminder($reimbursement): bool
     {
         $statusUpdatedAt = Carbon::parse($reimbursement->updated_at);
         $now = Carbon::now();
 
-        if ($statusUpdatedAt->gt($now->copy()->subHours(self::INITIAL_DELAY_HOURS))) {
-            return true;
-        }
-
-        $sentFor = $statusUpdatedAt->toDateTimeString();
-
-        $lastSentAt = DB::table('reimbursement_reminder_logs')
+        $lastLog = DB::table('reimbursement_reminder_logs')
             ->where('reimbursement_id', $reimbursement->id)
             ->where('reimbursement_status', $reimbursement->status)
-            ->where('sent_for_updated_at', $sentFor)
             ->orderByDesc('sent_at')
-            ->value('sent_at');
+            ->orderByDesc('id')
+            ->first(['sent_at']);
 
-        if ($lastSentAt === null) {
-            return false;
+        if ($lastLog === null) {
+            return $statusUpdatedAt->gt($now->copy()->subHours(self::INITIAL_DELAY_HOURS));
         }
 
-        return Carbon::parse($lastSentAt)->gt($now->copy()->subHours(self::REPEAT_INTERVAL_HOURS));
+        return Carbon::parse($lastLog->sent_at)->gt($now->copy()->subHours(self::REPEAT_INTERVAL_HOURS));
     }
 
     private function resolveRecipients($reimbursement)
