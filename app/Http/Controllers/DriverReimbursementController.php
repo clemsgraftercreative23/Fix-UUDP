@@ -1383,7 +1383,11 @@ class DriverReimbursementController extends Controller
             $selected = $request->selected;
             $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id IN ($selected)"));
             $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
-            $user = User::find($request->driver == 'null' || $request->driver == "" || $request->driver == null ? auth()->user()->id : $request->driver);
+            $requestedDriverId = ($request->driver == 'null' || $request->driver == "" || $request->driver == null)
+                ? null
+                : (int) $request->driver;
+            $fallbackDriverId = !empty($data) ? (int) ($data[0]->id_user ?? 0) : 0;
+            $user = User::find($requestedDriverId ?: $fallbackDriverId);
             $total_toll = DB::select( DB::raw("SELECT sum(toll) AS total FROM reimbursement_driver WHERE reimbursement_id IN ($selected)"))['0']->total;
             $total_parking = DB::select( DB::raw("SELECT sum(parking) AS total FROM reimbursement_driver WHERE reimbursement_id IN ($selected)"))['0']->total;
             $total_gasoline = DB::select( DB::raw("SELECT sum(gasoline) AS total FROM reimbursement_driver WHERE reimbursement_id IN ($selected)"))['0']->total;
@@ -1407,7 +1411,7 @@ class DriverReimbursementController extends Controller
 
         } else {
 
-            $data = ReimbursementDriver::selectRaw("SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as total, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, date, reimbursement.remark, name, vehicleNo, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement, reimbursement.created_at")->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')->join('users', 'users.id', '=', 'reimbursement.id_user');
+            $data = ReimbursementDriver::selectRaw("SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as total, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, date, reimbursement.remark, name, vehicleNo, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement, reimbursement.created_at, reimbursement.id_user")->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')->join('users', 'users.id', '=', 'reimbursement.id_user');
             
             $targetUserId = ($request->driver == 'null' || $request->driver == "" || $request->driver == null)
                 ? auth()->user()->id
@@ -1442,16 +1446,20 @@ class DriverReimbursementController extends Controller
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
 
-            $user = User::find($request->driver == 'null' || $request->driver == "" || $request->driver == null ? auth()->user()->id : $request->driver);
-            
-            
-            if ($data->count()==0) {
+            $rows = $data->groupBy('reimbursement.id', 'reimbursement.id_user')->get();
+            $requestedDriverId = ($request->driver == 'null' || $request->driver == "" || $request->driver == null)
+                ? null
+                : (int) $request->driver;
+            $fallbackDriverId = $rows->isNotEmpty() ? (int) ($rows->first()->id_user ?? 0) : 0;
+            $user = User::find($requestedDriverId ?: $fallbackDriverId);
+
+            if ($rows->count() == 0) {
                 echo "Data not found. Please make sure the <strong>search button has been clicked first</strong>.";
             } else {
                 return view('print.driver-reimbursement', [
                     'start_date' => $request->start,
                     'end_date' => $request->end,
-                    'data' => $data->groupBy('reimbursement.id')->get(),
+                    'data' => $rows,
                     // 'obj' => Reimbursement::,
                     'user' => $user,
                     'head_dept' => $head_dept,
