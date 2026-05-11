@@ -257,3 +257,108 @@ padding: .5rem !important;
     width: 100% !important;
   }
 }
+
+/* Sidebar palette option 4 (premium blue-green) */
+.page-sidebar {
+  background: linear-gradient(180deg, #14213d 0%, #0e8a4b 100%) !important;
+  color: #f5f8ff;
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  box-shadow: 4px 0 14px rgba(20, 33, 61, 0.2);
+}
+
+.page-sidebar:before {
+  background: transparent !important;
+}
+
+.page-sidebar:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -16px;
+  width: 16px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(14, 138, 75, 0.22) 0%, rgba(14, 138, 75, 0) 100%);
+}
+
+.page-sidebar .logo-box {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom-color: rgba(241, 247, 243, 0.2) !important;
+  border-radius: 10px;
+  margin: 12px;
+  padding: 14px 10px 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.page-sidebar .logo-box span,
+.page-sidebar .logo-box strong {
+  color: #f5f8ff !important;
+}
+
+.page-sidebar .logo-box .sidebar-brand-img {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7ff 100%);
+  border: 1px solid rgba(20, 33, 61, 0.12);
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 6px 14px rgba(20, 33, 61, 0.22);
+}
+
+.page-sidebar .logo-box hr {
+  border-top: 1px solid rgba(245, 248, 255, 0.22) !important;
+}
+
+.page-sidebar .accordion-menu li.sidebar-title {
+  color: #c4cfdd !important;
+}
+
+.page-sidebar .accordion-menu > li > a,
+.page-sidebar .accordion-menu li ul li a {
+  color: #f5f8ff !important;
+}
+
+.page-sidebar .accordion-menu > li > a i,
+.page-sidebar .accordion-menu li ul li a i {
+  color: #c4cfdd !important;
+}
+
+.page-sidebar .accordion-menu > li > a:hover,
+.page-sidebar .accordion-menu > li.open > a,
+.page-sidebar .accordion-menu li ul li a:hover {
+  background: rgba(28, 156, 89, 0.35) !important;
+  color: #f5f8ff !important;
+}
+
+.page-sidebar .accordion-menu > li.active-page > a,
+.page-sidebar .accordion-menu li.active-page > a:only-child,
+.page-sidebar .accordion-menu li ul li a.active {
+  background: #2dbe73 !important;
+  color: #f5f8ff !important;
+  border-left: 2px solid #7ae8ad;
+  border-radius: 8px;
+}
+
+.page-sidebar .accordion-menu > li.active-page > a i,
+.page-sidebar .accordion-menu li.active-page > a:only-child i,
+.page-sidebar .accordion-menu li ul li a.active i {
+  color: #f5f8ff !important;
+}
+
+.page-sidebar .btn.btn-primary {
+  background: linear-gradient(90deg, #1c9c59 0%, #2dbe73 100%) !important;
+  border-color: transparent !important;
+  color: #f5f8ff !important;
+}
+
+.page-sidebar .btn.btn-primary:hover,
+.page-sidebar .btn.btn-primary:focus {
+  background: #1c9c59 !important;
+  color: #f5f8ff !important;
+}
+
+.page-container {
+  background: inherit;
+}
