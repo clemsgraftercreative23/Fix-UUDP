@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\DB;
 
 class SendApprovalDelayReminder extends Command
 {
+    /** First reminder once a claim stays this long at the same approval stage (`updated_at`). */
+    private const INITIAL_DELAY_HOURS = 2;
+
+    /** Subsequent reminders while the stage is unchanged (see `shouldSkipReminder`). */
+    private const REPEAT_INTERVAL_HOURS = 1;
+
     /**
      * The name and signature of the console command.
      *
@@ -22,7 +28,7 @@ class SendApprovalDelayReminder extends Command
      *
      * @var string
      */
-    protected $description = 'Send WA reminders: first after 12h at current approval stage, then every 1h until status advances';
+    protected $description = 'Send WA reminders: first after 2h at current approval stage, then every 1h until status advances';
 
     /**
      * Execute the console command.
@@ -31,7 +37,7 @@ class SendApprovalDelayReminder extends Command
      */
     public function handle()
     {
-        $threshold = Carbon::now()->subHours(12);
+        $threshold = Carbon::now()->subHours(self::INITIAL_DELAY_HOURS);
         $dryRun = (bool) $this->option('dry-run');
         $baseUrlOption = $this->option('base-url');
         $baseUrl = is_string($baseUrlOption) && trim($baseUrlOption) !== ''
@@ -106,15 +112,15 @@ class SendApprovalDelayReminder extends Command
     }
 
     /**
-     * Skip if we are still inside the initial 12h window for this stage, or if a reminder
-     * was already sent within the last 1 hour for the same stage + updated_at snapshot.
+     * Skip if we are still inside the initial delay window for this stage, or if a reminder
+     * was already sent within the repeat interval for the same stage + updated_at snapshot.
      */
     private function shouldSkipReminder($reimbursement): bool
     {
         $statusUpdatedAt = Carbon::parse($reimbursement->updated_at);
         $now = Carbon::now();
 
-        if ($statusUpdatedAt->gt($now->copy()->subHours(12))) {
+        if ($statusUpdatedAt->gt($now->copy()->subHours(self::INITIAL_DELAY_HOURS))) {
             return true;
         }
 
@@ -131,7 +137,7 @@ class SendApprovalDelayReminder extends Command
             return false;
         }
 
-        return Carbon::parse($lastSentAt)->gt($now->copy()->subHour());
+        return Carbon::parse($lastSentAt)->gt($now->copy()->subHours(self::REPEAT_INTERVAL_HOURS));
     }
 
     private function resolveRecipients($reimbursement)
@@ -203,7 +209,7 @@ class SendApprovalDelayReminder extends Command
     private function buildMessage($reimbursement, User $recipient, string $stageLabel, string $detailUrl): string
     {
         return 'Hai *' . $recipient->name . "*,\n\n" .
-            'reimbursement Nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . "* sudah menunggu lebih dari *12 jam* pada tahap approval saat ini (pengingat berkala setiap jam).\n\n" .
+            'reimbursement Nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* sudah menunggu lebih dari *' . self::INITIAL_DELAY_HOURS . "* jam* pada tahap approval saat ini (pengingat berkala setiap " . self::REPEAT_INTERVAL_HOURS . " jam).\n\n" .
             'Saat ini sedang menunggu proses verifikasi oleh *' . $stageLabel . "*.\n\n" .
             "Terima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl;
     }
