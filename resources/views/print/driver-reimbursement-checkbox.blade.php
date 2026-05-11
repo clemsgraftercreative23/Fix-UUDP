@@ -94,7 +94,7 @@
                     
                 <tr>
                     <td>Car No</td>
-                    <td>: {{$user->vehicleNo}}</td>
+                    <td>: {{$user->vehicleNo ?? ($detail[0]->vehicleNo ?? '-')}}</td>
                 </tr>
                 @endif
             </table>

@@ -1378,11 +1378,18 @@ class DriverReimbursementController extends Controller
 
     function print(Request $request)
     {
+        $startDate = ($request->start === null || $request->start === '' || $request->start === 'null')
+            ? '-'
+            : $request->start;
+        $endDate = ($request->end === null || $request->end === '' || $request->end === 'null')
+            ? '-'
+            : $request->end;
+
         if (isset($request->selected)) {
             
             $selected = $request->selected;
             $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id IN ($selected)"));
-            $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, mengetahui_op, mengetahui_finance, mengetahui_owner , reimbursement.no_reimbursement FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
+            $detail  = DB::select( DB::raw("SELECT no_reimbursement, date, reimbursement.created_at, reimbursement.remark, SUM(toll) as toll,sum(parking) as parking,sum(gasoline) as gasoline,sum(others) as others,sum(subtotal) as subtotal, GROUP_CONCAT(DISTINCT reimbursement_driver.payment_type ORDER BY reimbursement_driver.payment_type SEPARATOR ', ') as payment_type, mengetahui_op, mengetahui_finance, mengetahui_owner, reimbursement.no_reimbursement, reimbursement_driver.vehicleNo FROM reimbursement_driver LEFT JOIN reimbursement ON reimbursement.id = reimbursement_driver.reimbursement_id WHERE reimbursement_id IN ($selected) GROUP BY reimbursement.id"));
             $requestedDriverId = ($request->driver == 'null' || $request->driver == "" || $request->driver == null)
                 ? null
                 : (int) $request->driver;
@@ -1398,8 +1405,8 @@ class DriverReimbursementController extends Controller
             return view('print.driver-reimbursement-checkbox', [
                 'data' => $data,
                 'detail' => $detail,
-                'start_date' => $request->start,
-                'end_date' => $request->end,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
                 'user' => $user,
                 'total_toll' => $total_toll,
                 'total_parking' => $total_parking,
@@ -1457,8 +1464,8 @@ class DriverReimbursementController extends Controller
                 echo "Data not found. Please make sure the <strong>search button has been clicked first</strong>.";
             } else {
                 return view('print.driver-reimbursement', [
-                    'start_date' => $request->start,
-                    'end_date' => $request->end,
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
                     'data' => $rows,
                     // 'obj' => Reimbursement::,
                     'user' => $user,
