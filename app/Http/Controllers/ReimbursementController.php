@@ -397,7 +397,7 @@ class ReimbursementController extends Controller
         $nama_approval = ucfirst($approver->name);
         if ($approver->jabatan == 'Direktur Operasional' || ($approver->jabatan == 'superadmin' && (int) $data->status === 0)) {
             $level = 'Head Department';
-        } else if (($approver->jabatan == 'Finance' || $approver->jabatan == 'superadmin') && (int) $data->status === 1) {
+        } else if (($approver->jabatan == 'Finance' || $approver->jabatan == 'HR GA' || $approver->jabatan == 'superadmin') && (int) $data->status === 1) {
             $level = 'HR GA';
         } else if ($approver->jabatan === 'Finance Supervisor' && (int) $data->status === 2) {
             $level = 'Finance Supervisor';
@@ -461,7 +461,7 @@ class ReimbursementController extends Controller
             }
 
             
-        } elseif ($data->status == 1 && ($approver->jabatan == 'Finance' || $approver->jabatan == 'superadmin')) {
+        } elseif ($data->status == 1 && ($approver->jabatan == 'Finance' || $approver->jabatan == 'HR GA' || $approver->jabatan == 'superadmin')) {
             $processed = true;
             $data->update([
                 'status' => 2,

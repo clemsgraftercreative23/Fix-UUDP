@@ -329,7 +329,7 @@
         var show = false;
         @if(Auth::user()->jabatan=='Direktur Operasional')
           show = (status == '9' || status == '0');
-        @elseif(Auth::user()->jabatan=='Finance')
+        @elseif(Auth::user()->jabatan=='Finance' || Auth::user()->jabatan=='HR GA')
           show = (status == '1');
         @elseif(Auth::user()->jabatan=='Finance Supervisor')
           show = (status == '2');

@@ -133,7 +133,7 @@ if (!function_exists('driver_attachment_rows')) {
                         <h5 class="card-title">DETAIL REIMBURSEMENT DRIVER</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
                         @endphp
                         @if($isApproverRole && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -356,7 +356,7 @@ if (!function_exists('driver_attachment_rows')) {
                             <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                         @endif
                         
-                        @if (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'superadmin')                                
+                        @if (in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin'], true))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 @if($data->status == 1)
@@ -661,7 +661,7 @@ if (!function_exists('driver_attachment_rows')) {
                           <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
                           @php
                             $driverEditCanDraft = (int) auth()->id() === (int) $data->id_user
-                              || in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
+                              || in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
                           @endphp
                           @if($driverEditCanDraft)
                           <button class="btn btn-warning" type="submit" name="save_draft">Draft</button>
