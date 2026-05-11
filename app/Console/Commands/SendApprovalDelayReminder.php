@@ -22,7 +22,7 @@ class SendApprovalDelayReminder extends Command
      *
      * @var string
      */
-    protected $description = 'Send WA reminders for reimbursement approvals delayed more than 5 minutes';
+    protected $description = 'Send WA reminders: first after 12h at current approval stage, then every 1h until status advances';
 
     /**
      * Execute the console command.
@@ -57,7 +57,7 @@ class SendApprovalDelayReminder extends Command
         $sentCount = 0;
 
         foreach ($reimbursements as $reimbursement) {
-            if ($this->reminderAlreadySent($reimbursement)) {
+            if ($this->shouldSkipReminder($reimbursement)) {
                 continue;
             }
 
@@ -105,13 +105,33 @@ class SendApprovalDelayReminder extends Command
         return 0;
     }
 
-    private function reminderAlreadySent($reimbursement): bool
+    /**
+     * Skip if we are still inside the initial 12h window for this stage, or if a reminder
+     * was already sent within the last 1 hour for the same stage + updated_at snapshot.
+     */
+    private function shouldSkipReminder($reimbursement): bool
     {
-        return DB::table('reimbursement_reminder_logs')
+        $statusUpdatedAt = Carbon::parse($reimbursement->updated_at);
+        $now = Carbon::now();
+
+        if ($statusUpdatedAt->gt($now->copy()->subHours(12))) {
+            return true;
+        }
+
+        $sentFor = $statusUpdatedAt->toDateTimeString();
+
+        $lastSentAt = DB::table('reimbursement_reminder_logs')
             ->where('reimbursement_id', $reimbursement->id)
             ->where('reimbursement_status', $reimbursement->status)
-            ->where('sent_for_updated_at', Carbon::parse($reimbursement->updated_at)->toDateTimeString())
-            ->exists();
+            ->where('sent_for_updated_at', $sentFor)
+            ->orderByDesc('sent_at')
+            ->value('sent_at');
+
+        if ($lastSentAt === null) {
+            return false;
+        }
+
+        return Carbon::parse($lastSentAt)->gt($now->copy()->subHour());
     }
 
     private function resolveRecipients($reimbursement)
@@ -183,7 +203,7 @@ class SendApprovalDelayReminder extends Command
     private function buildMessage($reimbursement, User $recipient, string $stageLabel, string $detailUrl): string
     {
         return 'Hai *' . $recipient->name . "*,\n\n" .
-            'reimbursement Nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . "* sudah menunggu 1x24 jam approval anda.\n\n" .
+            'reimbursement Nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . "* sudah menunggu lebih dari *12 jam* pada tahap approval saat ini (pengingat berkala setiap jam).\n\n" .
             'Saat ini sedang menunggu proses verifikasi oleh *' . $stageLabel . "*.\n\n" .
             "Terima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl;
     }
