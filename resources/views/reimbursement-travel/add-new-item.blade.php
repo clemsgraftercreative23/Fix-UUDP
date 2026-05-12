@@ -257,7 +257,9 @@ function rupiah($angka){
                 $canManageTabs = true;
             } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'superadmin'], true)) {
+            } elseif ($statusInt === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
+                $canManageTabs = true;
+            } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
                 $canManageTabs = true;
             }
         @endphp
@@ -453,11 +455,15 @@ function rupiah($angka){
                               <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
                             @endif
                             
-                            @if((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && in_array((int) $data['0']->status, [1, 2], true))
+                            @if(
+                                ((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && in_array((int) $data['0']->status, [1, 2], true))
+                                || (auth()->user()->jabatan == 'Finance Supervisor' && (int) $data['0']->status === 2)
+                            )
                                 <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
                             @endif
 
-                            @if((auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'Finance Manager') && $data['0']->status==2)
+                            @if((auth()->user()->jabatan == 'Owner' && in_array((int) $data['0']->status, [2, 11], true))
+                                || (auth()->user()->jabatan == 'Finance Manager' && (int) $data['0']->status === 11))
                                 <button class="btn btn-warning" type="submit" id="edit_owner" name="edit_owner">Update</button>&nbsp;
                             @endif
                             

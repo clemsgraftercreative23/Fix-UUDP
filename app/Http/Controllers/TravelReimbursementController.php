@@ -169,11 +169,15 @@ class TravelReimbursementController extends Controller
             return true;
         }
 
-        if ($status === 2 && in_array($jabatan, ['Owner', 'Finance Manager', 'Finance Supervisor', 'superadmin'], true)) {
+        if ($status === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
             return true;
         }
 
-        if ($status === 3 && in_array($jabatan, ['Owner', 'superadmin'], true)) {
+        if ($status === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
+            return true;
+        }
+
+        if ($status === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
             return true;
         }
 
@@ -686,6 +690,8 @@ class TravelReimbursementController extends Controller
                 $button = '<button  class="view btn btn-success btn-sm">APPROVED HEAD DEPT</button>';
                 } elseif ($data->status == 2) {
                 $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
+                } elseif ($data->status == 11) {
+                $button = '<button class="view btn btn-success btn-sm">APPROVED FINANCE SUPERVISOR</button>';
                 } elseif ($data->status == 3) {
                 $button = '<button  class=" view btn btn-success btn-sm">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</button>';
                 } 
@@ -776,7 +782,7 @@ class TravelReimbursementController extends Controller
         {
             $id_user = auth()->user()->id;           
             
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Finance Manager' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',2)->where('reimbursement.status', '!=',10);
@@ -827,6 +833,8 @@ class TravelReimbursementController extends Controller
                 $button = '<button  class="view btn btn-success btn-sm">APPROVED HEAD DEPT</button>';
                 } elseif ($data->status == 2) {
                 $button = '<button   class="view btn btn-success btn-sm">APPROVED HR GA</button>';
+                } elseif ($data->status == 11) {
+                $button = '<button class="view btn btn-success btn-sm">APPROVED FINANCE SUPERVISOR</button>';
                 } elseif ($data->status == 3) {
                 $button = '<button  class=" view btn btn-success btn-sm">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</button>';
                 } elseif ($data->status == 4){
@@ -2925,12 +2933,21 @@ class TravelReimbursementController extends Controller
                 'mengetahui_finance' => $user->name
             ]);
         }
-        if($data->status == 2 && in_array($user->jabatan, ["Finance Manager", "Owner"], true)) {
+        if ($data->status == 2 && $user->jabatan === 'Finance Supervisor') {
+            $data->update([
+                'status' => 11,
+                'menyetujui_finance_supervisor' => $user->name,
+            ]);
+        } elseif ($data->status == 2 && in_array($user->jabatan, ['Owner', 'superadmin'], true)) {
             $data->update([
                 'status' => 3,
-                'mengetahui_owner' => $user->name
+                'mengetahui_owner' => $user->name,
             ]);
-
+        } elseif ($data->status == 11 && in_array($user->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true)) {
+            $data->update([
+                'status' => 3,
+                'mengetahui_owner' => $user->name,
+            ]);
         }
         ActivityLogger::log(
             'reimbursement-travel',
@@ -3299,10 +3316,13 @@ class TravelReimbursementController extends Controller
             return response()->json(['message' => 'Pilih klaim dengan status yang sama.'], 422);
         }
         $bulkStatus = (int) $rows->first()->status;
+        $status = $bulkStatus;
 
         $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
             || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin'))
-            || ($bulkStatus === 2 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'));
+            || ($bulkStatus === 2 && ($jab === 'Finance Supervisor' || $jab === 'Owner' || $jab === 'superadmin'))
+            || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'))
+            || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
         }
@@ -3313,9 +3333,21 @@ class TravelReimbursementController extends Controller
         } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin')) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
-        } else if ($bulkStatus === 2 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
+            $status = 11;
+            Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update([
+                'status' => $status,
+                'menyetujui_finance_supervisor' => $user->name,
+            ]);
+        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
+        } else if ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) {
+            $status = 3;
+            Reimbursement::whereIn('id', $idsArray)->where('status', 11)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
+        } else if ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin')) {
+            $status = 3;
+            Reimbursement::whereIn('id', $idsArray)->where('status', 3)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }
         ActivityLogger::log(
             'reimbursement-travel',
@@ -3380,7 +3412,7 @@ class TravelReimbursementController extends Controller
                     }
                 } 
 
-                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([
@@ -3394,15 +3426,15 @@ class TravelReimbursementController extends Controller
                             number_format($row->nominal_pengajuan, 0, ',', '.') .
                             "* telah diterima oleh *" .
                             auth()->user()->name .
-                            " (HR GA)* .\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance.\n\nTerima kasih.
+                            " (HR GA)* .\n\nSaat ini sedang menunggu verifikasi Finance Supervisor.\n\nTerima kasih.
                                \n\nKlik untuk melihat detail pengajuan : " .
                             url('/reimbursement-travel/' . $row->id),
                     ])
                     ->post();
 
-                    $finance = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
+                    $financeSupervisors = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Supervisor'"));
 
-                    foreach($finance as $fn) {
+                    foreach ($financeSupervisors as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
@@ -3415,16 +3447,58 @@ class TravelReimbursementController extends Controller
                                     $row->no_reimbursement .
                                     "* sebesar *Rp " .
                                     number_format($row->nominal_pengajuan, 0, ',', '.') .
-                                    "* telah diterima oleh Finance.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+                                    "* telah diterima oleh HR GA.\n\nMenunggu verifikasi Anda sebelum Finance Manager.\n\nTerima kasih.
                                      \n\nKlik untuk melihat detail pengajuan : " .
                                     url('/reimbursement-travel/' . $row->id),
                             ])
                             ->post();
 
                     }
-                } 
+                }
 
-                if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
+                if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
+                    $curl = \Curl::to('https://api.fonnte.com/send')
+                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withData([
+                        'target' => $user->phoneNumber,
+                        'message' =>
+                            "Hai *" .
+                            $row->created_by .
+                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                            $row->no_reimbursement .
+                            "* sebesar *Rp " .
+                            number_format($row->nominal_pengajuan, 0, ',', '.') .
+                            "* telah disetujui Finance Supervisor.\n\nMenunggu verifikasi Finance Manager untuk proses settlement.\n\nTerima kasih.
+                    \n\nKlik untuk melihat detail pengajuan : " .
+                            url('/reimbursement-travel/' . $row->id),
+                    ])
+                    ->post();
+
+                    $fmUsers = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Manager'"));
+                    foreach ($fmUsers as $fn) {
+                        if (empty($fn->phoneNumber)) {
+                            continue;
+                        }
+                        $curl = \Curl::to('https://api.fonnte.com/send')
+                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withData([
+                                'target' => $fn->phoneNumber,
+                                'message' =>
+                                    "Hai *" .
+                                    $fn->name .
+                                    "*,\n\nPengajuan reimbursement nama *".$row->created_by."* dengan nomor *" .
+                                    $row->no_reimbursement .
+                                    "* sebesar *Rp " .
+                                    number_format($row->nominal_pengajuan, 0, ',', '.') .
+                                    "* telah disetujui Finance Supervisor.\n\nMenunggu verifikasi Anda.\n\nTerima kasih.
+                                     \n\nKlik untuk melihat detail pengajuan : " .
+                                    url('/reimbursement-travel/' . $row->id),
+                            ])
+                            ->post();
+                    }
+                }
+
+                if (($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'))) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
                     ->withData([
