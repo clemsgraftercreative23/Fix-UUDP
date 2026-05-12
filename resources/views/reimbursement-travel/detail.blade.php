@@ -156,19 +156,23 @@ if (!function_exists('travel_attachment_rows')) {
                             </div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-md-2">
                                 <label for="inputEmail4">Approved by Head Department</label>
                                 <input type="text" class="form-control" value="{{strtoupper($data->mengetahui_op)}}" readonly>
                             </div>
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-md-2">
                                 <label for="inputEmail4">Approved by HR GA</label>
                                 <input type="text" class="form-control" id="date" value="{{strtoupper($data->mengetahui_finance)}}" readonly>
                             </div>
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-md-2">
+                                <label for="inputEmail4">Approved by Finance Supervisor</label>
+                                <input type="text" class="form-control" value="{{strtoupper($data->menyetujui_finance_supervisor ?? '-')}}" readonly>
+                            </div>
+                            <div class="form-group col-md-2">
                                 <label for="inputEmail4">Approved by Finance</label>
                                 <input type="text" class="form-control" value="{{strtoupper($data->mengetahui_owner)}}" readonly>
                             </div>
-                            <div class="form-group col-md-3">
+                            <div class="form-group col-md-2">
                                 <label for="inputEmail4">Status</label>
                                 @php
                                     if($data->mengetahui_op=='-') {
@@ -186,6 +190,9 @@ if (!function_exists('travel_attachment_rows')) {
                                             break;
                                         case '2':
                                             $status = "APPROVED HR GA";
+                                            break;
+                                        case '11':
+                                            $status = "APPROVED FINANCE SUPERVISOR";
                                             break;
                                         case '3':
                                             $status = "PROCESS SETTLEMENT";
