@@ -518,15 +518,6 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
 
-                            @if ($data->status == 3 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))
-                                <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
-                                    @csrf
-                                  	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
-                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                </form>
-                            @endif
-                            
                             @if ($data->status == 9 && auth()->user()->id == $data->id_user)
                                 @if($data->travel_type=='Domestic')
                                     <!--
