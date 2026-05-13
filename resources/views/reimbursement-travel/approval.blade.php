@@ -495,20 +495,6 @@ $(document).ready(function(){
         },
 
         print(){
-          
-          var status = $('.status').val();
-          if (status==null) {
-            alert('Status cannot be empty');
-            return false;
-          }
-
-          var employee = $('.employee').val();
-          if (employee=="" || employee==null) {
-            alert('Employee cannot be empty');
-            return false;
-          }
-
-          // Ambil semua nilai checkbox yang diceklis
           var selectedValues = [];
           $('.check-print:checked').each(function(){
               selectedValues.push($(this).val());
@@ -523,16 +509,37 @@ $(document).ready(function(){
           }
           var printRangeSuffix = printQs.length ? ('&' + printQs.join('&')) : '';
 
-          if(selectedValues.length > 0){
-              var id = selectedValues.join(",");
-              window.open("{{url('/')}}/reimbursement-travel-print?selected="+encodeURIComponent(id)+"&driver="+encodeURIComponent(this.user_id)+"&status="+encodeURIComponent(this.status)+printRangeSuffix, "_blank")
-
-          } else {
-
-              var user_id = $('.employee').val();
-              window.open("{{url('/')}}/reimbursement-travel-print?driver="+encodeURIComponent(user_id)+"&status="+encodeURIComponent(this.status)+printRangeSuffix, "_blank")
+          // Cetak baris terpilih: cukup centang inquiry, tidak wajib isi filter Status / Employee
+          if (selectedValues.length > 0) {
+              var id = selectedValues.join(',');
+              var qs = ['selected=' + encodeURIComponent(id)];
+              if (this.user_id != null && this.user_id !== '' && String(this.user_id) !== 'undefined') {
+                qs.push('driver=' + encodeURIComponent(this.user_id));
+              }
+              if (this.status != null && this.status !== '') {
+                qs.push('status=' + encodeURIComponent(this.status));
+              }
+              window.open("{{ url('/') }}/reimbursement-travel-print?" + qs.join('&') + printRangeSuffix, "_blank");
+              return;
           }
 
+          // Cetak massal dari filter (tanpa centang): tetap butuh Status + Employee bila dropdown ada
+          var status = $('.status').val();
+          if (status == null || status === '') {
+            alert('Status cannot be empty');
+            return false;
+          }
+
+          if ($('.employee').length > 0) {
+            var employee = $('.employee').val();
+            if (employee === '' || employee == null) {
+              alert('Employee cannot be empty');
+              return false;
+            }
+          }
+
+          var user_id = $('.employee').length > 0 ? $('.employee').val() : this.user_id;
+          window.open("{{url('/')}}/reimbursement-travel-print?driver="+encodeURIComponent(user_id || '')+"&status="+encodeURIComponent(status)+printRangeSuffix, "_blank");
         },
         approve(){
 
