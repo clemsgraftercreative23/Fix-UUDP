@@ -473,14 +473,6 @@ $(document).ready(function(){
         },
 
         print(){
-          var status = $('.status').val();
-          console.log(status);
-          if (status==null) {
-            alert('Status cannot be empty');
-            return false;
-          }
-          
-          // Ambil semua nilai checkbox yang diceklis
           var selectedValues = [];
           $('.check-print:checked').each(function(){
               selectedValues.push($(this).val());
@@ -495,19 +487,32 @@ $(document).ready(function(){
           }
           var printRangeSuffix = printQs.length ? ('&' + printQs.join('&')) : '';
 
-          // Tampilkan hasil
-          if(selectedValues.length > 0){
-              var id = selectedValues.join(",");
-              window.open("{{url('/')}}/reimbursement-travel-print?selected="+encodeURIComponent(id)+"&driver="+encodeURIComponent(this.user_id)+"&status="+encodeURIComponent(status)+printRangeSuffix, "_blank")
-
-          } else {
-
-              var user_id = "{{auth()->user()->id}}";
-              window.open("{{url('/')}}/reimbursement-travel-print?driver="+encodeURIComponent(user_id)+"&status="+encodeURIComponent(status)+printRangeSuffix, "_blank")
+          // Cetak baris terpilih: cukup centang inquiry, tidak wajib isi filter Status
+          if (selectedValues.length > 0) {
+              var id = selectedValues.join(',');
+              var qs = ['selected=' + encodeURIComponent(id)];
+              var driverId = (this.user_id != null && this.user_id !== '' && String(this.user_id) !== 'undefined')
+                  ? this.user_id
+                  : "{{ auth()->user()->id }}";
+              if (driverId) {
+                qs.push('driver=' + encodeURIComponent(driverId));
+              }
+              if (this.status != null && this.status !== '') {
+                qs.push('status=' + encodeURIComponent(this.status));
+              }
+              window.open("{{ url('/') }}/reimbursement-travel-print?" + qs.join('&') + printRangeSuffix, "_blank");
+              return;
           }
 
-          
+          // Cetak massal dari filter (tanpa centang): tetap butuh Status
+          var status = $('.status').val();
+          if (status == null || status === '') {
+            alert('Status cannot be empty');
+            return false;
+          }
 
+          var user_id = "{{ auth()->user()->id }}";
+          window.open("{{url('/')}}/reimbursement-travel-print?driver="+encodeURIComponent(user_id || '')+"&status="+encodeURIComponent(status)+printRangeSuffix, "_blank");
         },
         initSelectForm() {
           $(".addFile").on('click',function(){

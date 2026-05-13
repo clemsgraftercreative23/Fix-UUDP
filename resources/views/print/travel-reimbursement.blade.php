@@ -6,6 +6,16 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Travel Reimbursement</title>
     <style>
+        /*
+         * Akar masalah abu-abu hilang saat print: browser default mematikan background
+         * (hemat tinta). print-color-adjust: exact meminta background ikut ke PDF/kertas.
+         * Lihat opsi dialog "Background graphics" / "Cetak latar belakang" bila masih putih.
+         */
+        html {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
         * {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 8pt
@@ -16,6 +26,14 @@
         }
         table td, table th {
             padding: 8px;
+        }
+
+        /* Halaman cetak ini tidak memuat Bootstrap; class bg-secondary perlu warna eksplisit + print */
+        .table-style td.bg-secondary,
+        .table-style th.bg-secondary {
+            background: #e9ecef !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .table-style {
@@ -38,6 +56,8 @@
         .table-style tr.travel-section-total-row th {
             background: #d9d9d9 !important;
             font-weight: 600;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         .paid-watermark {
             position: fixed;
