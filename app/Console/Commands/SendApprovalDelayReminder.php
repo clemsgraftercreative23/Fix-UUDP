@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 class SendApprovalDelayReminder extends Command
 {
     /** First reminder once a claim stays this long at the same approval stage (`updated_at`). */
-    private const INITIAL_DELAY_HOURS = 2;
+    private const INITIAL_DELAY_HOURS = 1;
 
     /** Subsequent reminders while the stage is unchanged (see `shouldSkipReminder`). */
     private const REPEAT_INTERVAL_HOURS = 1;
@@ -28,7 +28,7 @@ class SendApprovalDelayReminder extends Command
      *
      * @var string
      */
-    protected $description = 'Send WA reminders: first after 2h at current approval stage, then every 1h until status advances';
+    protected $description = 'Send WA reminders: first after 1h at current approval stage, then every 1h until status advances';
 
     /**
      * Execute the console command.

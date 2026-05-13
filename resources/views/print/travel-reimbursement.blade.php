@@ -23,9 +23,21 @@
             width: 100%; /* Optional: Adjusts table width to fit printable area */
         }
 
+        /* Grid travel + detail: kolom sejajar, garis vertikal kanan lurus */
+        .table-style.travel-detail-block {
+            table-layout: fixed;
+        }
+
         .table-style th,.table-style td {
             border: 1px solid black; /* Defines solid black borders for table, headers, and cells */
             padding: 8px; /* Adjust padding for readability */
+        }
+
+        /* Baris subtotal per blok travel (cetak) */
+        .table-style tr.travel-section-total-row td,
+        .table-style tr.travel-section-total-row th {
+            background: #d9d9d9 !important;
+            font-weight: 600;
         }
         .paid-watermark {
             position: fixed;
@@ -105,7 +117,7 @@
                 @endforeach
             </tr>
       </table>
-      <table class="table-style table-bordered mb-2">
+      <table class="table-style table-bordered mb-2 travel-detail-block">
               @foreach (($data->travels ?? collect()) as $item)
                 @php
                     $tripTypeModel = optional($item->tripType)->id ? $item->tripType : \App\TravelTripType::where('id', $item->trip_type_id)->first();
@@ -157,6 +169,8 @@
                     </td>
                     <th>Allowance (IDR)</th>
                     <td class="bg-secondary">{{ number_format($allowanceIdrDisplay, 0, ',', '.') }}</td>
+                    {{-- Samakan 12 kolom dengan baris Cost Type agar border kanan rapi --}}
+                    <td colspan="2">&nbsp;</td>
                 </tr>
                 <tr>
                     <th>Purpose</th>
@@ -166,7 +180,7 @@
                     <th>Arrival</th>
                     <td class="bg-secondary">{{$item->end_time}}</td>
                     <th>Travel Time</th>
-                    <td class="bg-secondary" colspan="3">
+                    <td class="bg-secondary" colspan="5">
                         @php
                             if($item->start_time != null && $item->end_time != null) {
                                 $start = strtotime($item->start_time);
@@ -201,10 +215,10 @@
             </tr>
             @endforeach
             
-                <tr>
+                <tr class="travel-section-total-row">
                     <td colspan="2">Total</td>
-                    <td class="bg-secondary text-right" align="right" colspan="9">{{number_format($item->total,0,',','.')}}</td>
-                    <td style="background: #f0f0f0" >&nbsp;</td>
+                    <td class="text-right" align="right" colspan="9">{{ number_format($item->total, 0, ',', '.') }}</td>
+                    <td>&nbsp;</td>
                 </tr>
             @endforeach
           </table>
