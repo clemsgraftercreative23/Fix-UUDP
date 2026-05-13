@@ -106,7 +106,40 @@
             </tr>
       </table>
       <table class="table-style table-bordered mb-2">
-              @foreach (($data->travels ?? collect()) as $item)              
+              @foreach (($data->travels ?? collect()) as $item)
+                @php
+                    $tripTypeModel = optional($item->tripType)->id ? $item->tripType : \App\TravelTripType::where('id', $item->trip_type_id)->first();
+                    $allowanceTripAmount = $tripTypeModel ? (float) $tripTypeModel->allowance : 0.0;
+                    $tripCurrency = $tripTypeModel
+                        ? strtoupper(trim((string) ($tripTypeModel->currency ?? 'IDR')))
+                        : 'IDR';
+                    $storedAllowanceIdr = (float) ($item->allowance ?? 0);
+                    $convRate = null;
+                    $ratesColl = $data->rates ?? collect();
+                    $rateRow = $ratesColl->first(function ($r) use ($tripCurrency) {
+                        return strtoupper(trim((string) ($r->currency ?? ''))) === $tripCurrency;
+                    });
+                    if ($rateRow && isset($rateRow->rate)) {
+                        $convRate = (float) $rateRow->rate;
+                    }
+                    if (($convRate === null || $convRate === 0.0) && !empty($data->id)) {
+                        $dbRateRow = \App\TravelTripRate::where('reimbursement_id', $data->id)->where('currency', $tripCurrency)->first();
+                        if ($dbRateRow) {
+                            $convRate = (float) $dbRateRow->rate;
+                        }
+                    }
+                    if ($convRate === null || $convRate === 0.0) {
+                        if ($tripCurrency === 'IDR') {
+                            $convRate = 1.0;
+                        } elseif ($tripCurrency === 'USD') {
+                            $convRate = 16400.0;
+                        } else {
+                            $convRate = 1.0;
+                        }
+                    }
+                    $allowanceIdrComputed = $allowanceTripAmount * $convRate;
+                    $allowanceIdrDisplay = $storedAllowanceIdr > 0 ? $storedAllowanceIdr : $allowanceIdrComputed;
+                @endphp
                 <tr>
                     <th>Transaction Date</th>
                     <td class="bg-secondary">{{$item->date}}</td>
@@ -116,23 +149,14 @@
                     <td class="bg-secondary">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
                     <th>Allowance</th>
                     <td class="bg-secondary">
-                        {{-- Was HTML comment but Blade still evaluated {{ $item->tripType->currency }} and crashed when tripType was null --}}
-                        @php
-                            $currency = App\TravelTripType::where('id', $item->trip_type_id)->first();
-                            if ($currency) {
-                                $allowance_trip = $currency->allowance;
-                                echo number_format($allowance_trip, 0, ',', '.') . ' ' . $currency->currency;
-                            } else {
-                                echo '0';
-                            }
-
-                        @endphp
+                        @if($tripTypeModel)
+                            {{ number_format($allowanceTripAmount, 0, ',', '.') }} {{ $tripCurrency }}
+                        @else
+                            0
+                        @endif
                     </td>
                     <th>Allowance (IDR)</th>
-                    <td class="bg-secondary">
-                        {{-- Blade still runs @php even inside HTML <!-- -->, which crashed on $item->tripType->currency when tripType was null. Display stored allowance only. --}}
-                        {{ number_format((float) ($item->allowance ?? 0), 0, ',', '.') }}
-                    </td>
+                    <td class="bg-secondary">{{ number_format($allowanceIdrDisplay, 0, ',', '.') }}</td>
                 </tr>
                 <tr>
                     <th>Purpose</th>
