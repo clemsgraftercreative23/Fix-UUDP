@@ -144,15 +144,16 @@ if (!function_exists('ent_attachment_rows')) {
                         <h5 class="card-title">DETAIL REIMBURSEMENT ENTERTAINMENT</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
+                          $isOwnSubmission = (int) auth()->id() === (int) $data->id_user;
                           $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
                         @endphp
-                        @if($isApproverRole && in_array((int) $data->status, [0, 1, 2, 11], true))
+                        @if($isApproverRole && !$isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
                           Verifikasi bertahap: Head Department → HR GA → <strong>Finance Supervisor</strong> → <strong>Finance Manager</strong> → settlement. Direktur Utama dapat menyetujui langsung ke settlement dari tahap HR GA. Anda juga bisa memproses dari halaman <a href="{{ url('reimbursement-entertaiment-approval') }}" class="alert-link">Approval (bulk)</a>.
                         </div>
-                        @elseif(auth()->id() == $data->id_user && in_array((int) $data->status, [0, 1, 2, 11], true))
+                        @elseif($isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-secondary mb-0 mt-2" role="alert">
-                          Ini pengajuan Anda. Tombol <strong>Approve</strong> hanya untuk verifikator. Silakan tunggu proses dari Head Department / HR GA / Finance Supervisor / Finance Manager.
+                          Ini pengajuan Anda. Tombol verifikasi disembunyikan agar tidak ada persetujuan sendiri. Silakan tunggu Head Department / HR GA / Finance Supervisor / Finance Manager.
                         </div>
                         @endif
                         <hr>
@@ -393,7 +394,7 @@ if (!function_exists('ent_attachment_rows')) {
                     @endif 
                     <br>
                     <center>
-                        @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin'))                                
+                        @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin') && !$isOwnSubmission)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -410,7 +411,7 @@ if (!function_exists('ent_attachment_rows')) {
                             <button type="button" class="btn btn-primary"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
                         @endif
                         
-                        @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin'], true))                                
+                        @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin'], true) && !$isOwnSubmission)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -419,7 +420,7 @@ if (!function_exists('ent_attachment_rows')) {
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && auth()->user()->jabatan == 'Finance Supervisor')
+                        @if ($data->status == 2 && auth()->user()->jabatan == 'Finance Supervisor' && !$isOwnSubmission)
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -427,7 +428,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))
+                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') && !$isOwnSubmission)
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -435,7 +436,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true))
+                        @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true) && !$isOwnSubmission)
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>

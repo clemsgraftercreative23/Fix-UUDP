@@ -422,6 +422,10 @@ class MedicalReimbursementController extends Controller
         if(!$data)
             return redirect()->back()->withErrors(['Reimbursement tidak ditemukan']);
 
+        if ((int) auth()->id() === (int) $data->id_user) {
+            return redirect()->back()->withErrors(['Anda tidak dapat menyetujui pengajuan reimbursement yang Anda buat sendiri.']);
+        }
+
         $user = auth()->user();
         if($data->status == 0 && $user->jabatan == "Direktur Operasional") {
             $data->update([

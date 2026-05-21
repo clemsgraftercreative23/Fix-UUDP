@@ -2267,6 +2267,12 @@ class TravelReimbursementController extends Controller
             $status = 3;
         }
         $idsArray = array_map('intval', explode(',', $id));
+        $ownClaimIds = Reimbursement::whereIn('id', $idsArray)->where('id_user', (int) auth()->id())->pluck('id')->values()->all();
+        if ($ownClaimIds !== []) {
+            return response()->json([
+                'message' => 'Tidak dapat approve bulk untuk pengajuan Anda sendiri. Hapus dari pilihan: ' . implode(', ', $ownClaimIds),
+            ], 422);
+        }
         Reimbursement::whereIn('id', $idsArray)->update(['status' => $status]);
         
         // Ambil id_user dari tabel pengajuan

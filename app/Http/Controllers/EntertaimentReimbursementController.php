@@ -1071,6 +1071,10 @@ class EntertaimentReimbursementController extends Controller
         if(!$data)
             return redirect()->back()->withErrors(['Reimbursement tidak ditemukan']);
 
+        if ((int) auth()->id() === (int) $data->id_user) {
+            return redirect()->back()->withErrors(['Anda tidak dapat menyetujui pengajuan reimbursement yang Anda buat sendiri.']);
+        }
+
         $user = auth()->user();
         if($data->status == 0 && $user->jabatan == "Direktur Operasional") {
             $data->update([
@@ -1251,6 +1255,13 @@ class EntertaimentReimbursementController extends Controller
             || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
+        }
+
+        $ownClaimIds = $rows->where('id_user', (int) $user->id)->pluck('id')->values()->all();
+        if ($ownClaimIds !== []) {
+            return response()->json([
+                'message' => 'Tidak dapat approve bulk untuk pengajuan Anda sendiri. Hapus dari pilihan: ' . implode(', ', $ownClaimIds),
+            ], 422);
         }
 
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {

@@ -390,7 +390,7 @@
                     @endif
                     <br>
                     <center>
-                        @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional')                                
+                        @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional' && (int) auth()->id() !== (int) $data->id_user)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>&nbsp;&nbsp;
@@ -402,7 +402,7 @@
                             <button type="button" class="btn btn-primary"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
                         @endif
                         
-                        @if ($data->status == 1 && auth()->user()->jabatan == 'Finance')                                
+                        @if ($data->status == 1 && auth()->user()->jabatan == 'Finance' && (int) auth()->id() !== (int) $data->id_user)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>&nbsp;&nbsp;
@@ -410,7 +410,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner')                                
+                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) auth()->id() !== (int) $data->id_user)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>&nbsp;&nbsp;

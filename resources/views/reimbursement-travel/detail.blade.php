@@ -88,15 +88,16 @@ if (!function_exists('travel_attachment_rows')) {
                         <h5 class="card-title">DETAIL REIMBURSEMENT TRAVEL {{$data->travel_type}}</h5><hr>
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
+                          $isOwnSubmission = (int) auth()->id() === (int) $data->id_user;
                           $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
                         @endphp
-                        @if($isApproverRole && in_array((int) $data->status, [0, 1, 2, 11], true))
+                        @if($isApproverRole && !$isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
                           Verifikasi bertahap: Head Department → HR GA → Finance Supervisor → Finance Manager (Owner bisa menyetujui lebih awal). Anda juga bisa memproses dari halaman <a href="{{ url('reimbursement-travel-approval') }}" class="alert-link">Approval (bulk)</a>.
                         </div>
-                        @elseif(auth()->id() == $data->id_user && in_array((int) $data->status, [0, 1, 2, 11], true))
+                        @elseif($isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-secondary mb-0 mt-2" role="alert">
-                          Ini pengajuan Anda. Tombol <strong>Approve</strong> hanya untuk verifikator. Silakan tunggu proses dari Head Department / HR GA / Finance.
+                          Ini pengajuan Anda. Tombol verifikasi disembunyikan agar tidak ada persetujuan sendiri. Silakan tunggu Head Department / HR GA / Finance.
                         </div>
                         @endif
                         <hr>
@@ -482,7 +483,7 @@ if (!function_exists('travel_attachment_rows')) {
                     <br>
                     <center>
                                                         
-                            @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin') && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin') && (int) $data->id_user !== (int) auth()->id())                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
@@ -491,7 +492,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && (int) $data->id_user !== (int) auth()->id())                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
@@ -500,7 +501,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if ($data->status == 2 && in_array(auth()->user()->jabatan, ['Finance Supervisor', 'Owner', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))
+                            @if ($data->status == 2 && in_array(auth()->user()->jabatan, ['Finance Supervisor', 'Owner', 'superadmin'], true) && (int) $data->id_user !== (int) auth()->id())
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>
@@ -509,7 +510,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
 
-                            @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))
+                            @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true) && (int) $data->id_user !== (int) auth()->id())
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                   	<a href="{{ $editTravelItemUrl }}"  class="btn btn-warning">Edit</a>

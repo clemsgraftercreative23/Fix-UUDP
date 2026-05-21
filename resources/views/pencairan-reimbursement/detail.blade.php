@@ -404,7 +404,7 @@
                             
                         @endif
                         
-                        @if (auth()->user()->jabatan == 'Finance')                                
+                        @if (auth()->user()->jabatan == 'Finance' && (int) auth()->id() !== (int) $data->id_user)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 @if($data->status == 1)
@@ -414,7 +414,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner')                                
+                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) auth()->id() !== (int) $data->id_user)                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>

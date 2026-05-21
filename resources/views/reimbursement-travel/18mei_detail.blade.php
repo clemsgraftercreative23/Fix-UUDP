@@ -427,7 +427,7 @@ if (!function_exists('travel_attachment_rows')) {
                     <br>
                     <center>
                                                         
-                            @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional' && $data->id_user != auth()->user()->id)                                
+                            @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional' && (int) $data->id_user !== (int) auth()->id())                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <a href="{!!url('reimbursement-travel/add-item')!!}/{{$data->id}}/{{$item->id}}"  class="btn btn-warning">Edit</a>
@@ -436,7 +436,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && ($data->id_user != auth()->user()->id || auth()->user()->jabatan == 'superadmin'))                                
+                            @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && (int) $data->id_user !== (int) auth()->id())                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
@@ -444,7 +444,7 @@ if (!function_exists('travel_attachment_rows')) {
                                 </form>
                             @endif
                             
-                            @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && $data->id_user != auth()->user()->id)                                
+                            @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) $data->id_user !== (int) auth()->id())                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
