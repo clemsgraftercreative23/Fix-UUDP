@@ -394,6 +394,11 @@ class ReimbursementController extends Controller
         }
 
         $approver = auth()->user();
+        if ((int) $approver->id === (int) $data->id_user) {
+            return redirect()
+                ->back()
+                ->withErrors(['Anda tidak dapat menyetujui atau menolak pengajuan reimbursement yang Anda buat sendiri.']);
+        }
         $nama_approval = ucfirst($approver->name);
         if ($approver->jabatan == 'Direktur Operasional' || ($approver->jabatan == 'superadmin' && (int) $data->status === 0)) {
             $level = 'Head Department';
@@ -705,6 +710,12 @@ class ReimbursementController extends Controller
             return redirect()
                 ->back()
                 ->withErrors(['Reimbursement tidak ditemukan']);
+        }
+
+        if ((int) auth()->id() === (int) $data->id_user) {
+            return redirect()
+                ->back()
+                ->withErrors(['Anda tidak dapat menolak pengajuan reimbursement yang Anda buat sendiri melalui alur verifikator.']);
         }
 
         $user = auth()->user();

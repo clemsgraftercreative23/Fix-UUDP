@@ -684,6 +684,14 @@ class DriverReimbursementController extends Controller
         $status = (int) $data->status;
         $isSubmitter = (int) $user->id === (int) $data->id_user;
 
+        // Pengaju yang juga punya peran verifikator tidak boleh buka inquiry/approve sendiri di pipeline.
+        $approverJabatans = ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'];
+        if ($isSubmitter
+            && in_array($jabatan, $approverJabatans, true)
+            && in_array($status, [0, 1, 2, 11], true)) {
+            return false;
+        }
+
         // Same rules as resources/views/reimbursement-driver/detail.blade.php + index "Edit" deep-link (open inquiry modal).
         if ($jabatan === 'superadmin' && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
             return true;
@@ -705,6 +713,11 @@ class DriverReimbursementController extends Controller
             return true;
         }
         if (in_array($jabatan, ['Finance Manager', 'Owner'], true) && $status === 11) {
+            return true;
+        }
+
+        // Pengaju biasa (bukan peran verifikator) boleh revisi inquiry saat masih di pipeline.
+        if ($isSubmitter && in_array($status, [0, 1, 2, 11], true) && ! in_array($jabatan, $approverJabatans, true)) {
             return true;
         }
 
@@ -1088,6 +1101,12 @@ class DriverReimbursementController extends Controller
                 ->withErrors(['Reimbursement tidak ditemukan']);
         }
 
+        if ((int) auth()->id() === (int) $data->id_user) {
+            return redirect()
+                ->back()
+                ->withErrors(['Anda tidak dapat menyetujui pengajuan reimbursement yang Anda buat sendiri.']);
+        }
+
         $user = auth()->user();
         if ($data->status == 0 && $user->jabatan == "Direktur Operasional") {
             $data->update([
@@ -1152,6 +1171,13 @@ class DriverReimbursementController extends Controller
             || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
+        }
+
+        $ownClaimIds = $rows->where('id_user', (int) $user->id)->pluck('id')->values()->all();
+        if ($ownClaimIds !== []) {
+            return response()->json([
+                'message' => 'Tidak dapat approve bulk untuk pengajuan Anda sendiri. Hapus dari pilihan: ' . implode(', ', $ownClaimIds),
+            ], 422);
         }
 
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
