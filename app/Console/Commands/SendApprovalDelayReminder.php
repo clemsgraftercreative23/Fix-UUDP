@@ -125,7 +125,8 @@ class SendApprovalDelayReminder extends Command
      * Skip if first reminder is too soon, or if the last reminder for this status was too recent.
      * Uses the latest log per (reimbursement_id, status) so hourly repeats keep working even when
      * `updated_at` is bumped without a real status change (previously that dropped rows from the query
-     * and broke the 1h cadence).
+     * and broke the 1h cadence). Invalid/empty `sent_at` must not be passed to Carbon::parse (null/empty
+     * parses as "now" and would block all repeats).
      */
     private function shouldSkipReminder($reimbursement): bool
     {
@@ -143,7 +144,17 @@ class SendApprovalDelayReminder extends Command
             return $statusUpdatedAt->gt($now->copy()->subHours(self::INITIAL_DELAY_HOURS));
         }
 
-        return Carbon::parse($lastLog->sent_at)->gt($now->copy()->subHours(self::REPEAT_INTERVAL_HOURS));
+        // Carbon::parse(null|''|' ') resolves to "now", which would make this permanently skip
+        // and break the hourly repeat cadence — do not parse invalid values.
+        $rawSentAt = $lastLog->sent_at ?? null;
+        if ($rawSentAt === null || $rawSentAt === '') {
+            return false;
+        }
+
+        $lastSent = Carbon::parse($rawSentAt);
+
+        // Skip only while we are still inside the cool-down window after the last send.
+        return $now->lt($lastSent->copy()->addHours(self::REPEAT_INTERVAL_HOURS));
     }
 
     private function resolveRecipients($reimbursement)
