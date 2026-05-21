@@ -28,7 +28,7 @@ class SendApprovalDelayReminder extends Command
      *
      * @var string
      */
-    protected $description = 'Send WA reminders: first after 1h at current approval stage, then every 1h until status advances';
+    protected $description = 'Send WA reminders per approval stage (Head Dept → Finance/HR GA → Finance Supervisor/Owner → Finance Manager/Owner), first after 1h then hourly';
 
     /**
      * Execute the console command.
@@ -48,7 +48,7 @@ class SendApprovalDelayReminder extends Command
         // tanpa berubah status, klaim tetap harus masuk agar pengingat per jam tetap jalan.
         $reimbursements = Reimbursement::query()
             ->whereIn('reimbursement_type', [1, 2, 3])
-            ->whereIn('status', [0, 1, 2])
+            ->whereIn('status', [0, 1, 2, 11])
             ->where(function ($q) use ($threshold) {
                 $q->where('updated_at', '<=', $threshold)
                     ->orWhereExists(function ($sub) {
@@ -175,17 +175,32 @@ class SendApprovalDelayReminder extends Command
         }
 
         if ((int) $reimbursement->status === 1) {
-            return User::where('jabatan', 'Finance')
+            // Selaras Travel/Driver/Entertainment: HR GA / HR / Finance / Finance Supervisor bisa bertindak di status 1.
+            return User::whereIn('jabatan', ['Finance', 'Finance Supervisor', 'HR', 'HR GA'])
                 ->whereNotNull('phoneNumber')
                 ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber']);
+                ->get(['name', 'phoneNumber'])
+                ->unique('phoneNumber')
+                ->values();
         }
 
         if ((int) $reimbursement->status === 2) {
-            return User::where('jabatan', 'Owner')
+            // Status 2: Finance Supervisor dan Owner sama-sama bisa approve (alur travel/driver/reimbursement utama).
+            return User::whereIn('jabatan', ['Finance Supervisor', 'Owner'])
                 ->whereNotNull('phoneNumber')
                 ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber']);
+                ->get(['name', 'phoneNumber'])
+                ->unique('phoneNumber')
+                ->values();
+        }
+
+        if ((int) $reimbursement->status === 11) {
+            return User::whereIn('jabatan', ['Finance Manager', 'Owner'])
+                ->whereNotNull('phoneNumber')
+                ->where('phoneNumber', '!=', '')
+                ->get(['name', 'phoneNumber'])
+                ->unique('phoneNumber')
+                ->values();
         }
 
         return collect();
@@ -198,7 +213,15 @@ class SendApprovalDelayReminder extends Command
         }
 
         if ($status === 1) {
-            return 'Finance';
+            return 'Finance / HR GA';
+        }
+
+        if ($status === 2) {
+            return 'Finance Supervisor / Owner';
+        }
+
+        if ($status === 11) {
+            return 'Finance Manager / Owner';
         }
 
         return 'Owner';
