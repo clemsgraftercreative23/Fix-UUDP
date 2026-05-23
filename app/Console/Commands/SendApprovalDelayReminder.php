@@ -6,6 +6,7 @@ use App\Reimbursement;
 use App\User;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
 class SendApprovalDelayReminder extends Command
@@ -98,7 +99,9 @@ class SendApprovalDelayReminder extends Command
                     $this->line('[DRY RUN] Would send to ' . $recipient->phoneNumber . ' for reimbursement ' . $reimbursement->no_reimbursement);
                     $this->line($message);
                 } else {
-                    $this->sendWhatsapp($recipient->phoneNumber, $message);
+                    if (!$this->sendWhatsapp($recipient->phoneNumber, $message, $reimbursement->no_reimbursement, $recipient->name)) {
+                        continue;
+                    }
                 }
                 $sentCount++;
                 $hasSent = true;
@@ -254,14 +257,35 @@ class SendApprovalDelayReminder extends Command
             "Terima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl;
     }
 
-    private function sendWhatsapp(string $target, string $message): void
+    private function sendWhatsapp(string $target, string $message, string $reimbursementNumber, string $recipientName): bool
     {
-        $curl = \Curl::to('https://api.fonnte.com/send')
+        $response = \Curl::to('https://api.fonnte.com/send')
             ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
             ->withData([
                 'target' => $target,
                 'message' => $message,
             ])
             ->post();
+
+        $decoded = json_decode((string) $response, true);
+        if (is_array($decoded) && array_key_exists('status', $decoded) && !$decoded['status']) {
+            Log::warning('Approval delay reminder WA send failed', [
+                'reimbursement_number' => $reimbursementNumber,
+                'recipient' => $recipientName,
+                'target' => $target,
+                'response' => $decoded,
+            ]);
+
+            return false;
+        }
+
+        Log::info('Approval delay reminder WA send response', [
+            'reimbursement_number' => $reimbursementNumber,
+            'recipient' => $recipientName,
+            'target' => $target,
+            'response' => $decoded ?? $response,
+        ]);
+
+        return true;
     }
 }
