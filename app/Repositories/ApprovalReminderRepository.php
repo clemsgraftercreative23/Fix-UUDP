@@ -13,17 +13,17 @@ class ApprovalReminderRepository
 {
     public const WORKFLOW_CODE_REIMBURSEMENT = 'reimbursement';
 
-    private function initialDelayMinutes(): int
+    public function initialDelayMinutes(): int
     {
         return (int) env('APPROVAL_REMINDER_INITIAL_DELAY_MINUTES', 30);
     }
 
-    private function repeatIntervalMinutes(): int
+    public function repeatIntervalMinutes(): int
     {
         return (int) env('APPROVAL_REMINDER_REPEAT_INTERVAL_MINUTES', 30);
     }
 
-    private function maxDurationMinutes(): int
+    public function maxDurationMinutes(): int
     {
         return (int) env('APPROVAL_REMINDER_MAX_DURATION_MINUTES', 60);
     }

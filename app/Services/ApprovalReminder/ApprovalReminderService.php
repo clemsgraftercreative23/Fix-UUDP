@@ -14,7 +14,6 @@ class ApprovalReminderService
 {
     const INITIAL_DELAY_MINUTES = 30;
     const REPEAT_INTERVAL_MINUTES = 30;
-    const MAX_DURATION_MINUTES = 60;
 
     private $repository;
 
@@ -41,7 +40,7 @@ class ApprovalReminderService
     public function syncPendingReimbursements(?string $baseUrl = null): int
     {
         $count = 0;
-        $threshold = Carbon::now()->subMinutes(self::MAX_DURATION_MINUTES);
+        $threshold = Carbon::now()->subMinutes($this->repository->maxDurationMinutes());
 
         Reimbursement::query()
             ->whereIn('status', [0, 1, 2, 11])
@@ -78,7 +77,7 @@ class ApprovalReminderService
                     continue;
                 }
 
-                if ($now->greaterThanOrEqualTo(Carbon::parse($reimbursement->created_at)->copy()->addMinutes(self::MAX_DURATION_MINUTES))) {
+                if ($now->greaterThanOrEqualTo(Carbon::parse($reimbursement->created_at)->copy()->addMinutes($this->repository->maxDurationMinutes()))) {
                     $this->repository->stop($reminder, 'expired', (int) $reimbursement->status);
                     $count++;
                     continue;
@@ -238,7 +237,18 @@ class ApprovalReminderService
     {
         return 'Hai *' . $recipient->name . "*,\n\n" .
             'Pengajuan reimbursement nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* masih berstatus *PENDING* pada tahap *' . $reminder->stage_label . "*.\n\n" .
-            'Reminder otomatis berjalan setiap 1 jam dan akan berhenti setelah 12 jam atau saat status berubah menjadi APPROVED/REJECTED.\n\n' .
+            'Reminder otomatis berjalan setiap ' . $this->intervalText($this->repository->repeatIntervalMinutes()) . ' dan akan berhenti setelah ' . $this->intervalText($this->repository->maxDurationMinutes()) . ' atau saat status berubah menjadi APPROVED/REJECTED.\n\n' .
             'Klik untuk melihat detail pengajuan : ' . $detailUrl;
+    }
+
+    private function intervalText(int $minutes): string
+    {
+        if ($minutes % 60 === 0) {
+            $hours = (int) ($minutes / 60);
+
+            return $hours . ' jam';
+        }
+
+        return $minutes . ' menit';
     }
 }
