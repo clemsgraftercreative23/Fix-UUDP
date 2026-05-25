@@ -14,7 +14,6 @@ class ApprovalReminderService
 {
     const INITIAL_DELAY_MINUTES = 30;
     const REPEAT_INTERVAL_MINUTES = 30;
-
     private $repository;
 
     private $client;
