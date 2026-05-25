@@ -2,34 +2,33 @@
 
 namespace App\Console\Commands;
 
-use App\Reimbursement;
-use App\User;
-use Carbon\Carbon;
+use App\Services\ApprovalReminder\ApprovalReminderService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 
 class SendApprovalDelayReminder extends Command
 {
-    /** First reminder once a claim stays this long at the same approval stage (`updated_at`). */
-    private const INITIAL_DELAY_HOURS = 1;
-
-    /** Subsequent reminders while the stage is unchanged (see `shouldSkipReminder`). */
-    private const REPEAT_INTERVAL_HOURS = 1;
-
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'reimbursement:send-approval-delay-reminder {--dry-run : Show which reminders would be sent without sending WhatsApp messages} {--base-url= : Override app base URL for detail links, e.g. https://uudp.sf-indonesia.com}';
+    protected $signature = 'reimbursement:send-approval-delay-reminder {--dry-run : Show which reminders would be queued without sending WhatsApp messages} {--base-url= : Override app base URL for detail links, e.g. https://uudp.sf-indonesia.com}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Send WA reminders per approval stage (Head Dept → Finance/HR GA → Finance Supervisor/Owner → Finance Manager/Owner), first after 1h then hourly';
+    protected $description = 'Sync and queue hourly approval reminders for pending reimbursements';
+
+    private $service;
+
+    public function __construct(ApprovalReminderService $service)
+    {
+        parent::__construct();
+
+        $this->service = $service;
+    }
 
     /**
      * Execute the console command.
@@ -38,254 +37,28 @@ class SendApprovalDelayReminder extends Command
      */
     public function handle()
     {
-        $threshold = Carbon::now()->subHours(self::INITIAL_DELAY_HOURS);
         $dryRun = (bool) $this->option('dry-run');
         $baseUrlOption = $this->option('base-url');
         $baseUrl = is_string($baseUrlOption) && trim($baseUrlOption) !== ''
             ? rtrim(trim($baseUrlOption), '/')
             : null;
 
-        // Jangan hanya filter `updated_at <= threshold`: jika baris disentuh (updated_at maju)
-        // tanpa berubah status, klaim tetap harus masuk agar pengingat per jam tetap jalan.
-        $reimbursements = Reimbursement::query()
-            ->whereIn('reimbursement_type', [1, 2, 3])
-            ->whereIn('status', [0, 1, 2, 11])
-            ->where(function ($q) use ($threshold) {
-                $q->where('updated_at', '<=', $threshold)
-                    ->orWhereExists(function ($sub) {
-                        $sub->selectRaw('1')
-                            ->from('reimbursement_reminder_logs as rrl')
-                            ->whereColumn('rrl.reimbursement_id', 'reimbursement.id')
-                            ->whereColumn('rrl.reimbursement_status', 'reimbursement.status');
-                    });
-            })
-            ->orderBy('id')
-            ->get([
-                'id',
-                'id_user',
-                'status',
-                'no_reimbursement',
-                'nominal_pengajuan',
-                'created_by',
-                'reimbursement_type',
-                'updated_at',
-            ]);
+        if ($dryRun) {
+            $result = $this->service->previewDueReminders($baseUrl);
 
-        $sentCount = 0;
-
-        foreach ($reimbursements as $reimbursement) {
-            if ($this->shouldSkipReminder($reimbursement)) {
-                continue;
+            foreach ($result as $item) {
+                $this->line('[DRY RUN] ' . $item['no_reimbursement'] . ' | ' . $item['stage_label'] . ' | ' . $item['recipients'] . ' | ' . $item['next_send_at']);
             }
 
-            $recipients = $this->resolveRecipients($reimbursement);
-            if ($recipients->isEmpty()) {
-                continue;
-            }
+            $this->info('Dry run complete: ' . count($result) . ' reminder(s) eligible');
 
-            $stageLabel = $this->stageLabel($reimbursement->status);
-            $detailUrl = $this->detailUrl($reimbursement, $baseUrl);
-            $sentAt = Carbon::now()->toDateTimeString();
-            $statusUpdatedAt = Carbon::parse($reimbursement->updated_at)->toDateTimeString();
-            $hasSent = false;
-
-            foreach ($recipients as $recipient) {
-                if (empty($recipient->phoneNumber)) {
-                    continue;
-                }
-
-                $message = $this->buildMessage($reimbursement, $recipient, $stageLabel, $detailUrl);
-                if ($dryRun) {
-                    $this->line('[DRY RUN] Would send to ' . $recipient->phoneNumber . ' for reimbursement ' . $reimbursement->no_reimbursement);
-                    $this->line($message);
-                } else {
-                    if (!$this->sendWhatsapp($recipient->phoneNumber, $message, $reimbursement->no_reimbursement, $recipient->name)) {
-                        continue;
-                    }
-                }
-                $sentCount++;
-                $hasSent = true;
-            }
-
-            if ($hasSent && !$dryRun) {
-                DB::table('reimbursement_reminder_logs')->insert([
-                    'reimbursement_id' => $reimbursement->id,
-                    'reimbursement_status' => $reimbursement->status,
-                    'sent_for_updated_at' => $statusUpdatedAt,
-                    'sent_at' => $sentAt,
-                    'created_at' => $sentAt,
-                    'updated_at' => $sentAt,
-                ]);
-            }
+            return 0;
         }
 
-        $this->info($dryRun ? 'Dry run complete: ' . $sentCount . ' reminder(s) would be sent' : 'Reminder sent: ' . $sentCount);
+        $result = $this->service->processReimbursementReminders(false, $baseUrl);
+
+        $this->info('Reminder sync complete. Queued: ' . (int) ($result['queued'] ?? 0) . ', skipped: ' . (int) ($result['skipped'] ?? 0));
 
         return 0;
-    }
-
-    /**
-     * Skip if first reminder is too soon, or if the last reminder for this status was too recent.
-     * Uses the latest log per (reimbursement_id, status) so hourly repeats keep working even when
-     * `updated_at` is bumped without a real status change (previously that dropped rows from the query
-     * and broke the 1h cadence). Invalid/empty `sent_at` must not be passed to Carbon::parse (null/empty
-     * parses as "now" and would block all repeats).
-     */
-    private function shouldSkipReminder($reimbursement): bool
-    {
-        $statusUpdatedAt = Carbon::parse($reimbursement->updated_at);
-        $now = Carbon::now();
-
-        $lastLog = DB::table('reimbursement_reminder_logs')
-            ->where('reimbursement_id', $reimbursement->id)
-            ->where('reimbursement_status', $reimbursement->status)
-            ->orderByDesc('sent_at')
-            ->orderByDesc('id')
-            ->first(['sent_at']);
-
-        if ($lastLog === null) {
-            return $statusUpdatedAt->gt($now->copy()->subHours(self::INITIAL_DELAY_HOURS));
-        }
-
-        // Carbon::parse(null|''|' ') resolves to "now", which would make this permanently skip
-        // and break the hourly repeat cadence — do not parse invalid values.
-        $rawSentAt = $lastLog->sent_at ?? null;
-        if ($rawSentAt === null || $rawSentAt === '') {
-            return false;
-        }
-
-        $lastSent = Carbon::parse($rawSentAt);
-
-        // Skip only while we are still inside the cool-down window after the last send.
-        return $now->lt($lastSent->copy()->addHours(self::REPEAT_INTERVAL_HOURS));
-    }
-
-    private function resolveRecipients($reimbursement)
-    {
-        if ((int) $reimbursement->status === 0) {
-            $submitter = User::find($reimbursement->id_user);
-            if (!$submitter || empty($submitter->id_approval)) {
-                return collect();
-            }
-
-            $approver = User::find($submitter->id_approval);
-
-            if (!$approver || empty($approver->phoneNumber)) {
-                return collect();
-            }
-
-            return collect([$approver]);
-        }
-
-        if ((int) $reimbursement->status === 1) {
-            // Selaras Travel/Driver/Entertainment: HR GA / HR / Finance / Finance Supervisor bisa bertindak di status 1.
-            return User::whereIn('jabatan', ['Finance', 'Finance Supervisor', 'HR', 'HR GA'])
-                ->whereNotNull('phoneNumber')
-                ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber'])
-                ->unique('phoneNumber')
-                ->values();
-        }
-
-        if ((int) $reimbursement->status === 2) {
-            // Status 2: Finance Supervisor dan Owner sama-sama bisa approve (alur travel/driver/reimbursement utama).
-            return User::whereIn('jabatan', ['Finance Supervisor', 'Owner'])
-                ->whereNotNull('phoneNumber')
-                ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber'])
-                ->unique('phoneNumber')
-                ->values();
-        }
-
-        if ((int) $reimbursement->status === 11) {
-            return User::whereIn('jabatan', ['Finance Manager', 'Owner'])
-                ->whereNotNull('phoneNumber')
-                ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber'])
-                ->unique('phoneNumber')
-                ->values();
-        }
-
-        return collect();
-    }
-
-    private function stageLabel(int $status): string
-    {
-        if ($status === 0) {
-            return 'Head Department';
-        }
-
-        if ($status === 1) {
-            return 'Finance / HR GA';
-        }
-
-        if ($status === 2) {
-            return 'Finance Supervisor / Owner';
-        }
-
-        if ($status === 11) {
-            return 'Finance Manager / Owner';
-        }
-
-        return 'Owner';
-    }
-
-    private function detailUrl($reimbursement, ?string $baseUrl = null): string
-    {
-        $path = '/reimbursement-travel/' . $reimbursement->id;
-
-        if ((int) $reimbursement->reimbursement_type === 1) {
-            $path = '/reimbursement-driver/' . $reimbursement->id;
-        }
-
-        if ((int) $reimbursement->reimbursement_type === 3) {
-            $path = '/reimbursement-entertaiment/' . $reimbursement->id;
-        }
-
-        if ($baseUrl !== null) {
-            return $baseUrl . $path;
-        }
-
-        return url($path);
-    }
-
-    private function buildMessage($reimbursement, User $recipient, string $stageLabel, string $detailUrl): string
-    {
-        return 'Hai *' . $recipient->name . "*,\n\n" .
-            'reimbursement Nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* sudah menunggu lebih dari *' . self::INITIAL_DELAY_HOURS . "* jam* pada tahap approval saat ini (pengingat berkala setiap " . self::REPEAT_INTERVAL_HOURS . " jam).\n\n" .
-            'Saat ini sedang menunggu proses verifikasi oleh *' . $stageLabel . "*.\n\n" .
-            "Terima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl;
-    }
-
-    private function sendWhatsapp(string $target, string $message, string $reimbursementNumber, string $recipientName): bool
-    {
-        $response = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
-            ->withData([
-                'target' => $target,
-                'message' => $message,
-            ])
-            ->post();
-
-        $decoded = json_decode((string) $response, true);
-        if (is_array($decoded) && array_key_exists('status', $decoded) && !$decoded['status']) {
-            Log::warning('Approval delay reminder WA send failed', [
-                'reimbursement_number' => $reimbursementNumber,
-                'recipient' => $recipientName,
-                'target' => $target,
-                'response' => $decoded,
-            ]);
-
-            return false;
-        }
-
-        Log::info('Approval delay reminder WA send response', [
-            'reimbursement_number' => $reimbursementNumber,
-            'recipient' => $recipientName,
-            'target' => $target,
-            'response' => $decoded ?? $response,
-        ]);
-
-        return true;
     }
 }

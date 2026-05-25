@@ -60,4 +60,8 @@ class Reimbursement extends Model
     function department() {
       return $this->belongsTo('App\Departemen','reimbursement_department_id');
     }
+
+    function approvalReminders() {
+      return $this->morphMany('App\ApprovalReminder', 'subject');
+    }
 }

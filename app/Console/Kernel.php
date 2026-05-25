@@ -27,7 +27,8 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('reimbursement:send-approval-delay-reminder')
             ->everyFiveMinutes()
-            ->withoutOverlapping();
+            ->withoutOverlapping(15)
+            ->onOneServer();
     }
 
     /**
