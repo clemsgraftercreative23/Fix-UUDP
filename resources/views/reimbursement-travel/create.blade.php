@@ -435,7 +435,7 @@ $(document).ready(function(){
       mounted() {
         this.initSelectForm()
         self = this
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true});
         $('.idr-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
@@ -529,6 +529,23 @@ $(document).ready(function(){
             const n = parseFloat(t);
             if (isNaN(n)) return 0;
             return Math.round(n * 100) / 100;
+        },
+        /** Kolom Amount: integer; bagian desimal (setelah koma) diabaikan. */
+        parseTravelAmountInteger(raw) {
+            let s = String(raw || '').trim();
+            if (!s) return 0;
+            const c = s.lastIndexOf(',');
+            if (c !== -1) {
+                s = s.substring(0, c);
+            }
+            s = s.replace(/\./g, '').replace(/[^\d-]/g, '');
+            const n = parseInt(s, 10);
+            return isNaN(n) ? 0 : n;
+        },
+        formatIdrInteger(num) {
+            const n = Number(num);
+            if (isNaN(n)) return '0';
+            return n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         },
         /**
          * Jangan destroy + re-init semua mask: itu mereset nilai tampilan jadi 0/1.
@@ -626,7 +643,7 @@ $(document).ready(function(){
             } catch (error) {
                 rate = currency == "IDR" ? 1 : 0;
             }
-            return this.numericRate(amt) * this.numericRate(rate);
+            return this.parseTravelAmountInteger(amt) * this.numericRate(rate);
              
         },
         initSelectForm() {
@@ -914,8 +931,9 @@ $(document).ready(function(){
                 this.reimburses[i].total = allowance.toLocaleString('de-DE')
 
                 tax = self.types.filter(a => a.id == id)[0].tax
-                this.reimburses[i].details[a].idr_rate = this.getRate(currency, amount).toLocaleString("de-DE")
-                this.reimburses[i].details[a].tax = (this.getRate(currency, amount) * tax / 100).toLocaleString('de-DE')
+                const idrVal = this.getRate(currency, amount)
+                this.reimburses[i].details[a].idr_rate = this.formatIdrInteger(idrVal)
+                this.reimburses[i].details[a].tax = this.formatIdrInteger(idrVal * tax / 100)
                 this.reimburses[i].details.forEach(element => {
                     subtotal += parseInt(element.idr_rate.replaceAll(".",""))                    
                     allowance = self.reimburses[i].trip_allowance.replaceAll(".","")                    
