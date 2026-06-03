@@ -184,6 +184,11 @@ class TravelReimbursementController extends Controller
         return false;
     }
 
+    private function rejectedTravelTabManageMessage(): string
+    {
+        return 'Pengajuan ditolak: tidak dapat menambah atau menghapus tab tanggal. Silakan edit data pada tab yang sudah ada.';
+    }
+
     /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400 / -1.234,50. */
     private function normalizeExchangeRateValue($value): string
     {
@@ -1131,7 +1136,7 @@ class TravelReimbursementController extends Controller
             $user = \App\User::where('id', $data->id_user)->first();
             if ($status != 10) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -1151,7 +1156,7 @@ class TravelReimbursementController extends Controller
 
                 if (!empty($approval)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                        ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                        ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                         ->withData([
                             'target' => $approval[0]->phoneNumber,
                             'message' =>
@@ -1204,6 +1209,12 @@ class TravelReimbursementController extends Controller
         $isSave = in_array('save', $postKeys, true);
         $isSaveDraft = in_array('save_draft', $postKeys, true);
         $isSaveItem = in_array('save_item', $postKeys, true);
+
+        if ($isSaveItem && (int) (Reimbursement::whereId($id_main)->value('status') ?? 0) === 9) {
+            DB::rollback();
+
+            return redirect()->back()->withErrors([$this->rejectedTravelTabManageMessage()]);
+        }
 
         // Fallback: beberapa browser/flow tidak mengirim name tombol submit.
         // Default-kan ke submit/update agar tidak salah masuk flow "Add New Item"
@@ -1474,7 +1485,7 @@ class TravelReimbursementController extends Controller
             $user = \App\User::where('id', $data->id_user)->first();
             if ($status != 10) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -1494,7 +1505,7 @@ class TravelReimbursementController extends Controller
 
                 if (!empty($approval)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                        ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                        ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                         ->withData([
                             'target' => $approval[0]->phoneNumber,
                             'message' =>
@@ -1637,6 +1648,21 @@ class TravelReimbursementController extends Controller
         if (empty($data)) {
             return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
         }
+
+        if ((int) ($data['0']->status ?? 0) === 9) {
+            $lastTravelId = (int) (DB::table('reimbursement_travel')
+                ->where('reimbursement_id', $id_main)
+                ->orderByDesc('id')
+                ->value('id') ?? 0);
+            if ($lastTravelId > 0) {
+                return redirect('reimbursement-travel/add-item/' . $id_main . '/' . $lastTravelId)
+                    ->withErrors([$this->rejectedTravelTabManageMessage()]);
+            }
+
+            return redirect('reimbursement-travel/add-item/' . $id_main)
+                ->withErrors([$this->rejectedTravelTabManageMessage()]);
+        }
+
         $travel_type = $data['0']->travel_type;
         if ($travel_type == 'Domestic') {
             $tripTypes = TravelTripType::where('type','LOCAL')->get();   
@@ -2028,7 +2054,7 @@ class TravelReimbursementController extends Controller
         $data = Reimbursement::find($id);
         $user = \App\User::where('id', $data->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -2052,7 +2078,7 @@ class TravelReimbursementController extends Controller
 
         if (!empty($approval)) {
             $curl = \Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                 ->withData([
                     'target' => $approval[0]->phoneNumber,
                     'message' =>
@@ -2074,6 +2100,10 @@ class TravelReimbursementController extends Controller
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
+
+        if (isset($_POST['save_item']) && $currentStatus === 9) {
+            return redirect()->back()->withErrors([$this->rejectedTravelTabManageMessage()]);
+        }
 
         $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
 
@@ -2318,7 +2348,7 @@ class TravelReimbursementController extends Controller
               $data = Reimbursement::find($id_main);
               $user = \App\User::where('id', $data->id_user)->first();
               $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                  ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                   ->withData([
                       'target' => $user->phoneNumber,
                       'message' =>
@@ -2342,7 +2372,7 @@ class TravelReimbursementController extends Controller
 
               if (!empty($approval)) {
                   $curl = \Curl::to('https://api.fonnte.com/send')
-                      ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                      ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                       ->withData([
                           'target' => $approval[0]->phoneNumber,
                           'message' =>
@@ -2365,6 +2395,10 @@ class TravelReimbursementController extends Controller
     public function updateItemReject(Request $request, $id_main, $id_travel)
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
+
+        if (isset($_POST['save_item'])) {
+            return redirect()->back()->withErrors([$this->rejectedTravelTabManageMessage()]);
+        }
 
         if (isset($_POST['save_again'])) {
             $status = 0;
@@ -2557,7 +2591,7 @@ class TravelReimbursementController extends Controller
               $data = Reimbursement::find($id_main);
               $user = \App\User::where('id', $data->id_user)->first();
               $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                  ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                   ->withData([
                       'target' => $user->phoneNumber,
                       'message' =>
@@ -2581,7 +2615,7 @@ class TravelReimbursementController extends Controller
 
               if (!empty($approval)) {
                   $curl = \Curl::to('https://api.fonnte.com/send')
-                      ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                      ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                       ->withData([
                           'target' => $approval[0]->phoneNumber,
                           'message' =>
@@ -2783,7 +2817,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Direktur Operasional') {
             $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -2806,7 +2840,7 @@ class TravelReimbursementController extends Controller
             foreach($hr_ga as $hr) {
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $hr->phoneNumber,
                         'message' =>
@@ -2826,7 +2860,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='Finance Supervisor') {
             $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -2849,7 +2883,7 @@ class TravelReimbursementController extends Controller
             foreach($finance as $fn) {
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $fn->phoneNumber,
                         'message' =>
@@ -2869,7 +2903,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Owner') {
             $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -2892,7 +2926,7 @@ class TravelReimbursementController extends Controller
             foreach($finance as $fn) {
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $fn->phoneNumber,
                         'message' =>
@@ -3382,7 +3416,7 @@ class TravelReimbursementController extends Controller
             if ($user && $user->phoneNumber) {
                 if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -3405,7 +3439,7 @@ class TravelReimbursementController extends Controller
                     foreach($hr_ga as $hr) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $hr->phoneNumber,
                                 'message' =>
@@ -3425,7 +3459,7 @@ class TravelReimbursementController extends Controller
 
                 if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR' || $jab === 'HR GA' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -3448,7 +3482,7 @@ class TravelReimbursementController extends Controller
                     foreach ($financeSupervisors as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>
@@ -3469,7 +3503,7 @@ class TravelReimbursementController extends Controller
 
                 if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -3491,7 +3525,7 @@ class TravelReimbursementController extends Controller
                             continue;
                         }
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>
@@ -3511,7 +3545,7 @@ class TravelReimbursementController extends Controller
 
                 if (($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'))) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -3534,7 +3568,7 @@ class TravelReimbursementController extends Controller
                     foreach($finance as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>
@@ -3719,7 +3753,7 @@ class TravelReimbursementController extends Controller
             $user = \App\User::where('id', $id_reimb_user)->first();
             if ($status != 10) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -3739,7 +3773,7 @@ class TravelReimbursementController extends Controller
 
                 if (!empty($approval)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                        ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                        ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                         ->withData([
                             'target' => $approval[0]->phoneNumber,
                             'message' =>

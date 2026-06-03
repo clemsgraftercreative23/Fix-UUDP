@@ -262,6 +262,9 @@ function rupiah($angka){
             } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
                 $canManageTabs = true;
             }
+            if ($statusInt === 9) {
+                $canManageTabs = false;
+            }
         @endphp
         <div class="row" v-for="(data,i) in reimburses">
             <div class="col-xl">
@@ -289,12 +292,14 @@ function rupiah($angka){
                                     </div>
                                 </li>
                                 @endforeach
+                                @if($canManageTabs)
                                 <li class="nav-item">
                                     <a class="nav-link active" data-toggle="tab" href="#reimburse-form"><span class="item-new">New Item</span></a>
                                 </li>
                                 <li class="nav-item">
                                     <button type="submit" class="nav-link" name="save_item" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
                                 </li>
+                                @endif
                                 <!-- <li class="nav-item">
                                     <a class="nav-link" href="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'') !!}"><i class="fa fa-plus"></i> &nbsp;Add New Item</a>
                                 </li> -->
