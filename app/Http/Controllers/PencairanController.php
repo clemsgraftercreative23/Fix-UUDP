@@ -448,7 +448,7 @@ class PencairanController extends Controller
             $user = \App\User::where('id',$dt->id_user)->first();
             $curl = \Curl::to('https://api.fonnte.com/send')
                         ->withHeaders([
-                            'Authorization: G-BJE9txd#aXDewvme7u'
+                            'Authorization: ' . config('services.fonnte.token')
                         ])
                         ->withData([
                             'target' => $user->phoneNumber,

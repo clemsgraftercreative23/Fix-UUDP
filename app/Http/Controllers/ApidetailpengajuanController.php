@@ -380,7 +380,7 @@ class ApidetailpengajuanController extends Controller
         DB::insert('insert into notif (data, created_at) values (?, ?)', ['Pengajuan Anda Telah Selesai di Pertanggungjawabankan dengan ID '.$c[0], $date]);
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
-                        'Authorization: G-BJE9txd#aXDewvme7u'
+                        'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
                         'target' => auth()->user()->phoneNumber,

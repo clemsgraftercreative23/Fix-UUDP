@@ -15,17 +15,17 @@ class ApprovalReminderRepository
 
     public function initialDelayMinutes(): int
     {
-        return (int) env('APPROVAL_REMINDER_INITIAL_DELAY_MINUTES', 30);
+        return (int) config('approval_reminder.initial_delay_minutes', 30);
     }
 
     public function repeatIntervalMinutes(): int
     {
-        return (int) env('APPROVAL_REMINDER_REPEAT_INTERVAL_MINUTES', 30);
+        return (int) config('approval_reminder.repeat_interval_minutes', 30);
     }
 
     public function maxDurationMinutes(): int
     {
-        return (int) env('APPROVAL_REMINDER_MAX_DURATION_MINUTES', 60);
+        return (int) config('approval_reminder.max_duration_minutes', 720);
     }
 
     public function upsertFromReimbursement(Reimbursement $reimbursement, ?string $baseUrl = null): ApprovalReminder

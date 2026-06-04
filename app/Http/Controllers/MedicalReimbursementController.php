@@ -321,7 +321,7 @@ class MedicalReimbursementController extends Controller
 //             $user = \App\User::where('id',$data->id_user)->first();
 //             $curl = \Curl::to('https://api.fonnte.com/send')
 //                         ->withHeaders([
-//                             'Authorization: G-BJE9txd#aXDewvme7u'
+//                             'Authorization: ' . config('services.fonnte.token')
 //                         ])
 //                         ->withData([
 //                             'target' => $user->phoneNumber,
@@ -336,7 +336,7 @@ class MedicalReimbursementController extends Controller
                 
 //                 $curl = \Curl::to('https://api.fonnte.com/send')
 //                         ->withHeaders([
-//                             'Authorization: G-BJE9txd#aXDewvme7u'
+//                             'Authorization: ' . config('services.fonnte.token')
 //                         ])
 //                         ->withData([
 //                             'target' => $value->phoneNumber,

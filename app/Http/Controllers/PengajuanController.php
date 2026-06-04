@@ -555,7 +555,7 @@ class PengajuanController extends Controller
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
-                        'Authorization: G-BJE9txd#aXDewvme7u'
+                        'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
                         'target' => $user->phoneNumber,
@@ -570,7 +570,7 @@ class PengajuanController extends Controller
           
           $curl = \Curl::to('https://api.fonnte.com/send')
                   ->withHeaders([
-                      'Authorization: G-BJE9txd#aXDewvme7u'
+                      'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
                       'target' => $value->phoneNumber,
@@ -623,7 +623,7 @@ class PengajuanController extends Controller
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
-                        'Authorization: G-BJE9txd#aXDewvme7u'
+                        'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
                         'target' => $user->phoneNumber,
@@ -638,7 +638,7 @@ class PengajuanController extends Controller
           
           $curl = \Curl::to('https://api.fonnte.com/send')
                   ->withHeaders([
-                      'Authorization: G-BJE9txd#aXDewvme7u'
+                      'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
                       'target' => $value->phoneNumber,
@@ -685,7 +685,7 @@ class PengajuanController extends Controller
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
-                        'Authorization: G-BJE9txd#aXDewvme7u'
+                        'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
                         'target' => $user->phoneNumber,
@@ -697,7 +697,7 @@ class PengajuanController extends Controller
         foreach ($financeManager as $value) {
           $curl = \Curl::to('https://api.fonnte.com/send')
                   ->withHeaders([
-                      'Authorization: G-BJE9txd#aXDewvme7u'
+                      'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
                       'target' => $value->phoneNumber,
@@ -758,7 +758,7 @@ class PengajuanController extends Controller
         $user = \App\User::where('id',$dt->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
-                        'Authorization: G-BJE9txd#aXDewvme7u'
+                        'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
                         'target' => $user->phoneNumber,
@@ -773,7 +773,7 @@ class PengajuanController extends Controller
           
           $curl = \Curl::to('https://api.fonnte.com/send')
                   ->withHeaders([
-                      'Authorization: G-BJE9txd#aXDewvme7u'
+                      'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
                       'target' => $value->phoneNumber,
@@ -845,7 +845,7 @@ class PengajuanController extends Controller
 
         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders([
-                        'Authorization: G-BJE9txd#aXDewvme7u'
+                        'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
                         'target' => auth()->user()->phoneNumber,
@@ -861,7 +861,7 @@ class PengajuanController extends Controller
           
           $curl = \Curl::to('https://api.fonnte.com/send')
                   ->withHeaders([
-                      'Authorization: G-BJE9txd#aXDewvme7u'
+                      'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
                       'target' => $value->phoneNumber,

@@ -27,7 +27,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">REIMBURSEMENT UUDP - TRAVEL ( Domestic )</h5>
-                        {{-- <p>Here’s a quick example to demonstrate Bootstrap’s form styles. </p> --}}
+                        {{-- <p>Hereâ€™s a quick example to demonstrate Bootstrapâ€™s form styles. </p> --}}
                         <input type="hidden" name="travel_type" value="Domestic">
                         <div class="row">
                             <div class="col-md-3">
@@ -116,7 +116,7 @@
                         <!--        <button class="btn btn-danger text-right" @click="removeTravel(i)"><i class="fa fa-trash"></i> Remove</button>-->
                         <!--    </div>-->
                         <!--</div>-->
-                        {{-- <p>Here’s a quick example to demonstrate Bootstrap’s form styles. </p> --}}
+                        {{-- <p>Hereâ€™s a quick example to demonstrate Bootstrapâ€™s form styles. </p> --}}
                         <div class="row">
                             <div class="col-md-3">
                                 <label for="">Transaction Date</label>

@@ -346,7 +346,7 @@ class PencairanReimbursementController extends Controller
             
             $user = \App\User::where('id', $data->id_user)->first();
             $curl = Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                 ->withData([
                     'target' => $user->phoneNumber,
                     'message' =>

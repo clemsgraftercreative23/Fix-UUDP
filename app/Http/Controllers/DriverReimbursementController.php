@@ -607,7 +607,7 @@ class DriverReimbursementController extends Controller
             if ($status != 10) {
             
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -631,7 +631,7 @@ class DriverReimbursementController extends Controller
 
                 if (!empty($approval)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                        ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                        ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                         ->withData([
                             'target' => $approval[0]->phoneNumber,
                             'message' =>
@@ -838,7 +838,7 @@ class DriverReimbursementController extends Controller
             $user = \App\User::where('id', $data->id_user)->first();
             
             $curl = \Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                 ->withData([
                     'target' => $user->phoneNumber,
                     'message' =>
@@ -862,7 +862,7 @@ class DriverReimbursementController extends Controller
 
             if (!empty($approval)) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $approval[0]->phoneNumber,
                         'message' =>
@@ -1225,7 +1225,7 @@ class DriverReimbursementController extends Controller
             if ($user && $user->phoneNumber) {
                 if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -1248,7 +1248,7 @@ class DriverReimbursementController extends Controller
                     foreach($hr_ga as $hr) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $hr->phoneNumber,
                                 'message' =>
@@ -1268,7 +1268,7 @@ class DriverReimbursementController extends Controller
 
                 if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -1291,7 +1291,7 @@ class DriverReimbursementController extends Controller
                     foreach($finance as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $fn->phoneNumber,
                         'message' =>
@@ -1312,7 +1312,7 @@ class DriverReimbursementController extends Controller
 
                 if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -1334,7 +1334,7 @@ class DriverReimbursementController extends Controller
                             continue;
                         }
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>
@@ -1354,7 +1354,7 @@ class DriverReimbursementController extends Controller
 
                 if (($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'))) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -1377,7 +1377,7 @@ class DriverReimbursementController extends Controller
                     foreach($finance as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>

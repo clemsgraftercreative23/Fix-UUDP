@@ -12,8 +12,6 @@ use Illuminate\Support\Facades\Log;
 
 class ApprovalReminderService
 {
-    const INITIAL_DELAY_MINUTES = 30;
-    const REPEAT_INTERVAL_MINUTES = 30;
     private $repository;
 
     private $client;
@@ -39,11 +37,9 @@ class ApprovalReminderService
     public function syncPendingReimbursements(?string $baseUrl = null): int
     {
         $count = 0;
-        $threshold = Carbon::now()->subMinutes($this->repository->maxDurationMinutes());
 
         Reimbursement::query()
             ->whereIn('status', [0, 1, 2, 11])
-            ->where('created_at', '>=', $threshold)
             ->orderBy('id')
             ->chunkById(100, function ($reimbursements) use (&$count, $baseUrl) {
                 foreach ($reimbursements as $reimbursement) {
@@ -168,13 +164,14 @@ class ApprovalReminderService
         $now = Carbon::now();
         if ($now->greaterThan(Carbon::parse($reminder->expires_at))) {
             $this->repository->stop($reminder, 'expired', (int) $reimbursement->status);
-            $this->repository->markLogFailed($log, 'Reminder expired after 12 hours');
+            $this->repository->markLogFailed($log, 'Reminder expired after ' . $this->repository->maxDurationMinutes() . ' minutes');
             return;
         }
 
         $recipients = $this->repository->recipientCollectionForReimbursement($reimbursement);
         if ($recipients->isEmpty()) {
             $this->repository->markLogFailed($log, 'No recipients available for this approval reminder');
+            $this->repository->refreshAfterFailure($reminder, $now, 'No recipients available for this approval reminder');
             Log::warning('Approval reminder skipped because there is no recipient', [
                 'reminder_id' => $reminder->id,
                 'reimbursement_id' => $reimbursement->id,
@@ -200,6 +197,7 @@ class ApprovalReminderService
 
         if (empty($responses)) {
             $this->repository->markLogFailed($log, 'No recipient with phone number was available');
+            $this->repository->refreshAfterFailure($reminder, $now, 'No recipient with phone number was available');
             return;
         }
 

@@ -459,7 +459,7 @@ class TravelReimbursementController extends Controller
             $user = \App\User::where('id', $data->id_user)->first();
             if ($status != 10) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -479,7 +479,7 @@ class TravelReimbursementController extends Controller
 
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $approval['0']->phoneNumber,
                         'message' =>
@@ -666,7 +666,7 @@ class TravelReimbursementController extends Controller
             $user = \App\User::where('id', $data->id_user)->first();
             if ($status != 10) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -686,7 +686,7 @@ class TravelReimbursementController extends Controller
 
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $approval['0']->phoneNumber,
                         'message' =>
@@ -1181,7 +1181,7 @@ class TravelReimbursementController extends Controller
         $data = Reimbursement::find($id);
         $user = \App\User::where('id', $data->id_user)->first();
         $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -1205,7 +1205,7 @@ class TravelReimbursementController extends Controller
 
 
         $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $approval['0']->phoneNumber,
                 'message' =>
@@ -1401,7 +1401,7 @@ class TravelReimbursementController extends Controller
               $data = Reimbursement::find($id_main);
               $user = \App\User::where('id', $data->id_user)->first();
               $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                  ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                   ->withData([
                       'target' => $user->phoneNumber,
                       'message' =>
@@ -1425,7 +1425,7 @@ class TravelReimbursementController extends Controller
 
 
               $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                  ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                   ->withData([
                       'target' => $approval['0']->phoneNumber,
                       'message' =>
@@ -1613,7 +1613,7 @@ class TravelReimbursementController extends Controller
               $data = Reimbursement::find($id_main);
               $user = \App\User::where('id', $data->id_user)->first();
               $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                  ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                   ->withData([
                       'target' => $user->phoneNumber,
                       'message' =>
@@ -1637,7 +1637,7 @@ class TravelReimbursementController extends Controller
 
 
               $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                  ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                   ->withData([
                       'target' => $approval['0']->phoneNumber,
                       'message' =>
@@ -1824,7 +1824,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Direktur Operasional') {
             $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -1847,7 +1847,7 @@ class TravelReimbursementController extends Controller
             foreach($hr_ga as $hr) {
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $hr->phoneNumber,
                         'message' =>
@@ -1867,7 +1867,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Finance') {
             $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -1890,7 +1890,7 @@ class TravelReimbursementController extends Controller
             foreach($finance as $fn) {
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $fn->phoneNumber,
                         'message' =>
@@ -1910,7 +1910,7 @@ class TravelReimbursementController extends Controller
 
         if (auth()->user()->jabatan=='Owner') {
             $curl = \Curl::to('https://api.fonnte.com/send')
-            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
                 'target' => $user->phoneNumber,
                 'message' =>
@@ -1933,7 +1933,7 @@ class TravelReimbursementController extends Controller
             foreach($finance as $fn) {
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $fn->phoneNumber,
                         'message' =>
@@ -2287,7 +2287,7 @@ class TravelReimbursementController extends Controller
             if ($user && $user->phoneNumber) {
                 if (auth()->user()->jabatan=='Direktur Operasional') {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -2310,7 +2310,7 @@ class TravelReimbursementController extends Controller
                     foreach($hr_ga as $hr) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $hr->phoneNumber,
                                 'message' =>
@@ -2330,7 +2330,7 @@ class TravelReimbursementController extends Controller
 
                 if (auth()->user()->jabatan=='Finance') {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -2353,7 +2353,7 @@ class TravelReimbursementController extends Controller
                     foreach($finance as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>
@@ -2374,7 +2374,7 @@ class TravelReimbursementController extends Controller
 
                 if (auth()->user()->jabatan=='Owner') {
                     $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -2397,7 +2397,7 @@ class TravelReimbursementController extends Controller
                     foreach($finance as $fn) {
 
                         $curl = \Curl::to('https://api.fonnte.com/send')
-                            ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
                                 'target' => $fn->phoneNumber,
                                 'message' =>
@@ -2569,7 +2569,7 @@ class TravelReimbursementController extends Controller
             $user = \App\User::where('id', $id_reimb_user)->first();
             if ($status != 10) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $user->phoneNumber,
                         'message' =>
@@ -2589,7 +2589,7 @@ class TravelReimbursementController extends Controller
 
 
                 $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: G-BJE9txd#aXDewvme7u'])
+                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
                         'target' => $approval['0']->phoneNumber,
                         'message' =>
