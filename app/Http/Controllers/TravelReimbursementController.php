@@ -181,12 +181,12 @@ class TravelReimbursementController extends Controller
             return true;
         }
 
-        return false;
-    }
+        if ($status === 9) {
+            $submitterId = (int) $reimbursement->id_user;
+            return $submitterId > 0 && $submitterId === (int) auth()->id();
+        }
 
-    private function rejectedTravelTabManageMessage(): string
-    {
-        return 'Pengajuan ditolak: tidak dapat menambah atau menghapus tab tanggal. Silakan edit data pada tab yang sudah ada.';
+        return false;
     }
 
     /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400 / -1.234,50. */
@@ -1210,12 +1210,6 @@ class TravelReimbursementController extends Controller
         $isSaveDraft = in_array('save_draft', $postKeys, true);
         $isSaveItem = in_array('save_item', $postKeys, true);
 
-        if ($isSaveItem && (int) (Reimbursement::whereId($id_main)->value('status') ?? 0) === 9) {
-            DB::rollback();
-
-            return redirect()->back()->withErrors([$this->rejectedTravelTabManageMessage()]);
-        }
-
         // Fallback: beberapa browser/flow tidak mengirim name tombol submit.
         // Default-kan ke submit/update agar tidak salah masuk flow "Add New Item"
         // yang memunculkan tab "New Item" lagi setelah user menekan Update.
@@ -1233,7 +1227,11 @@ class TravelReimbursementController extends Controller
             $status = $keepProgressStatus ? $currentStatus : 10; // DRAFT
             $notif = 'Reimbursement Successfully Saved as Draft';
         } else if ($isSaveItem) {
-            $status = $keepProgressStatus ? $currentStatus : 10;
+            if ($currentStatus === 9) {
+                $status = 9;
+            } else {
+                $status = $keepProgressStatus ? $currentStatus : 10;
+            }
             $notif = 'redirect';
         }
 
@@ -1647,20 +1645,6 @@ class TravelReimbursementController extends Controller
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id_main'"));
         if (empty($data)) {
             return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
-        }
-
-        if ((int) ($data['0']->status ?? 0) === 9) {
-            $lastTravelId = (int) (DB::table('reimbursement_travel')
-                ->where('reimbursement_id', $id_main)
-                ->orderByDesc('id')
-                ->value('id') ?? 0);
-            if ($lastTravelId > 0) {
-                return redirect('reimbursement-travel/add-item/' . $id_main . '/' . $lastTravelId)
-                    ->withErrors([$this->rejectedTravelTabManageMessage()]);
-            }
-
-            return redirect('reimbursement-travel/add-item/' . $id_main)
-                ->withErrors([$this->rejectedTravelTabManageMessage()]);
         }
 
         $travel_type = $data['0']->travel_type;
@@ -2101,10 +2085,6 @@ class TravelReimbursementController extends Controller
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
 
-        if (isset($_POST['save_item']) && $currentStatus === 9) {
-            return redirect()->back()->withErrors([$this->rejectedTravelTabManageMessage()]);
-        }
-
         $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
 
         if($request->id_user == $request->id_editor) {
@@ -2115,7 +2095,7 @@ class TravelReimbursementController extends Controller
               $status = $keepProgressStatus ? $currentStatus : 10; // DRAFT
               $return = redirect()->back()->with(['success' => "Reimbursement Successfully Saved as Draft"]);
           } else if (isset($_POST['save_item'])) {
-              $status = $keepProgressStatus ? $currentStatus : 10;
+              $status = $currentStatus === 9 ? 9 : ($keepProgressStatus ? $currentStatus : 10);
               $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
           }
         } else {
@@ -2396,16 +2376,15 @@ class TravelReimbursementController extends Controller
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
 
-        if (isset($_POST['save_item'])) {
-            return redirect()->back()->withErrors([$this->rejectedTravelTabManageMessage()]);
-        }
-
         if (isset($_POST['save_again'])) {
             $status = 0;
             $return = redirect('reimbursement-travel')->with(['success' => "Reimbursement Successfully Submitted Again"]);
         } else if (isset($_POST['save_finance'])) {
             $status = 1;
             $return = back()->with(['success' => "Reimbursement Successfully Updated"]);
+        } else if (isset($_POST['save_item'])) {
+            $status = 9;
+            $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
         } else {
             $status = 9;  
             $return = back()->with(['success' => "Reimbursement Successfully Updated"]);

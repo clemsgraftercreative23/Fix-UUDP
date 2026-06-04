@@ -78,10 +78,8 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         $canManageTabs = true;
     } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
         $canManageTabs = true;
-    }
-    // Status 9 (rejected): pengaju hanya edit isi tab yang ada — tidak tambah/hapus tab tanggal.
-    if ($statusInt === 9) {
-        $canManageTabs = false;
+    } elseif ($statusInt === 9) {
+        $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
     }
 @endphp
 <div class="nav-tabs-container">

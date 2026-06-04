@@ -261,9 +261,8 @@ function rupiah($angka){
                 $canManageTabs = true;
             } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
                 $canManageTabs = true;
-            }
-            if ($statusInt === 9) {
-                $canManageTabs = false;
+            } elseif ($statusInt === 9) {
+                $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
             }
         @endphp
         <div class="row" v-for="(data,i) in reimburses">
