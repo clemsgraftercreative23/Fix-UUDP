@@ -4,7 +4,7 @@
 
 <?php function rupiah($angka)
 {
-    return number_format($angka, 0, ',', '.');
+    return number_format((float) $angka, 0, ',', '.');
 } ?>
 
 @php
@@ -184,7 +184,7 @@ if (!function_exists('ent_attachment_rows')) {
                             </div>
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Total</label>
-                                <input type="text" class="form-control" value="{{number_format($data->nominal_pengajuan,0,',','.')}}" readonly>
+                                <input type="text" class="form-control" value="{{ rupiah($data->nominal_pengajuan) }}" readonly>
                             </div>
                             <div class="form-group col-md-3">
                                 <label for="inputEmail4">Approved by Head Department</label>
@@ -295,7 +295,7 @@ if (!function_exists('ent_attachment_rows')) {
                         <td>{{$row->company}}</td>
                         <td>{{$row->type}}</td>
                         <td>{{$row->payment_type}}</td>
-                        <td>{{number_format($row->amount,0,'.',',')}}</td>
+                        <td>{{ rupiah($row->amount) }}</td>
                         <td width="260px">
                             @foreach(ent_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
                                 @php $fileName = $att['file_name'] ?? ''; $display = $att['original_name'] ?? $fileName; @endphp
@@ -349,7 +349,7 @@ if (!function_exists('ent_attachment_rows')) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($bdc,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ rupiah($bdc) }}" />
                             </div>
                         </div>
                     </div>
@@ -381,13 +381,13 @@ if (!function_exists('ent_attachment_rows')) {
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Bank</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($cash,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ rupiah($cash) }}" />
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label>Total</label>
-                                <input readonly type="text" class="form-control" name="bank" value="{{number_format($cash,0,',','.')}}" />
+                                <input readonly type="text" class="form-control" name="bank" value="{{ rupiah($cash) }}" />
                             </div>
                         </div>
                     </div>
