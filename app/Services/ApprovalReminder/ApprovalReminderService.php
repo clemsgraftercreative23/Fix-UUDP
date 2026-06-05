@@ -234,7 +234,9 @@ class ApprovalReminderService
     {
         return 'Hai *' . $recipient->name . "*,\n\n" .
             'Pengajuan reimbursement nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* masih berstatus *PENDING* pada tahap *' . $reminder->stage_label . "*.\n\n" .
-            'Reminder otomatis berjalan setiap ' . $this->intervalText($this->repository->repeatIntervalMinutes()) . ' dan akan berhenti setelah ' . $this->intervalText($this->repository->maxDurationMinutes()) . ' atau saat status berubah menjadi APPROVED/REJECTED.\n\n' .
+            'Notifikasi reminder akan terkirim otomatis selama pengajuan belum Anda approve.' . "\n" .
+            'Pengingat pertama sekitar *' . $this->intervalText($this->repository->initialDelayMinutes()) . '* setelah pengajuan, lalu diulang setiap *' . $this->intervalText($this->repository->repeatIntervalMinutes()) . '*. Pengingat berhenti setelah *' . $this->intervalText($this->repository->maxDurationMinutes()) . '* atau saat status berubah menjadi *APPROVED/REJECTED*.' . "\n\n" .
+            'Terima kasih.' . "\n\n" .
             'Klik untuk melihat detail pengajuan : ' . $detailUrl;
     }
 
