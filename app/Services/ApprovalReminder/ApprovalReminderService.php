@@ -104,7 +104,7 @@ class ApprovalReminderService
             $output[] = [
                 'id' => $reminder->id,
                 'no_reimbursement' => $reimbursement->no_reimbursement,
-                'stage_label' => $reminder->stage_label,
+                'stage_label' => $this->repository->stageLabel((int) $reimbursement->status),
                 'recipients' => $recipientNames,
                 'next_send_at' => (string) $reminder->next_send_at,
                 'expires_at' => (string) $reminder->expires_at,
@@ -155,7 +155,24 @@ class ApprovalReminderService
             return;
         }
 
-        if ($this->repository->shouldStopForStatus((int) $reimbursement->status)) {
+        $statusAtSchedule = (int) $reminder->source_status;
+        $currentStatus = (int) $reimbursement->status;
+
+        if ($statusAtSchedule !== $currentStatus) {
+            $this->repository->upsertFromReimbursement($reimbursement);
+            $this->repository->markLogFailed($log, 'Skipped: approval stage changed; reminder rescheduled for current stage');
+            return;
+        }
+
+        $this->repository->upsertFromReimbursement($reimbursement);
+        $reminder->refresh();
+
+        if (!$reminder->is_active) {
+            $this->repository->markLogFailed($log, 'Reminder is no longer active');
+            return;
+        }
+
+        if ($this->repository->shouldStopForStatus($currentStatus)) {
             $this->repository->stop($reminder, $this->repository->reasonForStatus((int) $reimbursement->status), (int) $reimbursement->status);
             $this->repository->markLogFailed($log, 'Reminder stopped because approval is no longer pending');
             return;
@@ -187,7 +204,7 @@ class ApprovalReminderService
                 continue;
             }
 
-            $message = $this->buildMessage($reimbursement, $recipient, $reminder, $this->repository->detailUrl($reimbursement, config('app.url')));
+            $message = $this->buildMessage($reimbursement, $recipient, $this->repository->detailUrl($reimbursement, config('app.url')));
             $responses[] = [
                 'recipient' => $recipient->name,
                 'phone' => $recipient->phoneNumber,
@@ -230,10 +247,12 @@ class ApprovalReminderService
         ]);
     }
 
-    private function buildMessage(Reimbursement $reimbursement, $recipient, ApprovalReminder $reminder, string $detailUrl): string
+    private function buildMessage(Reimbursement $reimbursement, $recipient, string $detailUrl): string
     {
+        $stageLabel = $this->repository->stageLabel((int) $reimbursement->status);
+
         return 'Hai *' . $recipient->name . "*,\n\n" .
-            'Pengajuan reimbursement nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* masih berstatus *PENDING* pada tahap *' . $reminder->stage_label . "*.\n\n" .
+            'Pengajuan reimbursement nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* masih berstatus *PENDING* pada tahap *' . $stageLabel . "*.\n\n" .
             'Notifikasi reminder akan terkirim otomatis selama pengajuan belum Anda approve.' . "\n" .
             'Pengingat pertama sekitar *' . $this->intervalText($this->repository->initialDelayMinutes()) . '* setelah pengajuan, lalu diulang setiap *' . $this->intervalText($this->repository->repeatIntervalMinutes()) . '*. Pengingat berhenti setelah *' . $this->intervalText($this->repository->maxDurationMinutes()) . '* atau saat status berubah menjadi *APPROVED/REJECTED*.' . "\n\n" .
             'Terima kasih.' . "\n\n" .
