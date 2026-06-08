@@ -152,7 +152,7 @@ class PencairanReimbursementController extends Controller
         $data = Reimbursement::find($id);
         $kasbank = Kasbank::get();
         $user = User::find($data->id_user);
-        $empNo = $user->idKaryawan;
+        $empNo = $user->idKaryawan ?? '';
         
         if($data->reimbursement_type==1) {
             $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, allowance_cash, metode_allowance, metode_cash FROM reimbursement WHERE id = '$id'"));
@@ -218,7 +218,13 @@ class PencairanReimbursementController extends Controller
             // $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;
 
 
-            $data = Reimbursement::find($id);
+            $data = Reimbursement::with([
+                'user',
+                'rates',
+                'travels.tripType',
+                'travels.hotelCondition',
+                'travels.details.costType',
+            ])->find($id);
             return view('pencairan-reimbursement.detail_travel',[
                 'data' => $data,
                 'kasbank' => $kasbank,

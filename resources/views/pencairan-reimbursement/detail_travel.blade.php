@@ -37,7 +37,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">DETAIL REIMBURSEMENT TRAVEL</h5><hr>
-                        <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
+                        <p>Below is the reimbursement data submitted by <b>{{ $data->applicantDisplayName() }}</b>.</p>
                         <hr>
                         @if(session()->has('success'))
                         <div class="alert alert-success">
@@ -158,24 +158,25 @@
                         <th>Transaction Date</th>
                         <td class="bg-secondary">{{$data->date}}</td>
                         <th>Trip Type</th>
-                        <td class="bg-secondary">{{$item->tripType->name}}</td>
+                        <td class="bg-secondary">{{ optional($item->tripType)->name ?? 'None' }}</td>
                         <th>Hotel At</th>
-                        <td class="bg-secondary">{{$item->hotelCondition->name}}</td>
+                        <td class="bg-secondary">{{ optional($item->hotelCondition)->name ?? 'Not Stay' }}</td>
                         <th>Allowance</th>
-                        <td class="bg-secondary">{{$item->tripType->currency}} {{number_format($item->allowance,0,',','.')}}</td>
+                        <td class="bg-secondary">{{ optional($item->tripType)->currency ?? 'IDR' }} {{number_format($item->allowance,0,',','.')}}</td>
                         <th>Allowance (IDR)</th>
                         <td class="bg-secondary">
                             @php
-                                $currency = App\TravelTripRate::where('reimbursement_id',$data->id)->where('currency',$item->tripType->currency)->first();
+                                $tripCurrency = optional($item->tripType)->currency ?? 'IDR';
+                                $currency = App\TravelTripRate::where('reimbursement_id',$data->id)->where('currency',$tripCurrency)->first();
                                 if ($currency) {
                                     $currency = $currency->rate;
                                 }
 
-                                if (!$currency && $item->tripType->currency == "IDR") {
+                                if (!$currency && $tripCurrency == "IDR") {
                                     $currency = 1;
                                 }
 
-                                if (!$currency && $item->tripType->currency == "USD") {
+                                if (!$currency && $tripCurrency == "USD") {
                                     $currency = 16400;
                                 }
 
@@ -218,7 +219,7 @@
                 @foreach ($item->details as $dt)
                     
                 <tr>
-                    <td>{{$dt->costType->name}}</td>
+                    <td>{{ optional($dt->costType)->name ?? '-' }}</td>
                     <td>{{$dt->destination}}</td>
                     <td>{{ $data->remark ?? '' }}</td>
                     <td>{{$dt->currency}}</td>
@@ -447,19 +448,19 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Bank Account Name</label>
-                                    <input type="text" class="form-control" name="penerima" value="{{$data->user->name}}" required/>
+                                    <input type="text" class="form-control" name="penerima" value="{{ $data->applicantDisplayName() }}" required/>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Bank Account Number</label>
-                                    <input type="text" class="form-control" name="no_rek" value="{{$data->user->bankAccount}}" required/>
+                                    <input type="text" class="form-control" name="no_rek" value="{{ optional($data->user)->bankAccount ?? '' }}" required/>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Bank</label>
-                                    <input type="text" class="form-control" name="bank" value="{{$data->user->bankName}}" required/>
+                                    <input type="text" class="form-control" name="bank" value="{{ optional($data->user)->bankName ?? '' }}" required/>
                                 </div>
                             </div>
                         </div>
