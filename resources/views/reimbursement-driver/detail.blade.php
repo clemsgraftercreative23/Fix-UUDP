@@ -772,6 +772,7 @@ if (!function_exists('driver_attachment_rows')) {
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 <script>
@@ -2723,20 +2724,24 @@ if (!function_exists('driver_attachment_rows')) {
             fileInput.off("change").on("change", function (event) {
               var file = event.target.files[0];
 
-              if (file) {
-                var reader = new FileReader();
+              if (!file) {
+                return;
+              }
+
+              DriverUpload.compressImageFile(file).then(function (processedFile) {
+                DriverUpload.setFileOnInput(fileInput[0], processedFile);
+
                 $("#action_button").prop("disabled", false);
                 $(".warning-upload").hide();
 
+                var reader = new FileReader();
                 reader.onload = function (e) {
                   let previewDiv = getPreviewDivFromRow(row);
                   previewDiv.append(createPreviewImage(e.target.result));
-
                   btn.find("i").removeClass("fa-upload").addClass("fa-check");
                 };
-
-                reader.readAsDataURL(file);
-              }
+                reader.readAsDataURL(processedFile);
+              });
             });
           });
 
@@ -2750,55 +2755,29 @@ if (!function_exists('driver_attachment_rows')) {
 
             if (navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices
-                    .getUserMedia({
-                        video: {
-                            facingMode: { ideal: "environment" }, // kamera belakang
-                            width: { ideal: 1920 },  // minta resolusi Full HD
-                            height: { ideal: 1080 },
-                            focusMode: "continuous", // auto focus (didukung beberapa device)
-                            exposureMode: "continuous"
-                        }
-                    })
+                    .getUserMedia(DriverUpload.getCameraConstraints())
                     .then(function (stream) {
                         $("#modalPhoto").modal("show");
                         let videoElement = $("#videoElement")[0];
                         videoElement.srcObject = stream;
 
                         $("#captureButton").off("click").on("click", function () {
-                            const canvas = document.createElement("canvas");
-                            const context = canvas.getContext("2d");
-
-                            // Gunakan resolusi asli kamera biar proporsional
-                            const videoWidth = videoElement.videoWidth;
-                            const videoHeight = videoElement.videoHeight;
-                            canvas.width = videoWidth;
-                            canvas.height = videoHeight;
-
-                            // Render dengan kualitas tinggi
-                            context.imageSmoothingEnabled = true;
-                            context.imageSmoothingQuality = "high";
-                            context.drawImage(videoElement, 0, 0, videoWidth, videoHeight);
-
-                            // Simpan sebagai JPEG dengan kualitas tinggi (0.92 - 0.95)
-                            canvas.toBlob(function (blob) {
-                                const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-
-                                const dataTransfer = new DataTransfer();
-                                dataTransfer.items.add(file);
-                                fileInput[0].files = dataTransfer.files;
+                            DriverUpload.captureFromVideo(videoElement).then(function (file) {
+                                DriverUpload.setFileOnInput(fileInput[0], file);
 
                                 const imageURL = URL.createObjectURL(file);
                                 let previewDiv = getPreviewDivFromRow(row);
                                 previewDiv.append(createPreviewImage(imageURL));
                                 btn.find("i").removeClass("fa-camera").addClass("fa-check");
 
-                                // stop kamera
                                 stream.getTracks().forEach(track => track.stop());
                                 $("#modalPhoto").modal("hide");
                                 $("#action_button").prop("disabled", false);
                                 $("#action_button_draft").prop("disabled", false);
                                 $(".warning-upload").hide();
-                            }, "image/jpeg", 0.92); // lebih jernih
+                            }).catch(function (err) {
+                                console.error("Failed to capture image: " + err);
+                            });
                         });
                     })
                     .catch(function (err) {

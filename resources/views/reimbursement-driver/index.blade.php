@@ -377,6 +377,7 @@
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
@@ -2274,7 +2275,13 @@ $("body").on("click",".remove-item",function(){
       fileInput.off("change").on("change", function (event) {
         let file = event.target.files[0];
 
-        if (file) {
+        if (!file) {
+          return;
+        }
+
+        DriverUpload.compressImageFile(file).then(function (processedFile) {
+          DriverUpload.setFileOnInput(fileInput[0], processedFile);
+
           $("#action_button").prop("disabled", false);
           $("#action_button_draft").prop("disabled", false);
           $(".warning-upload").hide();
@@ -2282,10 +2289,9 @@ $("body").on("click",".remove-item",function(){
           let previewDiv = row.find("#preview_" + (idx + 1));
           previewDiv.empty();
 
-          let fileType = file.type;
+          let fileType = processedFile.type;
 
           if (fileType.startsWith("image/")) {
-            // Preview gambar
             let reader = new FileReader();
             reader.onload = function (e) {
               previewDiv.append(
@@ -2298,12 +2304,10 @@ $("body").on("click",".remove-item",function(){
                 })
               );
             };
-            reader.readAsDataURL(file);
-
+            reader.readAsDataURL(processedFile);
           } else if (fileType === "application/pdf") {
-            // Preview ikon PDF + link ke file
-            let pdfIcon = 'https://cdn-icons-png.flaticon.com/512/337/337946.png'; // atau file lokal
-            let fileURL = URL.createObjectURL(file);
+            let pdfIcon = 'https://cdn-icons-png.flaticon.com/512/337/337946.png';
+            let fileURL = URL.createObjectURL(processedFile);
 
             previewDiv.append(
               $('<a>').attr({
@@ -2323,11 +2327,10 @@ $("body").on("click",".remove-item",function(){
                 })
               )
             );
-
           } else {
             previewDiv.append('<p style="color:red;">File tidak didukung</p>');
           }
-        }
+        });
       });
     });
 
@@ -2341,42 +2344,15 @@ $("body").on("click",".remove-item",function(){
 
       if (navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices
-              .getUserMedia({
-                  video: {
-                      facingMode: { ideal: "environment" }, // kamera belakang
-                      width: { ideal: 1920 },  // minta resolusi Full HD
-                      height: { ideal: 1080 },
-                      focusMode: "continuous", // auto focus (didukung beberapa device)
-                      exposureMode: "continuous"
-                  }
-              })
+              .getUserMedia(DriverUpload.getCameraConstraints())
               .then(function (stream) {
                   $("#modalPhoto").modal("show");
                   let videoElement = $("#videoElement")[0];
                   videoElement.srcObject = stream;
 
                   $("#captureButton").off("click").on("click", function () {
-                      const canvas = document.createElement("canvas");
-                      const context = canvas.getContext("2d");
-
-                      // Gunakan resolusi asli kamera biar proporsional
-                      const videoWidth = videoElement.videoWidth;
-                      const videoHeight = videoElement.videoHeight;
-                      canvas.width = videoWidth;
-                      canvas.height = videoHeight;
-
-                      // Render dengan kualitas tinggi
-                      context.imageSmoothingEnabled = true;
-                      context.imageSmoothingQuality = "high";
-                      context.drawImage(videoElement, 0, 0, videoWidth, videoHeight);
-
-                      // Simpan sebagai JPEG dengan kualitas tinggi (0.92 - 0.95)
-                      canvas.toBlob(function (blob) {
-                          const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-
-                          const dataTransfer = new DataTransfer();
-                          dataTransfer.items.add(file);
-                          fileInput[0].files = dataTransfer.files;
+                      DriverUpload.captureFromVideo(videoElement).then(function (file) {
+                          DriverUpload.setFileOnInput(fileInput[0], file);
 
                           const imageURL = URL.createObjectURL(file);
                           let previewDiv = row.find("#preview_" + (idx + 1));
@@ -2390,13 +2366,14 @@ $("body").on("click",".remove-item",function(){
                               })
                           );
 
-                          // stop kamera
                           stream.getTracks().forEach(track => track.stop());
                           $("#modalPhoto").modal("hide");
                           $("#action_button").prop("disabled", false);
                           $("#action_button_draft").prop("disabled", false);
                           $(".warning-upload").hide();
-                      }, "image/jpeg", 0.92); // lebih jernih
+                      }).catch(function (err) {
+                          console.error("Failed to capture image: " + err);
+                      });
                   });
               })
               .catch(function (err) {
