@@ -64,4 +64,18 @@ class Reimbursement extends Model
     function approvalReminders() {
       return $this->morphMany('App\ApprovalReminder', 'subject');
     }
+
+    /**
+     * Display name of the reimbursement submitter for WhatsApp notifications.
+     */
+    public function applicantDisplayName(): string
+    {
+        if ($this->created_by !== null && $this->created_by !== '') {
+            return (string) $this->created_by;
+        }
+
+        $submitter = $this->relationLoaded('user') ? $this->user : User::find($this->id_user);
+
+        return $submitter ? (string) $submitter->name : '-';
+    }
 }

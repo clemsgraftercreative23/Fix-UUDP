@@ -401,6 +401,7 @@ class ReimbursementController extends Controller
                 ->withErrors(['Anda tidak dapat menyetujui atau menolak pengajuan reimbursement yang Anda buat sendiri.']);
         }
         $nama_approval = ucfirst($approver->name);
+        $applicantName = $data->applicantDisplayName();
         if ($approver->jabatan == 'Direktur Operasional' || ($approver->jabatan == 'superadmin' && (int) $data->status === 0)) {
             $level = 'Head Department';
         } else if (($approver->jabatan == 'Finance' || $approver->jabatan == 'HR' || $approver->jabatan == 'HR GA' || $approver->jabatan == 'superadmin') && (int) $data->status === 1) {
@@ -457,7 +458,9 @@ class ReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $row->name .
-                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *" .
+                            $applicantName .
+                            "* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
@@ -512,7 +515,9 @@ class ReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $row->name .
-                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *" .
+                            $applicantName .
+                            "* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
@@ -563,7 +568,9 @@ class ReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $row->name .
-                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *" .
+                            $applicantName .
+                            "* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
@@ -614,7 +621,9 @@ class ReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $row->name .
-                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *" .
+                            $applicantName .
+                            "* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
@@ -665,7 +674,9 @@ class ReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $row->name .
-                            "*,\n\nPengajuan reimbursement dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *" .
+                            $applicantName .
+                            "* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .

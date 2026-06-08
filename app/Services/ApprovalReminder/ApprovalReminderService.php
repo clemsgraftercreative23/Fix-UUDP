@@ -250,9 +250,10 @@ class ApprovalReminderService
     private function buildMessage(Reimbursement $reimbursement, $recipient, string $detailUrl): string
     {
         $stageLabel = $this->repository->stageLabel((int) $reimbursement->status);
+        $applicantName = $reimbursement->applicantDisplayName();
 
         return 'Hai *' . $recipient->name . "*,\n\n" .
-            'Pengajuan reimbursement nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* masih berstatus *PENDING* pada tahap *' . $stageLabel . "*.\n\n" .
+            'Pengajuan reimbursement nama *' . $applicantName . '* dengan nomor *' . $reimbursement->no_reimbursement . '* sebesar *Rp ' . number_format($reimbursement->nominal_pengajuan, 0, ',', '.') . '* masih berstatus *PENDING* pada tahap *' . $stageLabel . "*.\n\n" .
             'Notifikasi reminder akan terkirim otomatis selama pengajuan belum Anda approve.' . "\n" .
             'Pengingat pertama sekitar *' . $this->intervalText($this->repository->initialDelayMinutes()) . '* setelah pengajuan, lalu diulang setiap *' . $this->intervalText($this->repository->repeatIntervalMinutes()) . '*. Pengingat berhenti setelah *' . $this->intervalText($this->repository->maxDurationMinutes()) . '* atau saat status berubah menjadi *APPROVED/REJECTED*.' . "\n\n" .
             'Terima kasih.' . "\n\n" .
