@@ -14,12 +14,119 @@ use App\Master_daftar_rencana;
 use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use App\Repositories\ApprovalReminderRepository;
 use App\Support\ActivityLogger;
+use Illuminate\Support\Facades\Log;
+
 class DriverReimbursementController extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth');
+    }
+
+    private function sendDriverWhatsApp(?string $target, string $message, array $context = []): void
+    {
+        $target = trim((string) $target);
+        if ($target === '') {
+            Log::warning('Driver reimbursement WhatsApp skipped: empty phone number', $context);
+
+            return;
+        }
+
+        $token = config('services.fonnte.token');
+        if (empty($token)) {
+            Log::warning('Driver reimbursement WhatsApp skipped: Fonnte token not configured', $context);
+
+            return;
+        }
+
+        try {
+            $response = \Curl::to(config('services.fonnte.base_url', 'https://api.fonnte.com/send'))
+                ->withHeaders(['Authorization: ' . $token])
+                ->withData([
+                    'target' => $target,
+                    'message' => $message,
+                ])
+                ->post();
+
+            $decoded = json_decode((string) $response, true);
+            if (is_array($decoded) && array_key_exists('status', $decoded) && !$decoded['status']) {
+                Log::warning('Driver reimbursement WhatsApp send failed', array_merge($context, [
+                    'target' => $target,
+                    'response' => $decoded,
+                ]));
+            }
+        } catch (\Throwable $e) {
+            Log::error('Driver reimbursement WhatsApp send error', array_merge($context, [
+                'target' => $target,
+                'error' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    private function notifyDriverSubmission(Reimbursement $data, User $submitter, bool $resubmit = false): void
+    {
+        $detailUrl = url('/reimbursement-driver/' . $data->id);
+        $submitterAction = $resubmit ? 'telah diajukan kembali' : 'telah diterima';
+        $approverAction = $resubmit ? 'telah diajukan kembali' : 'telah diterima';
+
+        $this->sendDriverWhatsApp($submitter->phoneNumber, (
+            "Hai *" .
+            $submitter->name .
+            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+            $data->no_reimbursement .
+            "* sebesar *Rp " .
+            number_format($data->nominal_pengajuan, 0, ',', '.') .
+            "* {$submitterAction}.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Head Department.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+            $detailUrl
+        ), [
+            'reimbursement_id' => $data->id,
+            'no_reimbursement' => $data->no_reimbursement,
+            'recipient_role' => 'submitter',
+        ]);
+
+        $approver = $submitter->id_approval ? User::find($submitter->id_approval) : null;
+        if (!$approver || empty($approver->phoneNumber)) {
+            Log::warning('Driver reimbursement approver WhatsApp skipped: approver or phone missing', [
+                'reimbursement_id' => $data->id,
+                'submitter_id' => $submitter->id,
+                'id_approval' => $submitter->id_approval,
+            ]);
+
+            return;
+        }
+
+        $this->sendDriverWhatsApp($approver->phoneNumber, (
+            "Hai *" .
+            $approver->name .
+            "*,\n\nPengajuan reimbursement nama *" . $submitter->name . "* dengan nomor *" .
+            $data->no_reimbursement .
+            "* sebesar *Rp " .
+            number_format($data->nominal_pengajuan, 0, ',', '.') .
+            "* {$approverAction}.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+            $detailUrl
+        ), [
+            'reimbursement_id' => $data->id,
+            'no_reimbursement' => $data->no_reimbursement,
+            'recipient_role' => 'approver',
+        ]);
+    }
+
+    private function queueDriverApprovalReminder(Reimbursement $data): void
+    {
+        if ((int) $data->status !== 0) {
+            return;
+        }
+
+        try {
+            app(ApprovalReminderRepository::class)->upsertFromReimbursement($data);
+        } catch (\Throwable $e) {
+            Log::error('Driver reimbursement approval reminder upsert failed', [
+                'reimbursement_id' => $data->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function attachmentTableReady(): bool
@@ -602,55 +709,16 @@ class DriverReimbursementController extends Controller
                 $dt->save();
             }
 
-            $user = \App\User::where('id', $data->id_user)->first();
-
-            if ($status != 10) {
-            
-                $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                    ->withData([
-                        'target' => $user->phoneNumber,
-                        'message' =>
-                            "Hai *" .
-                            $user->name .
-                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
-                            $data->no_reimbursement .
-                            "* sebesar *Rp " .
-                            number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Head Department.\n\nTerima kasih.
-                            \n\nKlik untuk melihat detail pengajuan : " .
-                            url('/reimbursement-driver/' . $data->id),
-                    ])->post();
-
-                $dirops = \App\User::where('jabatan', 'Direktur Operasional')->where(function ($query) use ($user) {
-                        $query->where('departmentId', $user->departmentId)->orWhere('departmentId', null);
-                        })->get();
-
-                $id_approval  = $user->id_approval;
-                $approval = DB::select(DB::raw("SELECT * FROM users WHERE id='$id_approval'"));
-
-                if (!empty($approval)) {
-                    $curl = \Curl::to('https://api.fonnte.com/send')
-                        ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                        ->withData([
-                            'target' => $approval[0]->phoneNumber,
-                            'message' =>
-                                "Hai *" .
-                                $approval[0]->name .
-                                "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
-                                $data->no_reimbursement .
-                                "* sebesar *Rp " .
-                                number_format($data->nominal_pengajuan, 0, ',', '.') .
-                                "* telah diterima.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
-                                url('/reimbursement-driver/' . $data->id),
-                        ])->post();
-                }
-            }
-            
+            $user = User::find($data->id_user);
 
             DB::commit();
-            return redirect()
-                ->back()
+
+            if ($status != 10 && $user) {
+                $this->notifyDriverSubmission($data, $user);
+                $this->queueDriverApprovalReminder($data);
+            }
+
+            return redirect('reimbursement-driver')
                 ->with(['success' => $notif]);
         } catch (\Exception $e) {
             // return var_dump($e);
@@ -835,52 +903,16 @@ class DriverReimbursementController extends Controller
 
             $delete = DB::select(DB::raw("DELETE FROM reimbursement_driver WHERE reimbursement_id = '$id' AND status=0"));
 
-            $user = \App\User::where('id', $data->id_user)->first();
-            
-            $curl = \Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                ->withData([
-                    'target' => $user->phoneNumber,
-                    'message' =>
-                        "Hai *" .
-                        $user->name .
-                        "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
-                        $data->no_reimbursement .
-                        "* sebesar *Rp " .
-                        number_format($data->nominal_pengajuan, 0, ',', '.') .
-                        "* telah diajukan kembali.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Head Department.\n\nTerima kasih.
-                        \n\nKlik untuk melihat detail pengajuan : " .
-                        url('/reimbursement-driver/' . $data->id),
-                ])->post();
-
-            $dirops = \App\User::where('jabatan', 'Direktur Operasional')->where(function ($query) use ($user) {
-                    $query->where('departmentId', $user->departmentId)->orWhere('departmentId', null);
-                    })->get();
-
-            $id_approval  = $user->id_approval;
-            $approval = DB::select(DB::raw("SELECT * FROM users WHERE id='$id_approval'"));
-
-            if (!empty($approval)) {
-                $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                    ->withData([
-                        'target' => $approval[0]->phoneNumber,
-                        'message' =>
-                            "Hai *" .
-                            $approval[0]->name .
-                            "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
-                            $data->no_reimbursement .
-                            "* sebesar *Rp " .
-                            number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diajukan kembali.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
-                            url('/reimbursement-driver/' . $data->id),
-                    ])->post();
-            }
-            
+            $user = User::find($data->id_user);
 
             DB::commit();
-            return redirect()
-                ->back()
+
+            if ($user) {
+                $this->notifyDriverSubmission($data, $user, true);
+                $this->queueDriverApprovalReminder($data);
+            }
+
+            return redirect('reimbursement-driver')
                 ->with(['success' => 'Reimbursement Successfully Submitted']);
         } catch (\Exception $e) {
             // return var_dump($e);
