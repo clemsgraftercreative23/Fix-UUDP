@@ -274,8 +274,9 @@ class ApprovalReminderRepository
     public function approverJabatanForStage(int $reimbursementType, int $status): array
     {
         if ($status === 1) {
+            // HR GA stage only — Finance Supervisor is notified at status 2.
             return $reimbursementType === 2
-                ? ['Finance', 'Finance Supervisor', 'HR', 'HR GA']
+                ? ['Finance', 'HR', 'HR GA']
                 : ['Finance', 'HR GA'];
         }
 

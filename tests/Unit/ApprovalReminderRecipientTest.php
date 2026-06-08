@@ -18,12 +18,12 @@ class ApprovalReminderRecipientTest extends TestCase
         );
     }
 
-    public function test_travel_hr_ga_stage_includes_finance_supervisor()
+    public function test_travel_hr_ga_stage_does_not_include_finance_supervisor()
     {
         $repository = new ApprovalReminderRepository();
 
         $this->assertSame(
-            ['Finance', 'Finance Supervisor', 'HR', 'HR GA'],
+            ['Finance', 'HR', 'HR GA'],
             $repository->approverJabatanForStage(2, 1)
         );
     }
