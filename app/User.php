@@ -46,4 +46,16 @@ class User extends Authenticatable
 
         return (int) static::whereKey($submitterId)->value('id_approval') === (int) $this->id;
     }
+
+    /**
+     * Final finance approvers at status 11. jabatan "Owner" is labeled Finance in admin UI.
+     */
+    public static function financeManagerNotificationRecipients()
+    {
+        return static::query()
+            ->whereIn('jabatan', ['Finance Manager', 'Owner'])
+            ->whereNotNull('phoneNumber')
+            ->where('phoneNumber', '!=', '')
+            ->get();
+    }
 }

@@ -3521,7 +3521,7 @@ class TravelReimbursementController extends Controller
                     ])
                     ->post();
 
-                    $fmUsers = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Manager'"));
+                    $fmUsers = User::financeManagerNotificationRecipients();
                     foreach ($fmUsers as $fn) {
                         if (empty($fn->phoneNumber)) {
                             continue;
