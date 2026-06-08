@@ -2,38 +2,18 @@
 
 namespace App\Services\ApprovalReminder;
 
-use Illuminate\Support\Facades\Log;
+use App\Support\FonnteMessenger;
 
 class FonnteClient
 {
     public function send(string $target, string $message): array
     {
-        $baseUrl = config('services.fonnte.base_url', 'https://api.fonnte.com/send');
-        $token = config('services.fonnte.token');
+        $result = FonnteMessenger::send($target, $message, ['channel' => 'approval_reminder']);
 
-        if (empty($token)) {
-            throw new \RuntimeException('Fonnte token is not configured');
+        if ($result === null) {
+            throw new \RuntimeException('Fonnte send failed or phone number is invalid');
         }
 
-        $response = \Curl::to($baseUrl)
-            ->withHeaders([
-                'Authorization: ' . $token,
-            ])
-            ->withData([
-                'target' => $target,
-                'message' => $message,
-            ])
-            ->post();
-
-        $decoded = json_decode((string) $response, true);
-
-        if (is_array($decoded) && array_key_exists('status', $decoded) && !$decoded['status']) {
-            Log::warning('Fonnte reminder send failed', [
-                'target' => $target,
-                'response' => $decoded,
-            ]);
-        }
-
-        return is_array($decoded) ? $decoded : ['raw' => (string) $response];
+        return $result;
     }
 }

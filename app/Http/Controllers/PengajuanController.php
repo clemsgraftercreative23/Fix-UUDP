@@ -10,6 +10,7 @@ use App\Tmp;
 use App\Listpengajuan;
 use Auth;
 use App\Support\ActivityLogger;
+use App\Support\FonnteMessenger;
 
 // use \Yajra\Datatables\Datatables;
 
@@ -558,7 +559,7 @@ class PengajuanController extends Controller
                         'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima Head Department.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                     ])
@@ -573,7 +574,7 @@ class PengajuanController extends Controller
                       'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
-                      'target' => $value->phoneNumber,
+                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
                       'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                   ])
@@ -626,7 +627,7 @@ class PengajuanController extends Controller
                         'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Supervisor.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                     ])
@@ -641,7 +642,7 @@ class PengajuanController extends Controller
                       'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
-                      'target' => $value->phoneNumber,
+                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
                       'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                   ])
@@ -688,7 +689,7 @@ class PengajuanController extends Controller
                         'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Manager.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                     ])
@@ -700,7 +701,7 @@ class PengajuanController extends Controller
                       'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
-                      'target' => $value->phoneNumber,
+                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
                       'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                   ])
@@ -761,7 +762,7 @@ class PengajuanController extends Controller
                         'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance.\n\nSaat ini sedang menunggu Proses Pencairan Finance.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                     ])
@@ -776,7 +777,7 @@ class PengajuanController extends Controller
                       'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
-                      'target' => $value->phoneNumber,
+                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
                       'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima Direktur Utama.\n\nSilahkan lanjutkan proses pencairan.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                   ])
@@ -848,7 +849,7 @@ class PengajuanController extends Controller
                         'Authorization: ' . config('services.fonnte.token')
                     ])
                     ->withData([
-                        'target' => auth()->user()->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone(auth()->user()->phoneNumber),
                         'message' => "Hai *".auth()->user()->name."*,\n\nPengajuan Anda dengan *".$pengajuan->no_pengajuan."* sebesar *Rp ".number_format($pengajuan->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Head Department.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                         // 'message' => "Pengajuan ".$pengajuan->no_pengajuan." telah diterima dan sedang proses verifikasi Direktur Operasional"
@@ -864,7 +865,7 @@ class PengajuanController extends Controller
                       'Authorization: ' . config('services.fonnte.token')
                   ])
                   ->withData([
-                      'target' => $value->phoneNumber,
+                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
                       'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$pengajuan->no_pengajuan."* sebesar *Rp ".number_format($pengajuan->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
 \n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
                   ])

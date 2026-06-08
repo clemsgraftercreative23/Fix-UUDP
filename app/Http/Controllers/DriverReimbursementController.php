@@ -16,6 +16,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use App\Repositories\ApprovalReminderRepository;
 use App\Support\ActivityLogger;
+use App\Support\FonnteMessenger;
 use Illuminate\Support\Facades\Log;
 
 class DriverReimbursementController extends Controller
@@ -27,42 +28,7 @@ class DriverReimbursementController extends Controller
 
     private function sendDriverWhatsApp(?string $target, string $message, array $context = []): void
     {
-        $target = trim((string) $target);
-        if ($target === '') {
-            Log::warning('Driver reimbursement WhatsApp skipped: empty phone number', $context);
-
-            return;
-        }
-
-        $token = config('services.fonnte.token');
-        if (empty($token)) {
-            Log::warning('Driver reimbursement WhatsApp skipped: Fonnte token not configured', $context);
-
-            return;
-        }
-
-        try {
-            $response = \Curl::to(config('services.fonnte.base_url', 'https://api.fonnte.com/send'))
-                ->withHeaders(['Authorization: ' . $token])
-                ->withData([
-                    'target' => $target,
-                    'message' => $message,
-                ])
-                ->post();
-
-            $decoded = json_decode((string) $response, true);
-            if (is_array($decoded) && array_key_exists('status', $decoded) && !$decoded['status']) {
-                Log::warning('Driver reimbursement WhatsApp send failed', array_merge($context, [
-                    'target' => $target,
-                    'response' => $decoded,
-                ]));
-            }
-        } catch (\Throwable $e) {
-            Log::error('Driver reimbursement WhatsApp send error', array_merge($context, [
-                'target' => $target,
-                'error' => $e->getMessage(),
-            ]));
-        }
+        FonnteMessenger::send($target, $message, array_merge($context, ['channel' => 'reimbursement_driver']));
     }
 
     private function notifyDriverSubmission(Reimbursement $data, User $submitter, bool $resubmit = false): void
@@ -1279,7 +1245,7 @@ class DriverReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1302,7 +1268,7 @@ class DriverReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $hr->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($hr->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $hr->name .
@@ -1322,7 +1288,7 @@ class DriverReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1345,7 +1311,7 @@ class DriverReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $fn->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $fn->name .
@@ -1366,7 +1332,7 @@ class DriverReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1388,7 +1354,7 @@ class DriverReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $fn->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $fn->name .
@@ -1408,7 +1374,7 @@ class DriverReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1431,7 +1397,7 @@ class DriverReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $fn->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $fn->name .

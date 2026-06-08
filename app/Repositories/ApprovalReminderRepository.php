@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\ApprovalReminder;
 use App\ApprovalReminderLog;
 use App\Reimbursement;
+use App\Support\FonnteMessenger;
 use App\User;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -213,7 +214,7 @@ class ApprovalReminderRepository
         return [
             'stage_label' => $stageLabel,
             'recipient_name' => $recipient ? $recipient->name : null,
-            'recipient_phone' => $recipient ? $recipient->phoneNumber : null,
+            'recipient_phone' => $recipient ? FonnteMessenger::normalizePhone($recipient->phoneNumber) : null,
             'metadata' => [
                 'no_reimbursement' => $reimbursement->no_reimbursement,
                 'nominal_pengajuan' => (float) $reimbursement->nominal_pengajuan,

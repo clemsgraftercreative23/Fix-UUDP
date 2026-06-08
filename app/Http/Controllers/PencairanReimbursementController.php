@@ -10,6 +10,7 @@ use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use App\Kasbank;
 use App\User;
+use App\Support\FonnteMessenger;
 use App\Services\Accurate\AccurateApiTokenClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -348,7 +349,7 @@ class PencairanReimbursementController extends Controller
             $curl = Curl::to('https://api.fonnte.com/send')
                 ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                 ->withData([
-                    'target' => $user->phoneNumber,
+                    'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                     'message' =>
                         "Hai *" .
                         $user->name .

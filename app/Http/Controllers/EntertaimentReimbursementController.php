@@ -15,6 +15,7 @@ use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use App\Support\ActivityLogger;
+use App\Support\FonnteMessenger;
 class EntertaimentReimbursementController extends Controller
 {
 
@@ -529,7 +530,7 @@ class EntertaimentReimbursementController extends Controller
                 $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $user->name .
@@ -547,7 +548,7 @@ class EntertaimentReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                         ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                         ->withData([
-                            'target' => $approver->phoneNumber,
+                            'target' => FonnteMessenger::normalizePhone($approver->phoneNumber),
                             'message' =>
                                 "Hai *" .
                                 $approver->name .
@@ -769,7 +770,7 @@ class EntertaimentReimbursementController extends Controller
                 $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $user->name .
@@ -791,7 +792,7 @@ class EntertaimentReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                         ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                         ->withData([
-                            'target' => $approver->phoneNumber,
+                            'target' => FonnteMessenger::normalizePhone($approver->phoneNumber),
                             'message' =>
                                 "Hai *" .
                                 $approver->name .
@@ -1325,7 +1326,7 @@ class EntertaimentReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1348,7 +1349,7 @@ class EntertaimentReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $hr->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($hr->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $hr->name .
@@ -1368,7 +1369,7 @@ class EntertaimentReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1391,7 +1392,7 @@ class EntertaimentReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $fn->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $fn->name .
@@ -1412,7 +1413,7 @@ class EntertaimentReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1434,7 +1435,7 @@ class EntertaimentReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $fn->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $fn->name .
@@ -1454,7 +1455,7 @@ class EntertaimentReimbursementController extends Controller
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => $user->phoneNumber,
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
                             $row->created_by .
@@ -1477,7 +1478,7 @@ class EntertaimentReimbursementController extends Controller
                         $curl = \Curl::to('https://api.fonnte.com/send')
                             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                             ->withData([
-                                'target' => $fn->phoneNumber,
+                                'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
                                 'message' =>
                                     "Hai *" .
                                     $fn->name .
