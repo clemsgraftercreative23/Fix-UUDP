@@ -310,25 +310,7 @@ class ApprovalReminderRepository
     {
         $submitter = User::find($reimbursement->id_user);
 
-        if (!$submitter) {
-            return collect();
-        }
-
-        $dirops = User::query()
-            ->where('jabatan', 'Direktur Operasional')
-            ->where(function ($query) use ($submitter) {
-                $query->where('departmentId', $submitter->departmentId)
-                    ->orWhereNull('departmentId');
-            })
-            ->whereNotNull('phoneNumber')
-            ->where('phoneNumber', '!=', '')
-            ->get(['name', 'phoneNumber']);
-
-        if ($dirops->isNotEmpty()) {
-            return $dirops->unique('phoneNumber')->values();
-        }
-
-        if (empty($submitter->id_approval)) {
+        if (!$submitter || empty($submitter->id_approval)) {
             return collect();
         }
 

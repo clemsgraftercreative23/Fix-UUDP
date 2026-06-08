@@ -37,4 +37,13 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    public function isHeadDeptApproverForSubmitter(int $submitterId): bool
+    {
+        if ($submitterId <= 0 || (int) $this->id <= 0) {
+            return false;
+        }
+
+        return (int) static::whereKey($submitterId)->value('id_approval') === (int) $this->id;
+    }
 }

@@ -415,7 +415,10 @@ class ReimbursementController extends Controller
         }
 
         $processed = false;
-        if ($data->status == 0 && ($approver->jabatan == 'Direktur Operasional' || $approver->jabatan == 'superadmin')) {
+        if ($data->status == 0 && (
+            ($approver->jabatan == 'Direktur Operasional' && $approver->isHeadDeptApproverForSubmitter((int) $data->id_user))
+            || $approver->jabatan == 'superadmin'
+        )) {
             $processed = true;
             $data->update([
                 'status' => 1,
@@ -719,6 +722,13 @@ class ReimbursementController extends Controller
         }
 
         $user = auth()->user();
+        if ((int) $data->status === 0
+            && $user->jabatan === 'Direktur Operasional'
+            && !$user->isHeadDeptApproverForSubmitter((int) $data->id_user)) {
+            return redirect()
+                ->back()
+                ->withErrors(['Anda bukan Head Department yang ditunjuk untuk pengajuan ini.']);
+        }
         
 
         $data->update([

@@ -347,7 +347,7 @@ class EntertaimentReimbursementController extends Controller
         if(request()->ajax())
         {
 
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Finance Manager' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin' || auth()->user()->jabatan=='Direktur Operasional') {
+            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Finance Manager' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin') {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',3)->where('reimbursement.status', '!=',10);
@@ -596,8 +596,8 @@ class EntertaimentReimbursementController extends Controller
         if ($jabatan === 'superadmin' && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
             return true;
         }
-        if (in_array($jabatan, ['Direktur Operasional'], true) && $status === 0) {
-            return true;
+        if ($jabatan === 'Direktur Operasional' && $status === 0) {
+            return auth()->user()->isHeadDeptApproverForSubmitter((int) $data->id_user);
         }
         if ($isSubmitter && in_array($status, [9, 10], true)) {
             return true;
@@ -1077,6 +1077,9 @@ class EntertaimentReimbursementController extends Controller
 
         $user = auth()->user();
         if($data->status == 0 && $user->jabatan == "Direktur Operasional") {
+            if (!$user->isHeadDeptApproverForSubmitter((int) $data->id_user)) {
+                return redirect()->back()->withErrors(['Anda bukan Head Department yang ditunjuk untuk pengajuan ini.']);
+            }
             $data->update([
                 'status' => 1,
                 'mengetahui_op' => $user->name
@@ -1262,6 +1265,21 @@ class EntertaimentReimbursementController extends Controller
             return response()->json([
                 'message' => 'Tidak dapat approve bulk untuk pengajuan Anda sendiri. Hapus dari pilihan: ' . implode(', ', $ownClaimIds),
             ], 422);
+        }
+
+        if ($bulkStatus === 0 && $jab === 'Direktur Operasional') {
+            $unauthorizedIds = $rows
+                ->filter(function ($row) use ($user) {
+                    return !$user->isHeadDeptApproverForSubmitter((int) $row->id_user);
+                })
+                ->pluck('id')
+                ->values()
+                ->all();
+            if ($unauthorizedIds !== []) {
+                return response()->json([
+                    'message' => 'Beberapa pengajuan bukan anak buah Anda. Hapus dari pilihan: ' . implode(', ', $unauthorizedIds),
+                ], 422);
+            }
         }
 
       	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {

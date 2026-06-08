@@ -134,6 +134,7 @@ if (!function_exists('driver_attachment_rows')) {
                         <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
                         @php
                           $isOwnSubmission = (int) auth()->id() === (int) $data->id_user;
+                          $isAssignedHeadDept = auth()->user()->isHeadDeptApproverForSubmitter((int) $data->id_user);
                           $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
                         @endphp
                         @if($isApproverRole && !$isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
@@ -337,7 +338,7 @@ if (!function_exists('driver_attachment_rows')) {
                   
                     <br>
                     <center>
-                        @if (!$isOwnSubmission && (auth()->user()->jabatan == 'Direktur Operasional' || auth()->user()->jabatan == 'superadmin')) 
+                        @if (!$isOwnSubmission && ((auth()->user()->jabatan == 'Direktur Operasional' && $isAssignedHeadDept) || auth()->user()->jabatan == 'superadmin')) 
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     @if($data->status == 0)
