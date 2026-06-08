@@ -491,7 +491,7 @@ class ReimbursementController extends Controller
                         number_format($data->nominal_pengajuan, 0, ',', '.') .
                         "* telah diterima oleh *" .
                         $nama_approval .
-                        " (".$level.")* .\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance.\n\nTerima kasih.
+                        " (".$level.")* .\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance Supervisor.\n\nTerima kasih.
                            \n\nKlik untuk melihat detail pengajuan : " .
                         url(''.$direct.'' . $data->id),
                 ])

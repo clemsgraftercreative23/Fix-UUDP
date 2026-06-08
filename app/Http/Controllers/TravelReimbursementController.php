@@ -2856,7 +2856,7 @@ class TravelReimbursementController extends Controller
                     number_format($data->nominal_pengajuan, 0, ',', '.') .
                     "* telah diterima oleh *" .
                     auth()->user()->name  .
-                    " (HR GA)* .\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance.\n\nTerima kasih.
+                    " (HR GA)* .\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance Supervisor.\n\nTerima kasih.
                        \n\nKlik untuk melihat detail pengajuan : " .
                     url('/reimbursement-driver/' . $data->id),
             ])
