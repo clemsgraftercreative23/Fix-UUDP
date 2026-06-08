@@ -47,13 +47,16 @@ class ApprovalReminderRepository
         }
 
         $payload = $this->buildPayload($reimbursement, $baseUrl);
-        $isNewCycle = !$reminder->exists || !$reminder->is_active || !$reminder->first_due_at;
+        $currentStage = (string) $reimbursement->status;
+        $previousStage = $reminder->exists ? (string) $reminder->stage_code : null;
+        $stageChanged = $reminder->exists && $previousStage !== null && $previousStage !== $currentStage;
+        $isNewCycle = !$reminder->exists || !$reminder->is_active || !$reminder->first_due_at || $stageChanged;
 
         if ($isNewCycle) {
-            $sourceCreatedAt = Carbon::parse($reimbursement->created_at);
-            $reminder->first_due_at = $sourceCreatedAt->copy()->addMinutes($this->initialDelayMinutes());
-            $reminder->next_send_at = $sourceCreatedAt->copy()->addMinutes($this->initialDelayMinutes());
-            $reminder->expires_at = $sourceCreatedAt->copy()->addMinutes($this->maxDurationMinutes());
+            $referenceAt = $stageChanged ? $now : Carbon::parse($reimbursement->created_at);
+            $reminder->first_due_at = $referenceAt->copy()->addMinutes($this->initialDelayMinutes());
+            $reminder->next_send_at = $referenceAt->copy()->addMinutes($this->initialDelayMinutes());
+            $reminder->expires_at = $referenceAt->copy()->addMinutes($this->maxDurationMinutes());
             $reminder->last_sent_at = null;
             $reminder->last_attempt_at = null;
             $reminder->send_count = 0;
@@ -228,7 +231,7 @@ class ApprovalReminderRepository
         }
 
         if ($status === 1) {
-            return 'Finance / HR GA';
+            return 'HR GA';
         }
 
         if ($status === 2) {
@@ -267,52 +270,85 @@ class ApprovalReminderRepository
         return $recipients->first();
     }
 
+    public function approverJabatanForStage(int $reimbursementType, int $status): array
+    {
+        if ($status === 1) {
+            return $reimbursementType === 2
+                ? ['Finance', 'Finance Supervisor', 'HR', 'HR GA']
+                : ['Finance', 'HR GA'];
+        }
+
+        if ($status === 2) {
+            return ['Finance Supervisor', 'Owner'];
+        }
+
+        if ($status === 11) {
+            return ['Finance Manager', 'Owner'];
+        }
+
+        return [];
+    }
+
     public function recipientCollectionForReimbursement(Reimbursement $reimbursement)
     {
-        if ((int) $reimbursement->status === 0) {
-            $submitter = User::find($reimbursement->id_user);
+        $status = (int) $reimbursement->status;
 
-            if (!$submitter || empty($submitter->id_approval)) {
-                return collect();
-            }
-
-            $approver = User::find($submitter->id_approval);
-
-            if (!$approver || empty($approver->phoneNumber)) {
-                return collect();
-            }
-
-            return collect([$approver]);
+        if ($status === 0) {
+            return $this->headDepartmentRecipients($reimbursement);
         }
 
-        if ((int) $reimbursement->status === 1) {
-            return User::whereIn('jabatan', ['Finance', 'Finance Supervisor', 'HR', 'HR GA'])
-                ->whereNotNull('phoneNumber')
-                ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber'])
-                ->unique('phoneNumber')
-                ->values();
+        $jabatan = $this->approverJabatanForStage((int) $reimbursement->reimbursement_type, $status);
+
+        if ($jabatan === []) {
+            return collect();
         }
 
-        if ((int) $reimbursement->status === 2) {
-            return User::whereIn('jabatan', ['Finance Supervisor', 'Owner'])
-                ->whereNotNull('phoneNumber')
-                ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber'])
-                ->unique('phoneNumber')
-                ->values();
+        return $this->usersWithJabatan($jabatan);
+    }
+
+    private function headDepartmentRecipients(Reimbursement $reimbursement)
+    {
+        $submitter = User::find($reimbursement->id_user);
+
+        if (!$submitter) {
+            return collect();
         }
 
-        if ((int) $reimbursement->status === 11) {
-            return User::whereIn('jabatan', ['Finance Manager', 'Owner'])
-                ->whereNotNull('phoneNumber')
-                ->where('phoneNumber', '!=', '')
-                ->get(['name', 'phoneNumber'])
-                ->unique('phoneNumber')
-                ->values();
+        $dirops = User::query()
+            ->where('jabatan', 'Direktur Operasional')
+            ->where(function ($query) use ($submitter) {
+                $query->where('departmentId', $submitter->departmentId)
+                    ->orWhereNull('departmentId');
+            })
+            ->whereNotNull('phoneNumber')
+            ->where('phoneNumber', '!=', '')
+            ->get(['name', 'phoneNumber']);
+
+        if ($dirops->isNotEmpty()) {
+            return $dirops->unique('phoneNumber')->values();
         }
 
-        return collect();
+        if (empty($submitter->id_approval)) {
+            return collect();
+        }
+
+        $approver = User::find($submitter->id_approval);
+
+        if (!$approver || empty($approver->phoneNumber)) {
+            return collect();
+        }
+
+        return collect([$approver]);
+    }
+
+    private function usersWithJabatan(array $jabatan)
+    {
+        return User::whereIn('jabatan', $jabatan)
+            ->whereNotNull('phoneNumber')
+            ->where('phoneNumber', '!=', '')
+            ->get(['name', 'phoneNumber'])
+            ->unique('phoneNumber')
+            ->values();
     }
 
     public function shouldStopForStatus(int $status): bool
