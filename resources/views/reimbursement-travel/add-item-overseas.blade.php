@@ -232,6 +232,17 @@ function rate_input($angka){
                                         }
                                         return ((int) ($a->id ?? 0)) <=> ((int) ($b->id ?? 0));
                                     })->values();
+                                    if ($travelTripRatesSorted->isEmpty()) {
+                                        $travelTripRatesSorted = collect([
+                                            (object) ['id' => 0, 'currency' => 'IDR', 'rate' => 1],
+                                            (object) ['id' => 0, 'currency' => 'USD', 'rate' => 0],
+                                        ]);
+                                    } elseif (strtoupper((string) ($travel_type ?? '')) !== 'DOMESTIC'
+                                        && !$travelTripRatesSorted->contains(function ($row) {
+                                            return strtoupper((string) ($row->currency ?? '')) === 'USD';
+                                        })) {
+                                        $travelTripRatesSorted->push((object) ['id' => 0, 'currency' => 'USD', 'rate' => 0]);
+                                    }
                                 @endphp
                                 @foreach($travelTripRatesSorted as $row)
                                 <div class="row fieldGroup">
@@ -518,17 +529,48 @@ $(document).ready(function(){
         }
     }
 
-    function computeAllowanceInIdr(allowance, currency) {
+    function fetchTripRateForCurrency(code, callback) {
+        var cur = String(code || '').trim().toUpperCase();
+        if (!cur || cur === 'IDR') {
+            callback(1);
+            return;
+        }
+        var local = getTripRateForCurrency(cur);
+        if (local > 0) {
+            callback(local);
+            return;
+        }
+        var mainId = $('#rt-travel-item-pane').attr('data-main-id');
+        if (!mainId) {
+            callback(0);
+            return;
+        }
+        $.ajax({
+            url: '../../../get-currency/' + mainId + '/' + cur,
+            dataType: 'json',
+            success: function (resp) {
+                callback(parseFloat(resp.data) || 0);
+            },
+            error: function () {
+                callback(0);
+            }
+        });
+    }
+
+    function computeAllowanceInIdrAsync(allowance, currency, done) {
         var cur = String(currency || '').trim().toUpperCase();
         if (cur === 'IDR' || !cur) {
-            return Number(allowance) || 0;
+            done(Number(allowance) || 0);
+            return;
         }
-        var rate = getTripRateForCurrency(cur);
-        if (rate <= 0) {
-            alert('Please enter the ' + cur + ' exchange rate first.');
-            return null;
-        }
-        return (Number(allowance) || 0) * rate;
+        fetchTripRateForCurrency(cur, function (rate) {
+            if (rate <= 0) {
+                alert('Please enter the ' + cur + ' exchange rate first.');
+                done(null);
+                return;
+            }
+            done((Number(allowance) || 0) * rate);
+        });
     }
 
     function recalculateDetailIdrRate($tr) {
@@ -571,12 +613,13 @@ $(document).ready(function(){
                 if (!row) {
                     return;
                 }
-                var allowanceInIDR = computeAllowanceInIdr(row.allowance, row.currency);
-                if (allowanceInIDR === null) {
-                    return;
-                }
-                $scope.find('.allowance').val(formatTravelIdrMoney(allowanceInIDR));
-                total_nominal();
+                computeAllowanceInIdrAsync(row.allowance, row.currency, function (allowanceInIDR) {
+                    if (allowanceInIDR === null) {
+                        return;
+                    }
+                    $scope.find('.allowance').val(formatTravelIdrMoney(allowanceInIDR));
+                    total_nominal();
+                });
             }
         });
     }

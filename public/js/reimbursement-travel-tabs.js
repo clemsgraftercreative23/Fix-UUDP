@@ -128,6 +128,8 @@
       if (el.type === 'file' || el.type === 'submit' || el.type === 'button') return;
       if ($(el).closest('tr.fieldGroupDetail').length) return;
       const n = el.name;
+      // Jangan simpan allowance/total — selalu dihitung ulang dari trip type + kurs.
+      if (n === 'allowance' || n === 'nominal_pengajuan') return;
       headerCounts[n] = (headerCounts[n] || 0) + 1;
       const key = n + '\u0000' + headerCounts[n];
       header[key] = el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value;

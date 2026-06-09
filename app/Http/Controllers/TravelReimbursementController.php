@@ -264,6 +264,107 @@ class TravelReimbursementController extends Controller
         return (int) floor($this->normalizeTravelMoneyValue($value));
     }
 
+    /** Overseas wajib punya IDR (1) + USD; domestic wajib IDR. */
+    private function ensureDefaultTripRates(int $reimbursementId, string $travelType): void
+    {
+        TravelTripRate::updateOrCreate(
+            ['reimbursement_id' => $reimbursementId, 'currency' => 'IDR'],
+            ['rate' => 1.00]
+        );
+
+        if ($travelType === 'Domestic') {
+            return;
+        }
+
+        $hasUsd = TravelTripRate::where('reimbursement_id', $reimbursementId)
+            ->where('currency', 'USD')
+            ->exists();
+
+        if ($hasUsd) {
+            return;
+        }
+
+        $fallbackRate = 0.0;
+        $reimbursement = Reimbursement::find($reimbursementId);
+        if ($reimbursement && (float) $reimbursement->usd_rate > 0) {
+            $fallbackRate = (float) $reimbursement->usd_rate;
+        }
+
+        TravelTripRate::create([
+            'reimbursement_id' => $reimbursementId,
+            'currency' => 'USD',
+            'rate' => $fallbackRate,
+        ]);
+    }
+
+    private function isCorruptTravelMoney($value): bool
+    {
+        if ($value === null || $value === '') {
+            return false;
+        }
+
+        return (float) $value >= 2147483647.0;
+    }
+
+    /** Hitung allowance IDR dari master trip type × kurs reimbursement. */
+    private function computeAllowanceInIdr(int $tripTypeId, int $reimbursementId): ?float
+    {
+        if ($tripTypeId <= 0) {
+            return null;
+        }
+
+        $trip = TravelTripType::find($tripTypeId);
+        if (!$trip) {
+            return null;
+        }
+
+        $currency = strtoupper(trim((string) ($trip->currency ?? 'IDR')));
+        $base = (float) $trip->allowance;
+
+        if ($currency === 'IDR' || $currency === '') {
+            return $base;
+        }
+
+        $rate = (float) TravelTripRate::where('reimbursement_id', $reimbursementId)
+            ->where('currency', $currency)
+            ->value('rate');
+
+        if ($rate <= 0) {
+            return null;
+        }
+
+        return $base * $rate;
+    }
+
+    /** Perbaiki allowance INT32 overflow di DB & objek yang dikirim ke view. */
+    private function repairCorruptTravelAllowance(object $travelRow, int $reimbursementId): void
+    {
+        if (!$this->isCorruptTravelMoney($travelRow->allowance ?? null)) {
+            return;
+        }
+
+        $tripTypeId = (int) ($travelRow->trip_type_id ?? 0);
+        $computed = $this->computeAllowanceInIdr($tripTypeId, $reimbursementId);
+        if ($computed === null) {
+            return;
+        }
+
+        $travelRow->allowance = $computed;
+        ReimbursementTravel::where('id', (int) $travelRow->id)->update(['allowance' => $computed]);
+    }
+
+    private function resolveTravelAllowanceForSave(Request $request, int $reimbursementId): float
+    {
+        $tripTypeId = (int) $this->normalizeTripTypeId($request->trip_type_id);
+        $computed = $this->computeAllowanceInIdr($tripTypeId, $reimbursementId);
+
+        if ($computed !== null) {
+            return $computed;
+        }
+
+        return $this->normalizeTravelMoneyValue($request->allowance ?? '');
+    }
+
     /** Sinkronkan kurs dari form utama (currency_rate[] + rate[]) ke travel_trip_rates. */
     private function syncTripRatesFromMainForm(Request $request, int $reimbursementId): void
     {
@@ -274,8 +375,8 @@ class TravelReimbursementController extends Controller
             return;
         }
 
-        $payloads = [];
         $count = max(count($currencies), count($rates));
+        $hasPayload = false;
 
         for ($i = 0; $i < $count; $i++) {
             $currency = strtoupper(trim((string) ($currencies[$i] ?? '')));
@@ -287,19 +388,19 @@ class TravelReimbursementController extends Controller
                 continue;
             }
 
-            $payloads[] = [
-                'reimbursement_id' => $reimbursementId,
-                'currency' => $currency,
-                'rate' => $rate,
-            ];
+            $hasPayload = true;
+            TravelTripRate::updateOrCreate(
+                ['reimbursement_id' => $reimbursementId, 'currency' => $currency],
+                ['rate' => $rate]
+            );
         }
 
-        if (empty($payloads)) {
+        if (!$hasPayload) {
             return;
         }
 
-        TravelTripRate::where('reimbursement_id', $reimbursementId)->delete();
-        TravelTripRate::insert($payloads);
+        $travelType = Reimbursement::where('id', $reimbursementId)->value('travel_type');
+        $this->ensureDefaultTripRates($reimbursementId, (string) ($travelType ?? 'Domestic'));
     }
 
     /** Simpan file bukti ke public/images/file_bukti dan kembalikan nama file. */
@@ -1327,7 +1428,7 @@ class TravelReimbursementController extends Controller
                     'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
                     'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
                     'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
-                    'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
+                    'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id_main),
                     'total'        =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
                 );
 
@@ -1620,6 +1721,12 @@ class TravelReimbursementController extends Controller
             }
             return redirect($fallback);
         }
+
+        $this->ensureDefaultTripRates((int) $id_main, (string) $travel_type);
+        foreach ($data_travel as $travelRow) {
+            $this->repairCorruptTravelAllowance($travelRow, (int) $id_main);
+        }
+
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = $id_travel;
         $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
@@ -1686,12 +1793,20 @@ class TravelReimbursementController extends Controller
             }
         }
 
+        $this->ensureDefaultTripRates((int) $id_main, (string) $travel_type);
+
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = !empty($data_travel) ? $data_travel[0]->id : 0;
         $travel_detail = $id_detail > 0
             ? DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"))
             : [];
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb'"));
+
+        if (!empty($data_travel)) {
+            foreach ($data_travel as $travelRow) {
+                $this->repairCorruptTravelAllowance($travelRow, (int) $id_main);
+            }
+        }
 
         return view('reimbursement-travel.'.$file.'',[
             "trip_types" => $tripTypes,
@@ -1901,7 +2016,7 @@ class TravelReimbursementController extends Controller
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
             'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
-            'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
+            'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id),
         );
         
         ReimbursementTravel::where('reimbursement_id', $id)->update($form_data);
@@ -2161,7 +2276,7 @@ class TravelReimbursementController extends Controller
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
             'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
-            'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
+            'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id_main),
             'total'        =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
         );
 
@@ -2418,7 +2533,7 @@ class TravelReimbursementController extends Controller
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
             'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
-            'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
+            'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id_main),
             'total'        =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
         );
 
@@ -2653,7 +2768,7 @@ class TravelReimbursementController extends Controller
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
             'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
-            'allowance'        =>  $this->normalizeTravelMoneyValue($request->allowance ?? ''),
+            'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id_main),
             'total'        =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
         );
 
