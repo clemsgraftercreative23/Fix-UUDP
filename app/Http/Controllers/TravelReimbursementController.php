@@ -279,7 +279,9 @@ class TravelReimbursementController extends Controller
 
         for ($i = 0; $i < $count; $i++) {
             $currency = strtoupper(trim((string) ($currencies[$i] ?? '')));
-            $rate = $this->normalizeExchangeRateValue($rates[$i] ?? '');
+            $rate = $currency === 'IDR'
+                ? '1.00'
+                : $this->normalizeExchangeRateValue($rates[$i] ?? '');
 
             if ($currency === '') {
                 continue;
@@ -3824,6 +3826,10 @@ class TravelReimbursementController extends Controller
             return response()->json(['message' => 'Currency tidak boleh kosong.', 'id_rate' => 0], 422);
         }
 
+        if ($currency === 'IDR') {
+            $rate = '1.00';
+        }
+
         if ($id_rate > 0) {
             $row = TravelTripRate::where('id', $id_rate)->where('reimbursement_id', $reim_id)->first();
             if (!$row) {
@@ -3856,15 +3862,31 @@ class TravelReimbursementController extends Controller
 
     public function getCurrencyOptions(Request $request)
     {
-        $selected = $request->selected;
+        $selected = strtoupper(trim((string) $request->selected));
         $reim_id = $request->reim_id;
 
-        $currencyList = TravelTripRate::where('reimbursement_id', $reim_id)->get(); 
+        $codes = [];
+        foreach (TravelTripRate::where('reimbursement_id', $reim_id)->get() as $item) {
+            $code = strtoupper(trim((string) $item->currency));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+        }
+
+        $extra = trim((string) $request->input('currencies', ''));
+        if ($extra !== '') {
+            foreach (preg_split('/\s*,\s*/', $extra) as $part) {
+                $code = strtoupper(trim($part));
+                if ($code !== '') {
+                    $codes[$code] = true;
+                }
+            }
+        }
 
         $options = '<option value="">Pilih...</option>';
-        foreach ($currencyList as $item) {
-            $sel = $item->currency == $selected ? 'selected' : '';
-            $options .= "<option value=\"{$item->currency}\" {$sel}>{$item->currency}</option>";
+        foreach (array_keys($codes) as $code) {
+            $sel = $code === $selected ? 'selected' : '';
+            $options .= "<option value=\"{$code}\" {$sel}>{$code}</option>";
         }
 
         return response()->json(['options' => $options]);

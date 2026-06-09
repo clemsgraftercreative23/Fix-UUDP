@@ -1138,6 +1138,15 @@
   }
 
   function afterPaneHydrated($pane) {
+    if (typeof window.rtNormalizeAllTripRateInputs === 'function') {
+      window.rtNormalizeAllTripRateInputs();
+    }
+    if (typeof window.rtRefreshCurrencySelects === 'function') {
+      window.rtRefreshCurrencySelects();
+    }
+    if (typeof window.rtRecalculateAllowanceFromTripType === 'function') {
+      window.rtRecalculateAllowanceFromTripType($pane);
+    }
     if (typeof window.rtCalculateTimeDifference === 'function') {
       window.rtCalculateTimeDifference();
     }

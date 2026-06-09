@@ -451,16 +451,26 @@ $(document).ready(function(){
 
     calculateTimeDifference();
     
-    function getTripRateForCurrency(currencyCode, scopeNode) {
+    /** Input kurs (currency_rate[] / rate[]) ada di luar #rt-travel-item-pane — cari di form induk. */
+    function getExchangeRateFormRoot() {
+        var pane = document.getElementById('rt-travel-item-pane');
+        if (pane) {
+            var form = pane.closest('form');
+            if (form) {
+                return form;
+            }
+        }
+        return document;
+    }
+
+    function getTripRateForCurrency(currencyCode) {
         var code = String(currencyCode || '').trim().toUpperCase();
         if (!code || code === 'IDR') {
             return 1;
         }
-        if (!scopeNode) {
-            return 0;
-        }
-        var currencyInputs = scopeNode.querySelectorAll('[name="currency_rate[]"]');
-        var rateInputs = scopeNode.querySelectorAll('[name="rate[]"]');
+        var root = getExchangeRateFormRoot();
+        var currencyInputs = root.querySelectorAll('[name="currency_rate[]"]');
+        var rateInputs = root.querySelectorAll('[name="rate[]"]');
         for (var index = 0; index < currencyInputs.length; index++) {
             if (String(currencyInputs[index].value || '').trim().toUpperCase() === code) {
                 return parseExchangeRateNumber(rateInputs[index] ? rateInputs[index].value : '') || 0;
@@ -469,12 +479,51 @@ $(document).ready(function(){
         return 0;
     }
 
-    function computeAllowanceInIdr(allowance, currency, scopeNode) {
+    function buildCurrencySelectOptions(selected) {
+        var seen = {};
+        var list = [];
+        var selectedCode = String(selected || '').trim().toUpperCase();
+        getExchangeRateFormRoot().querySelectorAll('[name="currency_rate[]"]').forEach(function (input) {
+            var code = String(input.value || '').trim().toUpperCase();
+            if (code && !seen[code]) {
+                seen[code] = true;
+                list.push(code);
+            }
+        });
+        if (selectedCode && !seen[selectedCode]) {
+            list.push(selectedCode);
+        }
+        var html = '<option value="">Pilih...</option>';
+        list.forEach(function (code) {
+            var sel = code === selectedCode ? ' selected' : '';
+            html += '<option value="' + code + '"' + sel + '>' + code + '</option>';
+        });
+        return html;
+    }
+
+    function refreshAllCurrencySelects() {
+        $('#rt-travel-item-pane select.currency-select').each(function () {
+            var current = $(this).val();
+            $(this).html(buildCurrencySelectOptions(current));
+        });
+    }
+
+    function enforceIdrExchangeRate($group) {
+        if (!$group || !$group.length) {
+            return;
+        }
+        var cur = String($group.find('[name="currency_rate[]"]').val() || '').trim().toUpperCase();
+        if (cur === 'IDR') {
+            $group.find('[name="rate[]"]').val('1,00');
+        }
+    }
+
+    function computeAllowanceInIdr(allowance, currency) {
         var cur = String(currency || '').trim().toUpperCase();
         if (cur === 'IDR' || !cur) {
             return Number(allowance) || 0;
         }
-        var rate = getTripRateForCurrency(cur, scopeNode);
+        var rate = getTripRateForCurrency(cur);
         if (rate <= 0) {
             alert('Please enter the ' + cur + ' exchange rate first.');
             return null;
@@ -482,14 +531,14 @@ $(document).ready(function(){
         return (Number(allowance) || 0) * rate;
     }
 
-    function recalculateDetailIdrRate($tr, $scope) {
+    function recalculateDetailIdrRate($tr) {
         var currency = String($tr.find('select[name="currency[]"]').val() || '').trim().toUpperCase();
         var amount = parseTravelAmountInteger($tr.find('input[name="amount[]"]').val());
         var cost_type = $tr.find('select[name="cost_type_id[]"]').val();
         if (!currency) {
             return;
         }
-        var rate = getTripRateForCurrency(currency, $scope[0]);
+        var rate = getTripRateForCurrency(currency);
         var val = amount * (currency === 'IDR' ? 1 : rate);
         $tr.find('input[name="idr_rate[]"]').val(formatTravelIdrMoney(val));
         if (cost_type == 3) {
@@ -502,7 +551,7 @@ $(document).ready(function(){
     function recalculateAllDetailIdrRates($scope) {
         $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
         $scope.find('tbody tr.fieldGroupDetail').each(function () {
-            recalculateDetailIdrRate($(this), $scope);
+            recalculateDetailIdrRate($(this));
         });
     }
 
@@ -522,7 +571,7 @@ $(document).ready(function(){
                 if (!row) {
                     return;
                 }
-                var allowanceInIDR = computeAllowanceInIdr(row.allowance, row.currency, $scope[0]);
+                var allowanceInIDR = computeAllowanceInIdr(row.allowance, row.currency);
                 if (allowanceInIDR === null) {
                     return;
                 }
@@ -534,12 +583,34 @@ $(document).ready(function(){
 
     function onExchangeRatesUpdated($scope) {
         $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
+        refreshAllCurrencySelects();
         recalculateAllDetailIdrRates($scope);
         total_nominal();
         if ($scope.find('#trip_type_id').val()) {
             recalculateAllowanceFromTripType($scope);
         }
     }
+
+    window.rtRecalculateAllowanceFromTripType = recalculateAllowanceFromTripType;
+    window.rtOnExchangeRatesUpdated = onExchangeRatesUpdated;
+    window.rtRefreshCurrencySelects = refreshAllCurrencySelects;
+    window.rtBuildCurrencySelectOptions = buildCurrencySelectOptions;
+    window.rtEnforceIdrExchangeRate = enforceIdrExchangeRate;
+    window.rtNormalizeAllTripRateInputs = function () {
+        $('.fieldGroup').each(function () {
+            var $group = $(this);
+            enforceIdrExchangeRate($group);
+            var $rateInput = $group.find('input.exchange-rate-input[name="rate[]"]');
+            if (!$rateInput.length) {
+                return;
+            }
+            var raw = ($rateInput.val() || '').trim();
+            if (!raw) {
+                return;
+            }
+            $rateInput.val(normalizeExchangeRateValue(raw));
+        });
+    };
 
     function total_nominal() {
         var total = parseTravelMoney($('.allowance').val());
@@ -554,9 +625,7 @@ $(document).ready(function(){
     window.rtCalculateTimeDifference = calculateTimeDifference;
 
     $(document).on('change', '#rt-travel-item-pane input[name="amount[]"], #rt-travel-item-pane select[name="currency[]"]', function () {
-        var $tr = $(this).closest('tr');
-        var $scope = $('#rt-travel-item-pane');
-        recalculateDetailIdrRate($tr, $scope);
+        recalculateDetailIdrRate($(this).closest('tr'));
         total_nominal();
     });
 
@@ -647,13 +716,7 @@ $(document).ready(function(){
         
     });
     
-    $(function() {
-      applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
-      var $scope = $('#rt-travel-item-pane');
-      if ($scope.find('#trip_type_id').val()) {
-          recalculateAllowanceFromTripType($scope);
-      }
-    });
+    applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     
@@ -788,7 +851,11 @@ $(document).ready(function(){
         let rate = normalizeExchangeRateValue($group.find('input[name="rate[]"]').val());
         let currency = $group.find('input[name="currency_rate[]"]').val();
 
-        
+        if (String(currency || '').trim().toUpperCase() === 'IDR') {
+            alert('Kurs IDR tidak dapat dihapus.');
+            return;
+        }
+
         $.ajax({
             url: '../../../delete-currency-options',
             type: 'POST',
@@ -802,14 +869,12 @@ $(document).ready(function(){
             success: function(response) {
                 console.log("Berhasil hapus:", response);
                 $group.remove();
+                onExchangeRatesUpdated($('#rt-travel-item-pane'));
             },
             error: function(xhr) {
                 console.error("Gagal hapus:", xhr);
             }
         });
-
-        // Kalau langsung hapus tanpa AJAX
-        $group.remove();
     });
     
     var count = "{{count($travel_detail)}}" - 1;
@@ -1083,12 +1148,43 @@ $(document).ready(function(){
         }
     });
 
-    
-    
-    // EDIT AMOUNT
-    
-    
-    
+    $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
+        var $group = $(this).closest('.fieldGroup');
+        enforceIdrExchangeRate($group);
+        var id_rate = $group.find('.id_rate').val();
+        var rate = normalizeExchangeRateValue($(this).val());
+        $(this).val(rate);
+        var currency = $group.find('input[name="currency_rate[]"]').val();
+        var reim_id = "{{Request::segment('3')}}";
+        onExchangeRatesUpdated($('#rt-travel-item-pane'));
+        $.ajax({
+            url: '../../../update-currency',
+            type: 'POST',
+            data: {
+                reim_id: reim_id,
+                id_rate: id_rate,
+                rate: rate,
+                currency: currency,
+                _token: $('meta[name="csrf-token"]').attr('content')
+            }
+        });
+    });
+
+    $(document).on('focus', '.currency-select', function () {
+        var $select = $(this);
+        $select.html(buildCurrencySelectOptions($select.val()));
+    });
+
+    $(document).on('change', 'input[name="currency_rate[]"]', function () {
+        enforceIdrExchangeRate($(this).closest('.fieldGroup'));
+        refreshAllCurrencySelects();
+    });
+
+    getExchangeRateFormRoot().querySelectorAll('.fieldGroup').forEach(function (group) {
+        enforceIdrExchangeRate($(group));
+    });
+    window.rtNormalizeAllTripRateInputs();
+    refreshAllCurrencySelects();
   });
   
 </script>
@@ -1387,67 +1483,6 @@ $(document).ready(function(){
        
       },
   });
-
-    function normalizeAllTripRateInputs() {
-        $('.fieldGroup input.exchange-rate-input[name="rate[]"]').each(function () {
-            var raw = (this.value || '').trim();
-            if (!raw) return;
-            this.value = normalizeExchangeRateValue(raw);
-        });
-    }
-
-    $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
-        let $group = $(this).closest('.fieldGroup');
-
-        let id_rate = $group.find('.id_rate').val();
-        let rate = normalizeExchangeRateValue($(this).val());
-        $(this).val(rate);
-        let currency = $group.find('input[name="currency_rate[]"]').val();
-        let reim_id = "{{Request::segment('3')}}";
-
-        onExchangeRatesUpdated($('#rt-travel-item-pane'));
-
-        $.ajax({
-            url: '../../../update-currency',
-            type: 'POST',
-            data: {
-                reim_id: reim_id,
-                id_rate: id_rate,
-                rate: rate,
-                currency: currency,
-                _token: $('meta[name="csrf-token"]').attr('content')
-            },
-            success: function (response) {
-                console.log('Berhasil update:', response);
-            },
-            error: function (xhr, status, error) {
-                console.error('Gagal update:', error);
-            }
-        });
-    });
-
-    normalizeAllTripRateInputs();
-
-    $(document).on('focus', '.currency-select', function () {
-        let $select = $(this);
-        let selectedCurrency = $select.val();
-        let reim_id = "{{ Request::segment('3') }}";
-
-        $.ajax({
-            url: '../../../get-currency-options',
-            type: 'GET',
-            data: {
-                selected: selectedCurrency,
-                reim_id: reim_id
-            },
-            success: function(response) {
-                $select.html(response.options);
-            },
-            error: function(xhr) {
-                console.error('Gagal load currency:', xhr);
-            }
-        });
-    });
 
 </script>
 <script src="{{ asset('js/reimbursement-travel-tabs.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-tabs.js')) }}"></script>
