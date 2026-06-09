@@ -790,22 +790,34 @@ $(document).ready(function(){
                 return;
             }
 
-            // Dapatkan nilai allowance
-            const allowance = self.trip_types.filter(a => a.id == id)[0].allowance;
-
-            // Ambil value dari input rates[1][rate] (dukung pemisah ribuan, mis. 15.000)
-            const rateInput = document.querySelector('[name="rates[1][rate]"]');
-            const rate = rateInput ? this.numericRate(rateInput.value) : 0;
-
-            if (!rateInput || rate <= 0) {
-                alert('Please enter the USD exchange rate first, below the IDR exchange rate.');
+            const selectedTrip = self.trip_types.find(a => a.id == id);
+            if (!selectedTrip) {
+                this.reimburses[i].trip_allowance = '0';
+                this.calculateTotal(i, 0);
                 return;
             }
 
-            const totalAllowance = allowance * rate;
+            const currency = selectedTrip.currency;
+            const allowance = selectedTrip.allowance;
 
-            // Simpan hasil perkalian ke reimburses[i].trip_allowance
-            this.reimburses[i].trip_allowance = totalAllowance.toLocaleString('de-DE');
+            this.reimburses[i].trip_allowance = '';
+
+            if (currency === 'IDR') {
+                this.reimburses[i].trip_allowance = allowance.toLocaleString('de-DE');
+            } else {
+                const foundRate = this.rates.find(rate => rate.code == currency);
+                if (!foundRate) {
+                    alert('Please enter the ' + currency + ' exchange rate first, below the IDR exchange rate.');
+                    return;
+                }
+                const rate = this.numericRate(foundRate.rate);
+                if (rate <= 0) {
+                    alert('Please enter the ' + currency + ' exchange rate first, below the IDR exchange rate.');
+                    return;
+                }
+                const totalAllowance = allowance * rate;
+                this.reimburses[i].trip_allowance = totalAllowance.toLocaleString('de-DE');
+            }
 
             // Hitung total (jika kamu punya logic tambahan di sini)
             this.calculateTotal(i, 0);

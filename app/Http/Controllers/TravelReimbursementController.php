@@ -1708,13 +1708,8 @@ class TravelReimbursementController extends Controller
 
     private function recalculateTravelSummary($id_main)
     {
-        $travelType = Reimbursement::where('id', $id_main)->value('travel_type');
+        // Allowance per tab sudah disimpan dalam IDR (sudah dikali kurs di form).
         $allowance = (float) ReimbursementTravel::where('reimbursement_id', $id_main)->sum('allowance');
-
-        if ($travelType !== 'Domestic') {
-            $usdRate = (float) TravelTripRate::where('reimbursement_id', $id_main)->where('currency', 'USD')->value('rate');
-            $allowance = $allowance * $usdRate;
-        }
 
         $totalBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->sum('idr_rate');
         $simcardBdc = (float) ReimbursementTravelDetail::where('reimbursement_id', $id_main)->where('payment_type', 'BDC')->where('cost_type_id', 8)->sum('idr_rate');
