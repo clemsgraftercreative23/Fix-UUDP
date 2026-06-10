@@ -1361,7 +1361,7 @@ class DriverReimbursementController extends Controller
                             $row->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($row->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima oleh HR GA.\n\nMenunggu verifikasi Anda sebelum Finance Manager.\n\nTerima kasih.
+                            "* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Anda (Finance Supervisor).\n\nTerima kasih.
                                      \n\nKlik untuk melihat detail pengajuan : " .
                                     url('/reimbursement-driver/' . $row->id),
                             ])
