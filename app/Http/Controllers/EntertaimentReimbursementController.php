@@ -53,24 +53,28 @@ class EntertaimentReimbursementController extends Controller
     private function getEntertainmentRowUploadedFiles(Request $request, int $index): array
     {
         $files = [];
-        $f = data_get($request->file('file'), $index);
-        if ($f instanceof UploadedFile) {
-            $files[] = $f;
-        }
+        $seen = [];
+        $appendFile = static function ($candidate) use (&$files, &$seen): void {
+            if (!$candidate instanceof UploadedFile) {
+                return;
+            }
+            $objectId = spl_object_id($candidate);
+            if (isset($seen[$objectId])) {
+                return;
+            }
+            $seen[$objectId] = true;
+            $files[] = $candidate;
+        };
 
-        $p = data_get($request->file('proof'), $index);
-        if ($p instanceof UploadedFile) {
-            $files[] = $p;
-        }
+        $appendFile(data_get($request->file('file'), $index));
+        $appendFile(data_get($request->file('proof'), $index));
 
         $batch = data_get($request->file('attachments'), $index);
         if ($batch instanceof UploadedFile) {
-            $files[] = $batch;
+            $appendFile($batch);
         } elseif (is_array($batch)) {
             foreach ($batch as $bf) {
-                if ($bf instanceof UploadedFile) {
-                    $files[] = $bf;
-                }
+                $appendFile($bf);
             }
         }
 
@@ -264,7 +268,7 @@ class EntertaimentReimbursementController extends Controller
                 } elseif ($data->status == 11) {
                 $button = '<button   class="view btn btn-success btn-sm">APPROVED FINANCE SUPERVISOR</button>';
                 } elseif ($data->status == 3) {
-                $button = '<button  class=" view btn btn-success btn-sm">PROCESS SETTLEMET</button>';
+                $button = '<button  class=" view btn btn-success btn-sm">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</button>';
                 } elseif ($data->status == 4){
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED</button>';
                 } elseif ($data->status == 5){
@@ -401,7 +405,7 @@ class EntertaimentReimbursementController extends Controller
                 } elseif ($data->status == 11) {
                 $button = '<button   class="view btn btn-success btn-sm">APPROVED FINANCE SUPERVISOR</button>';
                 } elseif ($data->status == 3) {
-                $button = '<button  class=" view btn btn-success btn-sm">PROCESS SETTLEMET</button>';
+                $button = '<button  class=" view btn btn-success btn-sm">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</button>';
                 } elseif ($data->status == 4){
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED</button>';
                 } elseif ($data->status == 5){

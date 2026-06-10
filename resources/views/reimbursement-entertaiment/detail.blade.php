@@ -226,7 +226,7 @@ if (!function_exists('ent_attachment_rows')) {
                                             $status = "APPROVED FINANCE SUPERVISOR";
                                             break;
                                         case 3:
-                                            $status = "PROCESS SETTLEMENT";
+                                            $status = "APPROVED FINANCE MANAGER / PROCESS SETTLEMENT";
                                             break;
                                         case 9:
                                             $status = "REJECTED ".$meng."";
@@ -587,8 +587,8 @@ if (!function_exists('ent_attachment_rows')) {
                                     <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                                         <i class="fa fa-camera"></i>
                                     </button>
-                                    <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                                    <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                                    <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                                    <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                                 </td>
                                 <td>
                                     <div id="preview_1">
@@ -670,8 +670,8 @@ if (!function_exists('ent_attachment_rows')) {
                                         <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                                             <i class="fa fa-camera"></i>
                                         </button>
-                                        <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                                        <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                                        <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                                        <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                                     </td>
                                     <td>
                                         <div id="preview_{{$numb}}">
@@ -851,6 +851,7 @@ if (!function_exists('ent_attachment_rows')) {
 <!-- End Custom Lightbox -->
   
 @push('scripts')
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 
@@ -886,7 +887,7 @@ if (!function_exists('ent_attachment_rows')) {
             );
             if($('body').find('.fieldGroup').length < maxGroup){
 
-              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select class="form-control" name="payment_type[]" style="width:100%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+count+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
+              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select class="form-control" name="payment_type[]" style="width:100%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+count+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
 
               $('body').find('.fieldGroup:last').after(fieldHTML);
               
@@ -1073,35 +1074,6 @@ if (!function_exists('ent_attachment_rows')) {
                 
           });
           
-          // Objek untuk menyimpan status upload di setiap row
-          let uploadStatus = {};
-
-                    function getPreviewDivFromRow(row) {
-                        return row.find('[id^="preview_"]').first();
-                    }
-
-                    function createPreviewImage(src) {
-                        return $('<a>')
-                            .attr('href', src)
-                            .attr('target', '_blank')
-                            .attr('data-preview-src', src)
-                            .addClass('preview-link')
-                            .append(
-                                $('<img>')
-                                    .attr('src', src)
-                                    .attr('data-preview-src', src)
-                                    .addClass('preview-thumbnail')
-                                    .css({
-                                        maxWidth: '75px',
-                                        maxHeight: '75px',
-                                        border: '2px solid #28a745',
-                                        borderRadius: '5px',
-                                        marginTop: '5px',
-                                        cursor: 'pointer'
-                                    })
-                            );
-                    }
-
                     function bindExistingPreviewThumbnails() {
                         $('[id^="preview_"] img').each(function () {
                             $(this)
@@ -1145,103 +1117,6 @@ if (!function_exists('ent_attachment_rows')) {
                         }
                     });
 
-          // Fungsi untuk menangani upload file
-          $("body").on("click", ".addFile", function () {
-            let btn = $(this);
-            let row = btn.closest("tr"); // Ambil baris terkait
-            let idx = row.index(); // Dapatkan indeks baris
-            let fileInput = row.find(".file-input"); // Ambil input file di baris ini
-
-            fileInput.click();
-
-            fileInput.off("change").on("change", function (event) {
-              var file = event.target.files[0];
-
-              if (file) {
-                var reader = new FileReader();
-                $("#action_button").prop("disabled", false);
-                $(".warning-upload").hide();
-
-                reader.onload = function (e) {
-                                    let previewDiv = getPreviewDivFromRow(row);
-                                                                        previewDiv.append(createPreviewImage(e.target.result));
-
-                  btn.find("i").removeClass("fa-upload").addClass("fa-check");
-                };
-
-                reader.readAsDataURL(file);
-              }
-            });
-          });
-
-
-          // Fungsi untuk menangani pengambilan gambar dari kamera
-          $("body").on("click", ".addCamera", function () {
-              let btn = $(this);
-              let row = btn.closest("tr");
-              let idx = row.index();
-              let fileInput = row.find(".camera-input");
-
-              if (navigator.mediaDevices.getUserMedia) {
-                  navigator.mediaDevices
-                      .getUserMedia({
-                          video: {
-                              facingMode: { ideal: "environment" }, // kamera belakang
-                              width: { ideal: 1920 },  // minta resolusi Full HD
-                              height: { ideal: 1080 },
-                              focusMode: "continuous", // auto focus (didukung beberapa device)
-                              exposureMode: "continuous"
-                          }
-                      })
-                      .then(function (stream) {
-                          $("#modalPhoto").modal("show");
-                          let videoElement = $("#videoElement")[0];
-                          videoElement.srcObject = stream;
-
-                          $("#captureButton").off("click").on("click", function () {
-                              const canvas = document.createElement("canvas");
-                              const context = canvas.getContext("2d");
-
-                              // Gunakan resolusi asli kamera biar proporsional
-                              const videoWidth = videoElement.videoWidth;
-                              const videoHeight = videoElement.videoHeight;
-                              canvas.width = videoWidth;
-                              canvas.height = videoHeight;
-
-                              // Render dengan kualitas tinggi
-                              context.imageSmoothingEnabled = true;
-                              context.imageSmoothingQuality = "high";
-                              context.drawImage(videoElement, 0, 0, videoWidth, videoHeight);
-
-                              // Simpan sebagai JPEG dengan kualitas tinggi (0.92 - 0.95)
-                              canvas.toBlob(function (blob) {
-                                  const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-
-                                  const dataTransfer = new DataTransfer();
-                                  dataTransfer.items.add(file);
-                                  fileInput[0].files = dataTransfer.files;
-
-                                  const imageURL = URL.createObjectURL(file);
-                                  let previewDiv = getPreviewDivFromRow(row);
-                                  previewDiv.append(createPreviewImage(imageURL));
-                                  btn.find("i").removeClass("fa-camera").addClass("fa-check");
-
-                                  // stop kamera
-                                  stream.getTracks().forEach(track => track.stop());
-                                  $("#modalPhoto").modal("hide");
-                                  $("#action_button").prop("disabled", false);
-                                  $("#action_button_draft").prop("disabled", false);
-                                  $(".warning-upload").hide();
-                              }, "image/jpeg", 0.92); // lebih jernih
-                          });
-                      })
-                      .catch(function (err) {
-                          console.error("Error accessing webcam: " + err);
-                      });
-              }
-          });
-
-        
     });
   
 </script>
@@ -1338,82 +1213,6 @@ if (!function_exists('ent_attachment_rows')) {
 
         },
         initSelectForm() {
-          console.log("hehe")
-          $(".addFile").on('click',function(){
-      $(this).parent().find(".file-input").click();
-      $(this).parent().find(".file-input").change(function(event) {
-        var file = event.target.files[0];
-        
-        if (file) {
-            var reader = new FileReader();
-            
-            reader.onload = function(e) {
-                $('#preview_'+$(this).parent().find(".addFile").data('idx')).empty(); // Clear previous preview
-                
-                var img = $('<img>');
-                img.attr('src', e.target.result);
-                img.css({ maxWidth: '100%', maxHeight: '200px' }); // Adjust height as needed
-                $('#preview_'+$(this).parent().find(".addFile").data('idx')).append(img);
-            };
-            
-            reader.readAsDataURL(file);
-        }
-    })
-    }) 
-    $(".addCamera").on('click',function(){
-      idx = $(this).data('idx')
-      fileInput = $(this).parent().find(".file-input")[0]; 
-      $("#modalPhoto").modal('show')
-      const videoElement = $('#videoElement')[0];
-      const canvas = $('#canvas')[0];
-      const context = canvas.getContext('2d');
-
-      // Access the webcam
-      if (navigator.mediaDevices.getUserMedia) {
-          navigator.mediaDevices.getUserMedia({ video: {
-            facingMode: { ideal: "environment" }
-          } })
-              .then(function(stream) {
-                  videoElement.srcObject = stream;
-                  $('#captureButton').on('click', function() {
-                      canvas.width = videoElement.videoWidth * 0.3;
-                      canvas.height = videoElement.videoHeight * 0.3;
-                      context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-                      canvas.toBlob(function(blob) {
-                          const file = new File([blob], "capture.png", { type: "image/png" });
-
-                          // Display the captured image in the preview div
-                          const dataURL = URL.createObjectURL(file);
-                     
-                          // Create a DataTransfer to add the file to the input element
-                          const dataTransfer = new DataTransfer();
-                          dataTransfer.items.add(file);
-                          fileInput.files = dataTransfer.files;
-                          console.log(fileInput)
-                      }, 'image/png'); 
-                      // // Convert the canvas image to a data URL and display it
-                      // const dataURL = canvas.toDataURL('image/png');
-                      // // $('#preview_'+idx).html('<img src="' + dataURL + '" alt="Captured Image" width="320">');
-                      // fileInput = $(this).parent().find(".file-input")
-                      // console.log(fileInput)
-                      // fileInput.value = dataURL;
-                      // console.log(dataURL)
-                      // // Cleanup
-                      stream.getTracks().forEach(function(track) {
-                          return track.stop();
-                      });
-                      $("#modalPhoto").modal('hide')
-
-                  });
-              })
-              .catch(function(err) {
-                  console.error("Error accessing webcam: " + err);
-              });
-      }
-
-      // Capture the image when the button is clicked
-      
-    })
         },
         loadData(start = null,end = null, status= null, driver= null) {
           try {

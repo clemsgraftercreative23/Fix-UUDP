@@ -197,7 +197,7 @@ if (!function_exists('travel_attachment_rows')) {
                                             $status = "APPROVED FINANCE SUPERVISOR";
                                             break;
                                         case '3':
-                                            $status = "PROCESS SETTLEMENT";
+                                            $status = "APPROVED FINANCE MANAGER / PROCESS SETTLEMENT";
                                             break;
                                         case '9':
                                             $status = "REJECTED ".$meng."";

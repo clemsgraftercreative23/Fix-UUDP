@@ -55,7 +55,7 @@
                             <option value="1">APPROVED HEAD DEPT</option>
                             <option value="2">APPROVED HR GA</option>
                             <option value="11">APPROVED FINANCE SUPERVISOR</option>
-                            <option value="3">APPROVED FINANCE</option>
+                            <option value="3">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</option>
                             <option value="5">SETTLED</option>
                             <option value="9">REJECT</option>
                             <option value="0">PENDING</option>

@@ -224,8 +224,8 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                             <i class="fa fa-camera"></i>
                         </button>
-                        <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                        <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                        <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                        <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                     </td>
                     <td>
                         @php
@@ -318,8 +318,8 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                             <i class="fa fa-camera"></i>
                         </button>
-                        <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                        <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                        <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                        <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                     </td>
                     <td>
                         @php
@@ -415,8 +415,8 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         <button type="button" data-idx="__IDX__" class="btn btn-success btn-sm addCamera">
             <i class="fa fa-camera"></i>
         </button>
-        <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file__IDX__">
-        <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+        <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file__IDX__">
+        <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
     </td>
     <td>
         <div id="preview___PREVIEW__"></div>

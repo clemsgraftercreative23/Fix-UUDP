@@ -89,7 +89,7 @@
                             <select name="status" class="form-control select2 status" @change="searchStatus" v-model="status">
                                 <option value="1">APPROVED HEAD DEPT</option>
                                 <option value="2">APPROVED HR GA</option>
-                                <option value="3">APPROVED FINANCE</option>
+                                <option value="3">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</option>
                                 <option value="5">SETTLED</option>
                                 <option value="9">REJECT</option>
                                 <option value="0">PENDING</option>
@@ -289,8 +289,8 @@
                             <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                                 <i class="fa fa-camera"></i>
                             </button>
-                            <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                            <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                            <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                            <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                         </td>
                         <td>
                             <div id="preview_1"></div>
@@ -1332,7 +1332,7 @@ $(document).ready(function(){
       );
 
       if ($('body').find('.fieldGroup').length < maxGroup) {    
-           var fieldHTML = '<tr class="fieldGroup"><td>'+i+'</td><td><input type="hidden" name="id_detail[]"><input type="text" class="form-control amount-toll currency toll'+i+' change-price" name="toll[]" value="0" placeholder="Toll" required></td><td><input type="text" class="form-control amount-parking currency parking'+i+' change-price" name="parking[]" value="0" placeholder="Parking" required></td><td><input type="text" class="form-control amount-gasoline currency gasoline'+i+' change-price" name="gasoline[]" value="0" placeholder="Gasoline" required></td><td><input type="text" class="form-control amount-other currency others'+i+' change-price" name="others[]" value="0" placeholder="Other" required></td><td><input type="text" class="form-control amount-total currency subtotal'+i+' change-price" name="total[]" readonly placeholder="Total"></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="Cash">Cash</option><option value="Fleet">Fleet</option></select></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button type="button" class="btn btn-danger remove-item">-</button></td></tr>';
+           var fieldHTML = '<tr class="fieldGroup"><td>'+i+'</td><td><input type="hidden" name="id_detail[]"><input type="text" class="form-control amount-toll currency toll'+i+' change-price" name="toll[]" value="0" placeholder="Toll" required></td><td><input type="text" class="form-control amount-parking currency parking'+i+' change-price" name="parking[]" value="0" placeholder="Parking" required></td><td><input type="text" class="form-control amount-gasoline currency gasoline'+i+' change-price" name="gasoline[]" value="0" placeholder="Gasoline" required></td><td><input type="text" class="form-control amount-other currency others'+i+' change-price" name="others[]" value="0" placeholder="Other" required></td><td><input type="text" class="form-control amount-total currency subtotal'+i+' change-price" name="total[]" readonly placeholder="Total"></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="Cash">Cash</option><option value="Fleet">Fleet</option></select></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button type="button" class="btn btn-danger remove-item">-</button></td></tr>';
 
                $('body').find('.fieldGroup:last').after(fieldHTML);
       $('.currency').mask("#.##0", {
@@ -2260,130 +2260,6 @@ $("body").on("click",".remove-item",function(){
   $(this).parents(".fieldGroup").remove();
 });
   
-  // Objek untuk menyimpan status upload di setiap row
-  let uploadStatus = {};
-
-  // Fungsi untuk menangani upload file
-  $("body").on("click", ".addFile", function () {
-      let btn = $(this);
-      let row = btn.closest("tr");
-      let idx = row.index();
-      let fileInput = row.find(".file-input");
-
-      fileInput.click();
-
-      fileInput.off("change").on("change", function (event) {
-        let file = event.target.files[0];
-
-        if (!file) {
-          return;
-        }
-
-        DriverUpload.compressImageFile(file).then(function (processedFile) {
-          DriverUpload.setFileOnInput(fileInput[0], processedFile);
-
-          $("#action_button").prop("disabled", false);
-          $("#action_button_draft").prop("disabled", false);
-          $(".warning-upload").hide();
-
-          let previewDiv = row.find("#preview_" + (idx + 1));
-          previewDiv.empty();
-
-          let fileType = processedFile.type;
-
-          if (fileType.startsWith("image/")) {
-            let reader = new FileReader();
-            reader.onload = function (e) {
-              previewDiv.append(
-                $('<img>').attr('src', e.target.result).css({
-                  maxWidth: '75px',
-                  maxHeight: '75px',
-                  border: '2px solid #28a745',
-                  borderRadius: '5px',
-                  marginTop: '5px'
-                })
-              );
-            };
-            reader.readAsDataURL(processedFile);
-          } else if (fileType === "application/pdf") {
-            let pdfIcon = 'https://cdn-icons-png.flaticon.com/512/337/337946.png';
-            let fileURL = URL.createObjectURL(processedFile);
-
-            previewDiv.append(
-              $('<a>').attr({
-                href: fileURL,
-                target: '_blank',
-                title: 'Lihat PDF'
-              }).append(
-                $('<img>').attr({
-                  src: pdfIcon,
-                  alt: 'PDF File'
-                }).css({
-                  maxWidth: '50px',
-                  maxHeight: '50px',
-                  border: '2px solid #007bff',
-                  borderRadius: '5px',
-                  marginTop: '5px'
-                })
-              )
-            );
-          } else {
-            previewDiv.append('<p style="color:red;">File tidak didukung</p>');
-          }
-        });
-      });
-    });
-
-
-  // Fungsi untuk menangani pengambilan gambar dari kamera
-  $("body").on("click", ".addCamera", function () {
-      let btn = $(this);
-      let row = btn.closest("tr");
-      let idx = row.index();
-      let fileInput = row.find(".camera-input");
-
-      if (navigator.mediaDevices.getUserMedia) {
-          navigator.mediaDevices
-              .getUserMedia(DriverUpload.getCameraConstraints())
-              .then(function (stream) {
-                  $("#modalPhoto").modal("show");
-                  let videoElement = $("#videoElement")[0];
-                  videoElement.srcObject = stream;
-
-                  $("#captureButton").off("click").on("click", function () {
-                      DriverUpload.captureFromVideo(videoElement).then(function (file) {
-                          DriverUpload.setFileOnInput(fileInput[0], file);
-
-                          const imageURL = URL.createObjectURL(file);
-                          let previewDiv = row.find("#preview_" + (idx + 1));
-                          previewDiv.empty().append(
-                              $('<img>').attr('src', imageURL).css({
-                                  maxWidth: '75px',
-                                  maxHeight: '75px',
-                                  border: '2px solid #28a745',
-                                  borderRadius: '5px',
-                                  marginTop: '5px'
-                              })
-                          );
-
-                          stream.getTracks().forEach(track => track.stop());
-                          $("#modalPhoto").modal("hide");
-                          $("#action_button").prop("disabled", false);
-                          $("#action_button_draft").prop("disabled", false);
-                          $(".warning-upload").hide();
-                      }).catch(function (err) {
-                          console.error("Failed to capture image: " + err);
-                      });
-                  });
-              })
-              .catch(function (err) {
-                  console.error("Error accessing webcam: " + err);
-              });
-      }
-  });
-
-
-
   $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
   // $('#sum').maskMoney({ thousands:'.', decimal:',', precision:0});
   $('select[name="status"]').on('change', function(){

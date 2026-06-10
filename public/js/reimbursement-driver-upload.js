@@ -2,6 +2,8 @@ window.DriverUpload = (function () {
   var MAX_WIDTH = 1280;
   var MAX_HEIGHT = 1280;
   var JPEG_QUALITY = 0.82;
+  var PDF_ICON = 'https://cdn-icons-png.flaticon.com/512/337/337946.png';
+  var ACCEPT_TYPES = 'image/*,.pdf,application/pdf';
 
   function scaleDimensions(width, height) {
     var w = width;
@@ -109,10 +111,237 @@ window.DriverUpload = (function () {
     };
   }
 
+  function getRowIndex(row) {
+    var $row = $(row);
+    var explicit = $row.attr('data-row-index');
+    if (explicit !== undefined && explicit !== '') {
+      return parseInt(explicit, 10);
+    }
+    var $tbody = $row.closest('tbody');
+    return $tbody.find('tr').index($row);
+  }
+
+  function getPreviewDivFromRow(row) {
+    return $(row).find('[id^="preview_"]').first();
+  }
+
+  function appendAttachmentInput(row, rowIndex, file) {
+    var $row = $(row);
+    var $container = $row.find('.attachment-inputs').first();
+    if (!$container.length) {
+      $container = $('<div class="attachment-inputs" style="display:none;"></div>');
+      $row.find('.file-proof').first().append($container);
+    }
+
+    var uid = 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    var $input = $('<input type="file" class="pending-attachment-input">')
+      .attr('name', 'attachments[' + rowIndex + '][]')
+      .attr('data-uid', uid);
+    setFileOnInput($input[0], file);
+    $container.append($input);
+    return uid;
+  }
+
+  function isPdfFile(file) {
+    if (!file) {
+      return false;
+    }
+    if (file.type === 'application/pdf') {
+      return true;
+    }
+    var name = (file.name || '').toLowerCase();
+    return name.slice(-4) === '.pdf';
+  }
+
+  function renderFilePreview(file, uid) {
+    return new Promise(function (resolve) {
+      var $wrap = $('<div class="pending-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">')
+        .attr('data-uid', uid);
+      var $inner = $('<div style="display:flex; gap:6px; align-items:center;">');
+      var $remove = $('<button type="button" class="btn btn-sm btn-danger remove-pending-attachment" style="margin-left:auto;">x</button>');
+
+      if (file.type && file.type.indexOf('image/') === 0) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          $inner.append(
+            $('<img>').attr({
+              src: e.target.result,
+              'data-preview-src': e.target.result
+            }).addClass('preview-thumbnail').css({
+              maxWidth: '55px',
+              maxHeight: '55px',
+              border: '2px solid #28a745',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            })
+          );
+          $inner.append($remove);
+          $wrap.append($inner);
+          resolve($wrap);
+        };
+        reader.readAsDataURL(file);
+      } else if (isPdfFile(file)) {
+        var fileURL = URL.createObjectURL(file);
+        $inner.append(
+          $('<a>').attr({
+            href: fileURL,
+            target: '_blank',
+            title: 'Lihat PDF'
+          }).append(
+            $('<img>').attr({
+              src: PDF_ICON,
+              alt: 'PDF File'
+            }).css({
+              maxWidth: '40px',
+              maxHeight: '40px',
+              border: '2px solid #007bff',
+              borderRadius: '5px'
+            })
+          )
+        );
+        $inner.append($('<span>').text(file.name || 'PDF').css({
+          fontSize: '12px',
+          maxWidth: '100px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'inline-block'
+        }));
+        $inner.append($remove);
+        $wrap.append($inner);
+        resolve($wrap);
+      } else {
+        $inner.append($('<p style="color:red;">File tidak didukung</p>'));
+        $inner.append($remove);
+        $wrap.append($inner);
+        resolve($wrap);
+      }
+    });
+  }
+
+  function removePendingPreview($item) {
+    var uid = $item.attr('data-uid');
+    if (uid) {
+      $item.closest('tr').find('.pending-attachment-input[data-uid="' + uid + '"]').remove();
+    }
+    $item.find('a[href^="blob:"]').each(function () {
+      try {
+        var href = $(this).attr('href');
+        if (href) {
+          URL.revokeObjectURL(href);
+        }
+      } catch (e) { /* ignore */ }
+    });
+    $item.remove();
+  }
+
+  function enableSubmitButtons() {
+    $('#action_button, #action_button_draft, #action_button_submit').prop('disabled', false);
+    $('.warning-upload').hide();
+  }
+
+  function processAndAppendFile(row, file) {
+    return compressImageFile(file).then(function (processed) {
+      var rowIndex = getRowIndex(row);
+      var uid = appendAttachmentInput(row, rowIndex, processed);
+      var previewDiv = getPreviewDivFromRow(row);
+      return renderFilePreview(processed, uid).then(function ($el) {
+        previewDiv.append($el);
+        enableSubmitButtons();
+        return processed;
+      });
+    });
+  }
+
+  function resetPickerInput(input) {
+    if (!input) {
+      return;
+    }
+    input.value = '';
+  }
+
+  function bindAttachmentHandlers() {
+    if (window.__driverUploadBound) {
+      return;
+    }
+    window.__driverUploadBound = true;
+
+    $('body').on('click', '.remove-pending-attachment', function () {
+      removePendingPreview($(this).closest('.pending-attachment-item'));
+    });
+
+    $('body').on('click', '.addFile', function () {
+      var btn = $(this);
+      var row = btn.closest('tr');
+      var fileInput = row.find('.file-input').first();
+
+      fileInput.click();
+
+      fileInput.off('change.driverUpload').on('change.driverUpload', function (event) {
+        var file = event.target.files[0];
+        if (!file) {
+          return;
+        }
+
+        processAndAppendFile(row, file).then(function () {
+          btn.find('i').removeClass('fa-upload').addClass('fa-check');
+          resetPickerInput(fileInput[0]);
+        });
+      });
+    });
+
+    $('body').on('click', '.addCamera', function () {
+      var btn = $(this);
+      var row = btn.closest('tr');
+      var cameraInput = row.find('.camera-input').first();
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia(getCameraConstraints())
+        .then(function (stream) {
+          $('#modalPhoto').modal('show');
+          var videoElement = $('#videoElement')[0];
+          videoElement.srcObject = stream;
+
+          $('#captureButton').off('click.driverUpload').on('click.driverUpload', function () {
+            captureFromVideo(videoElement).then(function (file) {
+              return processAndAppendFile(row, file);
+            }).then(function () {
+              btn.find('i').removeClass('fa-camera').addClass('fa-check');
+              stream.getTracks().forEach(function (track) { track.stop(); });
+              $('#modalPhoto').modal('hide');
+            }).catch(function (err) {
+              console.error('Failed to capture image: ' + err);
+            });
+          });
+        })
+        .catch(function (err) {
+          console.error('Error accessing webcam: ' + err);
+        });
+    });
+  }
+
+  if (typeof jQuery !== 'undefined') {
+    $(function () {
+      bindAttachmentHandlers();
+    });
+  }
+
   return {
+    ACCEPT_TYPES: ACCEPT_TYPES,
     compressImageFile: compressImageFile,
     setFileOnInput: setFileOnInput,
     captureFromVideo: captureFromVideo,
-    getCameraConstraints: getCameraConstraints
+    getCameraConstraints: getCameraConstraints,
+    getRowIndex: getRowIndex,
+    getPreviewDivFromRow: getPreviewDivFromRow,
+    appendAttachmentInput: appendAttachmentInput,
+    renderFilePreview: renderFilePreview,
+    removePendingPreview: removePendingPreview,
+    processAndAppendFile: processAndAppendFile,
+    enableSubmitButtons: enableSubmitButtons,
+    bindAttachmentHandlers: bindAttachmentHandlers
   };
 })();

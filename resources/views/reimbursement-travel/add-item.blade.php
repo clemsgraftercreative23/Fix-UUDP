@@ -331,6 +331,7 @@ function rate_input($angka){
 
 
 @push('scripts')
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 
@@ -950,28 +951,6 @@ $(document).ready(function(){
          total_nominal();
      });
     
-    // Objek untuk menyimpan status upload di setiap row
-      let uploadStatus = {};
-
-            function getPreviewDivFromRow(row) {
-                return row.find('[id^="preview_"]').first();
-            }
-
-            function createPreviewImage(src) {
-                return $('<img>')
-                    .attr('src', src)
-                    .attr('data-preview-src', src)
-                    .addClass('preview-thumbnail')
-                    .css({
-                        maxWidth: '75px',
-                        maxHeight: '75px',
-                        border: '2px solid #28a745',
-                        borderRadius: '5px',
-                        marginTop: '5px',
-                        cursor: 'pointer'
-                    });
-            }
-
             function bindExistingPreviewThumbnails() {
                 $('[id^="preview_"] img').each(function () {
                     const src = $(this).attr('src');
@@ -1016,146 +995,6 @@ $(document).ready(function(){
                 $item.remove();
             });
 
-      // Fungsi untuk menangani upload file
-      $("body").on("click", ".addFile", function () {
-        let btn = $(this);
-        let row = btn.closest("tr");
-        let fileInput = row.find(".file-input");
-
-        fileInput.click();
-
-        fileInput.off("change").on("change", function (event) {
-          var file = event.target.files[0];
-
-          if (file) {
-            $("#action_button").prop("disabled", false);
-            $("#action_button_draft").prop("disabled", false);
-            $(".warning-upload").hide();
-
-            let previewDiv = getPreviewDivFromRow(row);
-            previewDiv.find('a[href^="blob:"]').each(function () {
-              try {
-                var h = $(this).attr('href');
-                if (h) URL.revokeObjectURL(h);
-              } catch (eRev) { /* ignore */ }
-            });
-            previewDiv.empty();
-
-            let fileType = file.type;
-
-            if (fileType.startsWith("image/")) {
-              // Preview gambar
-              var reader = new FileReader();
-              reader.onload = function (e) {
-                                previewDiv.append(createPreviewImage(e.target.result));
-              };
-              reader.readAsDataURL(file);
-
-            } else if (fileType === "application/pdf") {
-              // Preview PDF (ikon + link ke file)
-              let fileURL = URL.createObjectURL(file);
-              let pdfIcon = 'https://cdn-icons-png.flaticon.com/512/337/337946.png'; // Bisa diganti lokal
-
-              previewDiv.append(
-                $('<a>').attr({
-                  href: fileURL,
-                  target: '_blank',
-                  title: 'Klik untuk lihat PDF'
-                }).append(
-                  $('<img>').attr({
-                    src: pdfIcon,
-                    alt: 'PDF File'
-                  }).css({
-                    maxWidth: '50px',
-                    maxHeight: '50px',
-                    border: '2px solid #007bff',
-                    borderRadius: '5px',
-                    marginTop: '5px'
-                  })
-                )
-              );
-
-            } else {
-              previewDiv.append('<p style="color:red;">File tidak didukung</p>');
-            }
-          }
-        });
-      });
-
-
-
-    // Fungsi untuk menangani pengambilan gambar dari kamera
-    $("body").on("click", ".addCamera", function () {
-        let btn = $(this);
-        let row = btn.closest("tr");
-        let fileInput = row.find(".camera-input");
-
-        if (navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices
-                .getUserMedia({
-                    video: {
-                        width: { ideal: 1280 },  // minta HD
-                        height: { ideal: 720 },
-                        facingMode: { ideal: "environment" }
-                    }
-                })
-                .then(function (stream) {
-                    $("#modalPhoto").modal("show");
-                    let videoElement = $("#videoElement")[0];
-                    videoElement.srcObject = stream;
-
-                    $("#captureButton").off("click").on("click", function () {
-                        const canvas = document.createElement("canvas");
-                        const context = canvas.getContext("2d");
-
-                        // Atur resolusi keluaran (HD minimal)
-                        const outputWidth = 1280;
-                        const outputHeight = 720;
-                        canvas.width = outputWidth;
-                        canvas.height = outputHeight;
-
-                        // Scale dari video ke canvas agar tidak blur
-                        context.drawImage(videoElement, 0, 0, outputWidth, outputHeight);
-
-                        // Simpan sebagai JPEG dengan kualitas 0.85 (lebih jernih + kecil)
-                        canvas.toBlob(function (blob) {
-                            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-
-                            const dataTransfer = new DataTransfer();
-                            dataTransfer.items.add(file);
-                            fileInput[0].files = dataTransfer.files;
-                            fileInput.trigger('change');
-
-                            const imageURL = URL.createObjectURL(file);
-                            let previewDiv = getPreviewDivFromRow(row);
-                            previewDiv.find('a[href^="blob:"]').each(function () {
-                              try {
-                                var h = $(this).attr('href');
-                                if (h) URL.revokeObjectURL(h);
-                              } catch (eRev) { /* ignore */ }
-                            });
-                            previewDiv.empty();
-                            previewDiv.append(createPreviewImage(imageURL));
-                            btn.find("i").removeClass("fa-camera").addClass("fa-check");
-
-                            stream.getTracks().forEach(track => track.stop());
-                            $("#modalPhoto").modal("hide");
-                            $("#action_button").prop("disabled", false);
-                            $("#action_button_draft").prop("disabled", false);
-                            $(".warning-upload").hide();
-                        }, "image/jpeg", 0.85); 
-                    });
-                })
-                .catch(function (err) {
-                    console.error("Error accessing webcam: " + err);
-                });
-        }
-    });
-
-      
-    
-    
-    
   });
   
 </script>

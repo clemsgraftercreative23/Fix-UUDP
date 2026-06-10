@@ -91,7 +91,7 @@
                             <select name="status" class="form-control select2 status" @change="searchStatus" v-model="status">
                                 <option value="1">APPROVED HEAD DEPT</option>
                                 <option value="2">APPROVED HR GA</option>
-                                <option value="3">APPROVED FINANCE</option>
+                                <option value="3">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</option>
                                 <option value="5">SETTLED</option>
                                 <option value="9">REJECT</option>
                                 <option value="0">PENDING</option>
@@ -293,8 +293,8 @@
                               <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
                                   <i class="fa fa-camera"></i>
                               </button>
-                              <input type="file" accept="image/*" name="file[]" style="display: none;" class="file-input file1">
-                              <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                              <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                              <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                           </td>
                           <td>
                               <div id="preview_1"></div>
@@ -381,6 +381,7 @@
 <!-- End Modal -->
 
 @push('scripts')
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script type="text/javascript">
@@ -508,7 +509,7 @@ $(document).ready(function(){
             );
             if($('body').find('.fieldGroup').length < maxGroup){
              
-              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+i+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
+              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+i+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
               
               $('body').find('.fieldGroup:last').after(fieldHTML);
               
@@ -636,152 +637,6 @@ $(document).ready(function(){
             }
           });
 
-          // Objek untuk menyimpan status upload di setiap row
-  let uploadStatus = {};
-
-  // Fungsi untuk menangani upload file
-  $("body").on("click", ".addFile", function () {
-      let btn = $(this);
-      let row = btn.closest("tr");
-      let idx = row.index();
-      let fileInput = row.find(".file-input");
-
-      fileInput.click();
-
-      fileInput.off("change").on("change", function (event) {
-        let file = event.target.files[0];
-
-        if (file) {
-          $("#action_button").prop("disabled", false);
-          $("#action_button_draft").prop("disabled", false);
-          $(".warning-upload").hide();
-
-          let previewDiv = row.find("#preview_" + (idx + 1));
-          previewDiv.empty();
-
-          let fileType = file.type;
-
-          if (fileType.startsWith("image/")) {
-            // Preview gambar
-            let reader = new FileReader();
-            reader.onload = function (e) {
-              previewDiv.append(
-                $('<img>').attr('src', e.target.result).css({
-                  maxWidth: '75px',
-                  maxHeight: '75px',
-                  border: '2px solid #28a745',
-                  borderRadius: '5px',
-                  marginTop: '5px'
-                })
-              );
-            };
-            reader.readAsDataURL(file);
-
-          } else if (fileType === "application/pdf") {
-            // Preview ikon PDF + link ke file
-            let pdfIcon = 'https://cdn-icons-png.flaticon.com/512/337/337946.png'; // atau file lokal
-            let fileURL = URL.createObjectURL(file);
-
-            previewDiv.append(
-              $('<a>').attr({
-                href: fileURL,
-                target: '_blank',
-                title: 'Lihat PDF'
-              }).append(
-                $('<img>').attr({
-                  src: pdfIcon,
-                  alt: 'PDF File'
-                }).css({
-                  maxWidth: '50px',
-                  maxHeight: '50px',
-                  border: '2px solid #007bff',
-                  borderRadius: '5px',
-                  marginTop: '5px'
-                })
-              )
-            );
-
-          } else {
-            previewDiv.append('<p style="color:red;">File tidak didukung</p>');
-          }
-        }
-      });
-    });
-
-
-    // Fungsi untuk menangani pengambilan gambar dari kamera
-    $("body").on("click", ".addCamera", function () {
-        let btn = $(this);
-        let row = btn.closest("tr");
-        let idx = row.index();
-        let fileInput = row.find(".camera-input");
-
-        if (navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices
-                .getUserMedia({
-                    video: {
-                        facingMode: { ideal: "environment" }, // kamera belakang
-                        width: { ideal: 1920 },  // minta resolusi Full HD
-                        height: { ideal: 1080 },
-                        focusMode: "continuous", // auto focus (didukung beberapa device)
-                        exposureMode: "continuous"
-                    }
-                })
-                .then(function (stream) {
-                    $("#modalPhoto").modal("show");
-                    let videoElement = $("#videoElement")[0];
-                    videoElement.srcObject = stream;
-
-                    $("#captureButton").off("click").on("click", function () {
-                        const canvas = document.createElement("canvas");
-                        const context = canvas.getContext("2d");
-
-                        // Gunakan resolusi asli kamera biar proporsional
-                        const videoWidth = videoElement.videoWidth;
-                        const videoHeight = videoElement.videoHeight;
-                        canvas.width = videoWidth;
-                        canvas.height = videoHeight;
-
-                        // Render dengan kualitas tinggi
-                        context.imageSmoothingEnabled = true;
-                        context.imageSmoothingQuality = "high";
-                        context.drawImage(videoElement, 0, 0, videoWidth, videoHeight);
-
-                        // Simpan sebagai JPEG dengan kualitas tinggi (0.92 - 0.95)
-                        canvas.toBlob(function (blob) {
-                            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-
-                            const dataTransfer = new DataTransfer();
-                            dataTransfer.items.add(file);
-                            fileInput[0].files = dataTransfer.files;
-
-                            const imageURL = URL.createObjectURL(file);
-                            let previewDiv = row.find("#preview_" + (idx + 1));
-                            previewDiv.empty().append(
-                                $('<img>').attr('src', imageURL).css({
-                                    maxWidth: '75px',
-                                    maxHeight: '75px',
-                                    border: '2px solid #28a745',
-                                    borderRadius: '5px',
-                                    marginTop: '5px'
-                                })
-                            );
-
-                            // stop kamera
-                            stream.getTracks().forEach(track => track.stop());
-                            $("#modalPhoto").modal("hide");
-                            $("#action_button").prop("disabled", false);
-                            $("#action_button_draft").prop("disabled", false);
-                            $(".warning-upload").hide();
-                        }, "image/jpeg", 0.92); // lebih jernih
-                    });
-                })
-                .catch(function (err) {
-                    console.error("Error accessing webcam: " + err);
-                });
-        }
-    });
-  
 });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
