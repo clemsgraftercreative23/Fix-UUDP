@@ -1132,7 +1132,7 @@ class TravelReimbursementController extends Controller
                     $computedIdrRate = $amountValue * $rateValue;
                         
                     $payloadDetail = [
-                        'reimbursement_id' => $id_max,
+                        'reimbursement_id' => $data->id,
                         'reimbursement_travel_id' => $dt->id,
                         'destination' => $v['destination'],
                         'payment_type' => $v['payment_type'],
@@ -1173,8 +1173,7 @@ class TravelReimbursementController extends Controller
                 }
             }
 
-            $id_main = DB::select( DB::raw("SELECT max(id) as id_main FROM reimbursement"))['0']->id_main;
-            $id_max = DB::select( DB::raw("SELECT max(id) as id_max FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id_max;
+            $id_main = $data->id;
             $travel_type = DB::select( DB::raw("SELECT travel_type FROM reimbursement WHERE id='$id_main'"))['0']->travel_type;
 
             if ($travel_type=='Domestic') {
@@ -1187,31 +1186,31 @@ class TravelReimbursementController extends Controller
             }
 
 
-            $total_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC'"))['0']->total;
+            $total_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC'"))['0']->total;
             $allowance_bdc = 0;
-            $simcard_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 8"))['0']->total;
-            $flight_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 4"))['0']->total;
-            $rentalcar_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 3"))['0']->total;
-            $hotel_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 1"))['0']->total;
-            $toll_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 5"))['0']->total;
-            $gasoline_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 7"))['0']->total;
-            $taxi_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 2"))['0']->total;
-            $train_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 6"))['0']->total;
-            $tax_bdc  = DB::select( DB::raw("SELECT sum(tax) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC'"))['0']->total;
-            $others_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='BDC' AND cost_type_id = 9"))['0']->total;
+            $simcard_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 8"))['0']->total;
+            $flight_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 4"))['0']->total;
+            $rentalcar_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 3"))['0']->total;
+            $hotel_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 1"))['0']->total;
+            $toll_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 5"))['0']->total;
+            $gasoline_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 7"))['0']->total;
+            $taxi_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 2"))['0']->total;
+            $train_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 6"))['0']->total;
+            $tax_bdc  = DB::select( DB::raw("SELECT sum(tax) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC'"))['0']->total;
+            $others_bdc  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='BDC' AND cost_type_id = 9"))['0']->total;
 
-            $total_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash'"))['0']->total;
+            $total_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash'"))['0']->total;
             $allowance_cash = $allowance;
-            $simcard_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 8"))['0']->total;
-            $flight_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 4"))['0']->total;
-            $rentalcar_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 3"))['0']->total;
-            $hotel_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 1"))['0']->total;
-            $toll_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 5"))['0']->total;
-            $gasoline_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 7"))['0']->total;
-            $taxi_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 2"))['0']->total;
-            $train_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 6"))['0']->total;
-            $tax_cash  = DB::select( DB::raw("SELECT sum(tax) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash'"))['0']->total;
-            $others_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_max' AND payment_type='Cash' AND cost_type_id = 9"))['0']->total;
+            $simcard_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 8"))['0']->total;
+            $flight_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 4"))['0']->total;
+            $rentalcar_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 3"))['0']->total;
+            $hotel_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 1"))['0']->total;
+            $toll_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 5"))['0']->total;
+            $gasoline_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 7"))['0']->total;
+            $taxi_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 2"))['0']->total;
+            $train_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 6"))['0']->total;
+            $tax_cash  = DB::select( DB::raw("SELECT sum(tax) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash'"))['0']->total;
+            $others_cash  = DB::select( DB::raw("SELECT sum(idr_rate) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$id_main' AND payment_type='Cash' AND cost_type_id = 9"))['0']->total;
 
             $form_data = array(
                 'total_bdc'        =>  $total_bdc ?? 0,
@@ -1294,15 +1293,10 @@ class TravelReimbursementController extends Controller
             
 
         } catch(\Exception $e) {
-            // return var_dump($e);
-            dd($e->getMessage() . " at line ". $e->getLine());
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
     
         } catch(\Throwable $e) {
-            // return var_dump($e);
-            dd($e->getMessage() . " at line ". $e->getLine());
-
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
         }
