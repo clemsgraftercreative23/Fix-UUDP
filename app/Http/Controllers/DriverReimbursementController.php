@@ -661,7 +661,6 @@ class DriverReimbursementController extends Controller
     public function store(Request $request)
     {
         DB::beginTransaction();
-        $id_max = DB::select(DB::raw("SELECT max(id) AS id FROM reimbursement"))['0']->id + 1;
         if (isset($_POST['save'])) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
@@ -672,8 +671,7 @@ class DriverReimbursementController extends Controller
         try {
             $data = [
                 "id_user" => auth()->user()->id,
-                // "no_reimbursement" => "UUDP-REIMBURSE-D-00".(Reimbursement::count()+1),
-                "no_reimbursement" => "UUDP-REIMBURSE-D-00" . $id_max,
+                "no_reimbursement" => "PENDING",
                 "date" => $request->date,
                 "reimbursement_department_id" => $request->reimbursement_department_id,
                 "mengetahui_op" => "-",
@@ -687,6 +685,9 @@ class DriverReimbursementController extends Controller
             ];
 
             $data = Reimbursement::create($data);
+            $ticketNumber = Reimbursement::buildTicketNumber('D', $data->id);
+            $data->update(['no_reimbursement' => $ticketNumber]);
+            $data->no_reimbursement = $ticketNumber;
             ActivityLogger::log(
                 'reimbursement-driver',
                 $status == 10 ? 'draft' : 'create',

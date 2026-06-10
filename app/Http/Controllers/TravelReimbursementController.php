@@ -1046,7 +1046,6 @@ class TravelReimbursementController extends Controller
     public function store(Request $request)
     {
         DB::beginTransaction();
-        $id_max  = DB::select( DB::raw("SELECT max(id) AS id FROM reimbursement"))['0']->id + 1;
         if (isset($_POST['save'])) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
@@ -1065,8 +1064,7 @@ class TravelReimbursementController extends Controller
 
             $data = [
                 "id_user" => auth()->user()->id,
-                // "no_reimbursement" => "UUDP-REIMBURSE-T-00".(Reimbursement::where('no_reimbursement','like',"%-T-%")->count()+1),
-                "no_reimbursement" => "UUDP-REIMBURSE-T-00".$id_max,
+                "no_reimbursement" => "PENDING",
                 "date" => $request->reimburse['0']['date'],
                 "mengetahui_op" => "-",
                 "mengetahui_finance" => "-",
@@ -1083,6 +1081,9 @@ class TravelReimbursementController extends Controller
             ];
     
             $data = Reimbursement::create($data);
+            $ticketNumber = Reimbursement::buildTicketNumber('T', $data->id);
+            $data->update(['no_reimbursement' => $ticketNumber]);
+            $data->no_reimbursement = $ticketNumber;
             ActivityLogger::log(
                 'reimbursement-travel',
                 $status == 10 ? 'draft' : 'create',

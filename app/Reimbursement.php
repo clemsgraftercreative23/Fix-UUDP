@@ -66,6 +66,15 @@ class Reimbursement extends Model
     }
 
     /**
+     * Build UUDP ticket number from reimbursement type code and database id.
+     * Type codes: D = driver, T = travel, E = entertainment.
+     */
+    public static function buildTicketNumber(string $typeCode, int $id): string
+    {
+        return 'UUDP-REIMBURSE-' . $typeCode . '-00' . $id;
+    }
+
+    /**
      * Display name of the reimbursement submitter for WhatsApp notifications.
      */
     public function applicantDisplayName(): string
