@@ -2220,7 +2220,7 @@ class TravelReimbursementController extends Controller
                 $status = 3;
                 $return = redirect()->back()->with(['success' => "Reimbursement Successfully Updated"]);
             } else if (isset($_POST['edit_owner'])) {
-                $status = 2;
+                $status = $currentStatus;
                 $return =  redirect()->to('reimbursement-travel/add-item/'.$id_main.'/'.$id_travel.'')->with('success', 'Reimbursement Successfully Updated');
                 //$return = redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);
             } else if (isset($_POST['edit_finance'])) {
@@ -2729,12 +2729,22 @@ class TravelReimbursementController extends Controller
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
 
-        if (auth()->user()->jabatan=='Direktur Operasional') {
+        $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
+        $user = auth()->user();
+        $jabatan = (string) $user->jabatan;
+
+        if ($jabatan === 'Direktur Operasional') {
             $status = 1;
-        } else if (in_array(auth()->user()->jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA'], true)) {
+        } elseif (in_array($jabatan, ['Finance', 'HR', 'HR GA'], true)) {
             $status = 2;
-        } else {
+        } elseif ($jabatan === 'Finance Supervisor' && $currentStatus === 2) {
+            $status = 11;
+        } elseif (in_array($jabatan, ['Finance Manager', 'Owner'], true) && $currentStatus === 11) {
             $status = 3;
+        } elseif ($jabatan === 'Owner' && $currentStatus === 2) {
+            $status = 3;
+        } else {
+            $status = $currentStatus > 0 ? $currentStatus : 3;
         }
 
         $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
@@ -2832,6 +2842,16 @@ class TravelReimbursementController extends Controller
             'nominal_pengajuan' =>  $this->normalizeTravelMoneyValue($total ?? ''),
         );
 
+        if ($status === 1 && $jabatan === 'Direktur Operasional') {
+            $form_data['mengetahui_op'] = $user->name;
+        } elseif ($status === 2 && in_array($jabatan, ['Finance', 'HR', 'HR GA'], true)) {
+            $form_data['mengetahui_finance'] = $user->name;
+        } elseif ($status === 11 && $jabatan === 'Finance Supervisor') {
+            $form_data['menyetujui_finance_supervisor'] = $user->name;
+        } elseif ($status === 3 && in_array($jabatan, ['Finance Manager', 'Owner'], true)) {
+            $form_data['mengetahui_owner'] = $user->name;
+        }
+
         Reimbursement::where('id', $id_main)->update($form_data);
 
 
@@ -2904,16 +2924,16 @@ class TravelReimbursementController extends Controller
         Reimbursement::whereId($id_main)->update($form_report);
         
         $data = Reimbursement::find($id_main);
-        $user = \App\User::where('id', $data->id_user)->first();
+        $applicant = \App\User::where('id', $data->id_user)->first();
 
         if (auth()->user()->jabatan=='Direktur Operasional') {
             $curl = \Curl::to('https://api.fonnte.com/send')
             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
-                'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
+                'target' => FonnteMessenger::normalizePhone($applicant->phoneNumber),
                 'message' =>
                     "Hai *" .
-                    $user->name .
+                    $applicant->name .
                     "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
                     $data->no_reimbursement .
                     "* sebesar *Rp " .
@@ -2937,7 +2957,7 @@ class TravelReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $hr->name .
-                            "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *".$applicant->name."* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
@@ -2953,10 +2973,10 @@ class TravelReimbursementController extends Controller
             $curl = \Curl::to('https://api.fonnte.com/send')
             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
-                'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
+                'target' => FonnteMessenger::normalizePhone($applicant->phoneNumber),
                 'message' =>
                     "Hai *" .
-                    $user->name .
+                    $applicant->name .
                     "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
                     $data->no_reimbursement .
                     "* sebesar *Rp " .
@@ -2980,7 +3000,7 @@ class TravelReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $fn->name .
-                            "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *".$applicant->name."* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
@@ -2996,10 +3016,10 @@ class TravelReimbursementController extends Controller
             $curl = \Curl::to('https://api.fonnte.com/send')
             ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
             ->withData([
-                'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
+                'target' => FonnteMessenger::normalizePhone($applicant->phoneNumber),
                 'message' =>
                     "Hai *" .
-                    $user->name .
+                    $applicant->name .
                     "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
                     $data->no_reimbursement .
                     "* sebesar *Rp " .
@@ -3023,7 +3043,7 @@ class TravelReimbursementController extends Controller
                         'message' =>
                             "Hai *" .
                             $fn->name .
-                            "*,\n\nPengajuan reimbursement nama *".$user->name."* dengan nomor *" .
+                            "*,\n\nPengajuan reimbursement nama *".$applicant->name."* dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
