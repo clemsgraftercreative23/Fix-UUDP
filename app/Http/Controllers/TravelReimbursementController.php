@@ -655,6 +655,80 @@ class TravelReimbursementController extends Controller
         return $isUpdateItemPath && $isPlainUpdateSave;
     }
 
+    /**
+     * @return array{status: int, notif: string, sendSubmissionNotifications: bool}
+     */
+    private function resolveTravelItemSaveStatus(int $currentStatus, array $actions): array
+    {
+        $isSave = (bool) ($actions['save'] ?? false);
+        $isSaveDraft = (bool) ($actions['save_draft'] ?? false);
+        $isSaveItem = (bool) ($actions['save_item'] ?? false);
+        $isSaveAgain = (bool) ($actions['save_again'] ?? false);
+        $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
+
+        if ($isSaveAgain) {
+            return [
+                'status' => 0,
+                'notif' => 'Reimbursement Successfully Submitted Again',
+                'sendSubmissionNotifications' => true,
+            ];
+        }
+
+        if ($isSaveDraft) {
+            return [
+                'status' => 10,
+                'notif' => 'Reimbursement Successfully Saved as Draft',
+                'sendSubmissionNotifications' => false,
+            ];
+        }
+
+        if ($isSaveItem) {
+            return [
+                'status' => $currentStatus === 9 ? 9 : ($keepProgressStatus ? $currentStatus : 10),
+                'notif' => 'redirect',
+                'sendSubmissionNotifications' => false,
+            ];
+        }
+
+        if ($isSave) {
+            if ($currentStatus === 9) {
+                return [
+                    'status' => 9,
+                    'notif' => 'Reimbursement Successfully Updated',
+                    'sendSubmissionNotifications' => false,
+                ];
+            }
+
+            if ($currentStatus === 10) {
+                return [
+                    'status' => 0,
+                    'notif' => 'Reimbursement Successfully Submitted',
+                    'sendSubmissionNotifications' => true,
+                ];
+            }
+
+            if ($currentStatus === 0 || $keepProgressStatus) {
+                return [
+                    'status' => $currentStatus,
+                    'notif' => 'Reimbursement Successfully Updated',
+                    'sendSubmissionNotifications' => false,
+                ];
+            }
+
+            return [
+                'status' => 0,
+                'notif' => 'Reimbursement Successfully Submitted',
+                'sendSubmissionNotifications' => true,
+            ];
+        }
+
+        return [
+            'status' => $currentStatus,
+            'notif' => 'Reimbursement Successfully Updated',
+            'sendSubmissionNotifications' => false,
+        ];
+    }
+
     /** Validasi form item travel (simpan/update); cegah field kosong yang memicu error DB. */
     private function validateTravelReimbursementItemRequest(Request $request, bool $allowIncomplete): void
     {
@@ -1307,36 +1381,33 @@ class TravelReimbursementController extends Controller
 
         DB::beginTransaction();
 
+        $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
+
         // Deteksi intent submit yang lebih robust untuk tombol tanpa value.
         $postKeys = is_array($_POST ?? null) ? array_keys($_POST) : [];
         $isSave = in_array('save', $postKeys, true);
         $isSaveDraft = in_array('save_draft', $postKeys, true);
         $isSaveItem = in_array('save_item', $postKeys, true);
+        $isSaveAgain = in_array('save_again', $postKeys, true);
 
-        // Fallback: beberapa browser/flow tidak mengirim name tombol submit.
-        // Default-kan ke submit/update agar tidak salah masuk flow "Add New Item"
-        // yang memunculkan tab "New Item" lagi setelah user menekan Update.
-        if (!$isSave && !$isSaveDraft && !$isSaveItem) {
-            $isSave = true;
-        }
-
-        $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
-        $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
-
-        if ($isSave) {
-            $status = $keepProgressStatus ? $currentStatus : 0;
-            $notif = 'Reimbursement Successfully Submitted';
-        } else if ($isSaveDraft) {
-            $status = $keepProgressStatus ? $currentStatus : 10; // DRAFT
-            $notif = 'Reimbursement Successfully Saved as Draft';
-        } else if ($isSaveItem) {
-            if ($currentStatus === 9) {
-                $status = 9;
+        // Fallback: jangan otomatis submit jika status reject/draft.
+        if (!$isSave && !$isSaveDraft && !$isSaveItem && !$isSaveAgain) {
+            if ($currentStatus === 10) {
+                $isSaveDraft = true;
             } else {
-                $status = $keepProgressStatus ? $currentStatus : 10;
+                $isSave = true;
             }
-            $notif = 'redirect';
         }
+
+        $resolved = $this->resolveTravelItemSaveStatus($currentStatus, [
+            'save' => $isSave,
+            'save_draft' => $isSaveDraft,
+            'save_item' => $isSaveItem,
+            'save_again' => $isSaveAgain,
+        ]);
+        $status = $resolved['status'];
+        $notif = $resolved['notif'];
+        $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
 
 
         try {
@@ -1584,7 +1655,7 @@ class TravelReimbursementController extends Controller
             Reimbursement::whereId($id_main)->update($form_data);
             $data = Reimbursement::find($id_main);
             $user = \App\User::where('id', $data->id_user)->first();
-            if ($status != 10) {
+            if ($sendSubmissionNotifications) {
                 $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
@@ -2196,20 +2267,25 @@ class TravelReimbursementController extends Controller
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
-
-        $keepProgressStatus = ($currentStatus > 0 && $currentStatus !== 9 && $currentStatus !== 10);
+        $sendSubmissionNotifications = false;
 
         if($request->id_user == $request->id_editor) {
-          if (isset($_POST['save'])) {
-            $status = $keepProgressStatus ? $currentStatus : 0;
-            $return = redirect('reimbursement-travel')->with(['success' => "Reimbursement Successfully Submitted"]);
-          } else if (isset($_POST['save_draft'])) {
-              $status = $keepProgressStatus ? $currentStatus : 10; // DRAFT
-              $return = redirect()->back()->with(['success' => "Reimbursement Successfully Saved as Draft"]);
-          } else if (isset($_POST['save_item'])) {
-              $status = $currentStatus === 9 ? 9 : ($keepProgressStatus ? $currentStatus : 10);
-              $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
-          }
+            $resolved = $this->resolveTravelItemSaveStatus($currentStatus, [
+                'save' => isset($_POST['save']),
+                'save_draft' => isset($_POST['save_draft']),
+                'save_item' => isset($_POST['save_item']),
+                'save_again' => isset($_POST['save_again']),
+            ]);
+            $status = $resolved['status'];
+            $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
+
+            if ($resolved['notif'] === 'redirect') {
+                $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
+            } elseif ($status === 0 && $sendSubmissionNotifications) {
+                $return = redirect('reimbursement-travel')->with(['success' => $resolved['notif']]);
+            } else {
+                $return = redirect()->back()->with(['success' => $resolved['notif']]);
+            }
         } else {
             if (isset($_POST['save_item'])) {
                 $status = $currentStatus;
@@ -2436,7 +2512,7 @@ class TravelReimbursementController extends Controller
     
         Reimbursement::whereId($id_main)->update($form_report);
         if($request->id_user == $request->id_editor) {
-          if ($status==0) {
+          if ($sendSubmissionNotifications && $status === 0) {
               $data = Reimbursement::find($id_main);
               $user = \App\User::where('id', $data->id_user)->first();
               $curl = \Curl::to('https://api.fonnte.com/send')
@@ -2488,18 +2564,26 @@ class TravelReimbursementController extends Controller
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
 
-        if (isset($_POST['save_again'])) {
-            $status = 0;
-            $return = redirect('reimbursement-travel')->with(['success' => "Reimbursement Successfully Submitted Again"]);
-        } else if (isset($_POST['save_finance'])) {
+        $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 9);
+        $resolved = $this->resolveTravelItemSaveStatus($currentStatus, [
+            'save' => isset($_POST['save']),
+            'save_draft' => isset($_POST['save_draft']),
+            'save_item' => isset($_POST['save_item']),
+            'save_again' => isset($_POST['save_again']),
+        ]);
+        $status = $resolved['status'];
+        $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
+
+        if (isset($_POST['save_finance'])) {
             $status = 1;
+            $sendSubmissionNotifications = false;
             $return = back()->with(['success' => "Reimbursement Successfully Updated"]);
-        } else if (isset($_POST['save_item'])) {
-            $status = 9;
+        } elseif ($resolved['notif'] === 'redirect') {
             $return = redirect('reimbursement-travel/add-item/'.$id_main.'?new=1');
+        } elseif ($sendSubmissionNotifications && $status === 0) {
+            $return = redirect('reimbursement-travel')->with(['success' => $resolved['notif']]);
         } else {
-            $status = 9;  
-            $return = back()->with(['success' => "Reimbursement Successfully Updated"]);
+            $return = back()->with(['success' => $resolved['notif']]);
         }
 
         $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
@@ -2678,7 +2762,7 @@ class TravelReimbursementController extends Controller
     
         Reimbursement::whereId($id_main)->update($form_report);
       
-        if ($status==0) {
+        if ($sendSubmissionNotifications && $status === 0) {
               $data = Reimbursement::find($id_main);
               $user = \App\User::where('id', $data->id_user)->first();
               $curl = \Curl::to('https://api.fonnte.com/send')
