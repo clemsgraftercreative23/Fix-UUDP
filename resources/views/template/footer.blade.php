@@ -190,7 +190,12 @@
                 if ($(formSelector).length) {
                     $(formSelector)[0].reset();
                 }
-                notifySyncSuccess(function() {
+                var successMessage = "Sinkronisasi Data Berhasil";
+                if (data.warnings && data.warnings.length) {
+                    successMessage += "\n\n" + data.warnings.join("\n");
+                }
+                hideSyncLoading();
+                swal("Berhasil!", successMessage, "success").then(function() {
                     location.reload();
                 });
             }
