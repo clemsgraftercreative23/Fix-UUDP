@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Schema;
 use App\Repositories\ApprovalReminderRepository;
 use App\Support\ActivityLogger;
 use App\Support\FonnteMessenger;
+use App\Support\ReimbursementWaMessage;
 use Illuminate\Support\Facades\Log;
 
 class DriverReimbursementController extends Controller
@@ -77,6 +78,59 @@ class DriverReimbursementController extends Controller
             'no_reimbursement' => $data->no_reimbursement,
             'recipient_role' => 'approver',
         ]);
+    }
+
+    public function notifyDriverHrGaApproved(Reimbursement $data, string $approverName): void
+    {
+        $detailUrl = url('/reimbursement-driver/' . $data->id);
+        $submitter = User::find($data->id_user);
+        $applicantName = $data->applicantDisplayName();
+
+        if ($submitter && !empty($submitter->phoneNumber)) {
+            $this->sendDriverWhatsApp($submitter->phoneNumber, (
+                'Hai *' .
+                ($data->created_by ?: $submitter->name) .
+                "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                $data->no_reimbursement .
+                '* sebesar *Rp ' .
+                number_format($data->nominal_pengajuan, 0, ',', '.') .
+                '* telah diterima oleh *' .
+                $approverName .
+                " (HR GA)* .\n\n" .
+                ReimbursementWaMessage::waitingVerificationBy('Finance Supervisor') .
+                "\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+                $detailUrl
+            ), [
+                'reimbursement_id' => $data->id,
+                'no_reimbursement' => $data->no_reimbursement,
+                'recipient_role' => 'submitter',
+            ]);
+        }
+
+        foreach (User::where('jabatan', 'Finance Supervisor')->get() as $financeSupervisor) {
+            if (empty($financeSupervisor->phoneNumber)) {
+                continue;
+            }
+
+            $this->sendDriverWhatsApp($financeSupervisor->phoneNumber, (
+                'Hai *' .
+                $financeSupervisor->name .
+                "*,\n\nPengajuan reimbursement nama *" .
+                $applicantName .
+                '* dengan nomor *' .
+                $data->no_reimbursement .
+                '* sebesar *Rp ' .
+                number_format($data->nominal_pengajuan, 0, ',', '.') .
+                "* telah diterima oleh HR GA.\n\n" .
+                ReimbursementWaMessage::waitingYourVerification('Finance Supervisor') .
+                "\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+                $detailUrl
+            ), [
+                'reimbursement_id' => $data->id,
+                'no_reimbursement' => $data->no_reimbursement,
+                'recipient_role' => 'finance_supervisor',
+            ]);
+        }
     }
 
     private function notifyDriverFinanceSupervisorApproved(Reimbursement $data): void
@@ -1331,47 +1385,7 @@ class DriverReimbursementController extends Controller
                 } 
 
                 if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
-                    $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                        'message' =>
-                            "Hai *" .
-                            $row->created_by .
-                            "*,\n\nPengajuan reimbursement nama *".$row->created_by."*  dengan nomor *" .
-                            $row->no_reimbursement .
-                            "* sebesar *Rp " .
-                            number_format($row->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima oleh *" .
-                            auth()->user()->name .
-                            " (HR GA)* .\n\nSaat ini sedang menunggu verifikasi Finance Supervisor.\n\nTerima kasih.
-                               \n\nKlik untuk melihat detail pengajuan : " .
-                            url('/reimbursement-driver/' . $row->id),
-                    ])
-                    ->post();
-
-                    $finance = DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Supervisor'"));
-
-                    foreach($finance as $fn) {
-
-                        $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone($fn->phoneNumber),
-                        'message' =>
-                            "Hai *" .
-                            $fn->name .
-                            "*,\n\nPengajuan reimbursement nama *".$row->created_by."*  dengan nomor *" .
-                            $row->no_reimbursement .
-                            "* sebesar *Rp " .
-                            number_format($row->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Anda (Finance Supervisor).\n\nTerima kasih.
-                                     \n\nKlik untuk melihat detail pengajuan : " .
-                                    url('/reimbursement-driver/' . $row->id),
-                            ])
-                            ->post();
-
-                    }
+                    $this->notifyDriverHrGaApproved($row, auth()->user()->name);
                 } 
 
                 if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {

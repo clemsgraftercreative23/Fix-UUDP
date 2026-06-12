@@ -11,6 +11,7 @@ use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
 use App\Support\ActivityLogger;
 use App\Support\FonnteMessenger;
+use App\Support\ReimbursementWaMessage;
 use DB;
 use App\User;
 use Illuminate\Http\UploadedFile;
@@ -480,52 +481,60 @@ class ReimbursementController extends Controller
                 'mengetahui_finance' => $approver->name,
             ]);
 
-            $user = \App\User::where('id', $data->id_user)->first();
-            $curl = \Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                ->withData([
-                    'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                    'message' =>
-                        "Hai *" .
-                        $user->name .
-                        "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
-                        $data->no_reimbursement .
-                        "* sebesar *Rp " .
-                        number_format($data->nominal_pengajuan, 0, ',', '.') .
-                        "* telah diterima oleh *" .
-                        $nama_approval .
-                        " (".$level.")* .\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance Supervisor.\n\nTerima kasih.
-                           \n\nKlik untuk melihat detail pengajuan : " .
-                        url(''.$direct.'' . $data->id),
-                ])
-                ->post();
-
-            $nextApprovers = in_array((int) $cek_type, [1, 2, 3], true)
-                ? DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Supervisor'"))
-                : DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
-
-            foreach ($nextApprovers as $row) {
-                if (empty($row->phoneNumber)) {
-                    continue;
-                }
+            if ((int) $cek_type === 1) {
+                app(DriverReimbursementController::class)->notifyDriverHrGaApproved($data->fresh(), $nama_approval);
+            } else {
+                $user = \App\User::where('id', $data->id_user)->first();
                 $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
-                        'target' => FonnteMessenger::normalizePhone($row->phoneNumber),
+                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
                         'message' =>
                             "Hai *" .
-                            $row->name .
-                            "*,\n\nPengajuan reimbursement nama *" .
-                            $applicantName .
-                            "* dengan nomor *" .
+                            $user->name .
+                            "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
                             $data->no_reimbursement .
                             "* sebesar *Rp " .
                             number_format($data->nominal_pengajuan, 0, ',', '.') .
-                            "* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu verifikasi Finance Supervisor.\n\nTerima kasih.
-                             \n\nKlik untuk melihat detail pengajuan : " .
+                            "* telah diterima oleh *" .
+                            $nama_approval .
+                            " (".$level.")* .\n\n" .
+                            ReimbursementWaMessage::waitingVerificationBy('Finance Supervisor') .
+                            "\n\nTerima kasih.
+                           \n\nKlik untuk melihat detail pengajuan : " .
                             url(''.$direct.'' . $data->id),
                     ])
                     ->post();
+
+                $nextApprovers = in_array((int) $cek_type, [2, 3], true)
+                    ? DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Finance Supervisor'"))
+                    : DB::select(DB::raw("SELECT * FROM users WHERE jabatan='Owner'"));
+
+                foreach ($nextApprovers as $row) {
+                    if (empty($row->phoneNumber)) {
+                        continue;
+                    }
+                    $curl = \Curl::to('https://api.fonnte.com/send')
+                        ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
+                        ->withData([
+                            'target' => FonnteMessenger::normalizePhone($row->phoneNumber),
+                            'message' =>
+                                "Hai *" .
+                                $row->name .
+                                "*,\n\nPengajuan reimbursement nama *" .
+                                $applicantName .
+                                "* dengan nomor *" .
+                                $data->no_reimbursement .
+                                "* sebesar *Rp " .
+                                number_format($data->nominal_pengajuan, 0, ',', '.') .
+                                "* telah diterima oleh HR GA.\n\n" .
+                                ReimbursementWaMessage::waitingYourVerification('Finance Supervisor') .
+                                "\n\nTerima kasih.
+                             \n\nKlik untuk melihat detail pengajuan : " .
+                                url(''.$direct.'' . $data->id),
+                        ])
+                        ->post();
+                }
             }
         } elseif ((int) $data->status === 2 && in_array((int) $cek_type, [1, 2, 3], true) && $approver->jabatan === 'Finance Supervisor') {
             $processed = true;
