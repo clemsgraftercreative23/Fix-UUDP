@@ -451,7 +451,6 @@ function rupiah($angka){
                             @endif
                             @if($data['0']->status==9)
                                 <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" formnovalidate>Draft</button>&nbsp;
-                                <button class="btn btn-warning" type="submit" id="action_button" name="save">Update</button>&nbsp;
                                 <button class="btn btn-primary" type="submit" id="action_button_submit" name="save_again">Submit</button>
                             @endif
                           
