@@ -432,6 +432,36 @@
     } catch (e2) { /* ignore */ }
   }
 
+  /** Buang semua draft autosave (semua tab) untuk satu reimbursement — dipakai saat Cancel / buka detail. */
+  function clearAllDraftStorageForMain(mainId) {
+    const mid = String(mainId || '');
+    if (!mid) return;
+    try {
+      const v2Prefix = STORAGE_V2_PREFIX + mid + ':';
+      const v1Prefix = STORAGE_V1_PREFIX + mid + ':';
+      const localKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(v2Prefix) === 0) localKeys.push(k);
+      }
+      localKeys.forEach(function (k) {
+        localStorage.removeItem(k);
+      });
+      const sessionKeys = [];
+      for (let j = 0; j < sessionStorage.length; j++) {
+        const sk = sessionStorage.key(j);
+        if (sk && sk.indexOf(v1Prefix) === 0) sessionKeys.push(sk);
+      }
+      sessionKeys.forEach(function (k) {
+        sessionStorage.removeItem(k);
+      });
+      localStorage.removeItem(itemsStateKey(mid));
+      localStorage.removeItem(LEGACY_TABBAR_REGISTRY_PREFIX + mid);
+    } catch (e) { /* ignore */ }
+  }
+
+  window.rtTravelClearAllDraftStorage = clearAllDraftStorageForMain;
+
   function updateFormTravelAction($form, newTravelId) {
     let action = $form.attr('action') || '';
     if (!action) return;
@@ -1160,6 +1190,23 @@
   }
 
   $(function () {
+    const $clearOnView = $('[data-rt-clear-travel-drafts]').first();
+    if ($clearOnView.length) {
+      const viewMainId = String($clearOnView.attr('data-rt-clear-travel-drafts') || '');
+      if (viewMainId) {
+        clearAllDraftStorageForMain(viewMainId);
+      }
+    }
+
+    $(document).on('click', '.js-rt-discard-edit', function () {
+      const mainId =
+        String($(this).attr('data-rt-main-id') || '') ||
+        readMainIdAttr($('#rt-travel-item-pane'));
+      if (mainId) {
+        clearAllDraftStorageForMain(mainId);
+      }
+    });
+
     const $pane0 = $('#rt-travel-item-pane');
     if (!$pane0.length) return;
 

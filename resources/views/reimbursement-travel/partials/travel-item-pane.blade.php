@@ -440,7 +440,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
 </div>
 
 <div class="button-container">
-    <a class="btn btn-secondary text-right" href="{!!url('reimbursement-travel/'.Request::segment(3).'')!!}"><i class="fa fa-back"></i>Cancel</a>&nbsp;
+    <a class="btn btn-secondary text-right js-rt-discard-edit" data-rt-main-id="{{ $data['0']->id }}" href="{!!url('reimbursement-travel/'.Request::segment(3).'')!!}"><i class="fa fa-back"></i>Cancel</a>&nbsp;
     @if($data['0']->status==0)
         <button class="btn btn-warning" type="submit" id="action_button" name="save">Update</button>&nbsp;
     @endif

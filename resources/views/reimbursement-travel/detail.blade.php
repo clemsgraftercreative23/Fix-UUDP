@@ -70,7 +70,7 @@ if (!function_exists('travel_attachment_rows')) {
     }
 </style>
 
-<div class="page-content">
+<div class="page-content" data-rt-clear-travel-drafts="{{ $data->id }}">
     
 
     <div class="row">
@@ -755,6 +755,7 @@ if (!function_exists('travel_attachment_rows')) {
 <!-- End Modal Change-->
   
 @push('scripts')
+<script src="{{ asset('js/reimbursement-travel-tabs.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-tabs.js')) }}"></script>
 <script type="text/javascript">
   $(document).ready(function(){
     $('[data-toggle="tooltip"]').tooltip();   

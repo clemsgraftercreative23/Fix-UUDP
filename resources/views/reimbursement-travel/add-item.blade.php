@@ -179,7 +179,7 @@ function rate_input($angka){
                     <div class="card-body">
                         
                         <div class="d-flex justify-content-between w-100"><h2 id="exampleModalCenterTitle" class="modal-title maintitle clr-green mb-0">REIMBURSEMENT UUDP - TRAVEL {{strtoupper($travel_type)}}</h2> 
-                        <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close"><i class="material-icons">close</i></a></div>
+                        <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close js-rt-discard-edit" data-rt-main-id="{{ $data['0']->id }}"><i class="material-icons">close</i></a></div>
                         <hr>
                         
                         <div class="row">

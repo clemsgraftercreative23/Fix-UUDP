@@ -162,7 +162,7 @@ function rupiah($angka){
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between w-100"><h2 id="exampleModalCenterTitle" class="modal-title maintitle clr-green mb-0">REIMBURSEMENT UUDP - TRAVEL {{strtoupper($travel_type)}}</h2> 
-                        <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close"><i class="material-icons">close</i></a></div>
+                        <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close js-rt-discard-edit" data-rt-main-id="{{ $data['0']->id }}"><i class="material-icons">close</i></a></div>
                         <hr>
                         
                         <div class="row">
@@ -445,7 +445,7 @@ function rupiah($angka){
                         </div>
                         
                         <div class="button-container">
-                            <a class="btn btn-secondary text-right" href="{!!url('reimbursement-travel/'.Request::segment(3).'')!!}"><i class="fa fa-back"></i>Cancel</a>&nbsp;
+                            <a class="btn btn-secondary text-right js-rt-discard-edit" data-rt-main-id="{{ $data['0']->id }}" href="{!!url('reimbursement-travel/'.Request::segment(3).'')!!}"><i class="fa fa-back"></i>Cancel</a>&nbsp;
                             @if($data['0']->status==0)
                                 <button class="btn btn-warning" type="submit" id="action_button" name="save">Update</button>&nbsp;
                             @endif
