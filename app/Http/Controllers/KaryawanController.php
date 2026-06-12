@@ -60,6 +60,9 @@ class KaryawanController extends Controller
 		// echo "<pre>";
 		// print_r($data['d']);
 		// echo "</pre>";
+        $syncErrors = [];
+        $syncedCount = 0;
+
 		foreach ($karyawan as $item ) {
             if (!isset($item['id'])) {
                 continue;
@@ -70,91 +73,97 @@ class KaryawanController extends Controller
             }
 			$key = json_decode((string) ($detailResponse['body'] ?? ''), true);
             $key = isset($key['d']) && is_array($key['d']) ? $key['d'] : [];
-            if (empty($key)) {
+            if (empty($key) || empty($key['number'])) {
                 continue;
             }
-			if (User::where('idKaryawan', '=', $key['number'])->exists()) {
-					User::where('idKaryawan', $key['number'])
-					->update([
-					'name' => $key['name'],
-					'email' => $key['email'] == "" ? null : $key['email'] ,
-		            'phoneNumber' => isset($key['mobilePhone']) ? $key['mobilePhone'] : null,
-		            'resignMonth' => isset($key['resignMonth']) ? $key['resignMonth'] : null,
-		            'departmentId' => isset($key['departmentId']) ? $key['departmentId'] : null,
-		            'joinDateView' => isset($key['joinDateView']) ? $key['joinDateView'] : null,
-		            'resignYear' => isset($key['resignYear']) ? $key['resignYear'] : null,
-		            'bankName' => isset($key['bankName']) ? $key['bankName'] : null,
-		            //'idKaryawan' => isset($key['number']) ? $key['number'] : null,
-		            'contactInfoId' => isset($key['contactInfoId']) ? $key['contactInfoId'] : null,
-		            'startMonthPayment' => isset($key['startMonthPayment']) ? $key['startMonthPayment'] : null,
-		            'nikNo' => isset($key['nikNo']) ? $key['nikNo'] : null,
-		            'addressId' => isset($key['addressId']) ? $key['addressId'] : null,
-		            'joinDate' => isset($key['joinDate']) ? $key['joinDate'] : null,
-		            'salesmanUserId' => isset($key['salesmanUserId']) ? $key['salesmanUserId'] : null,
-		            'nettoIncomeBefore' => isset($key['nettoIncomeBefore']) ? $key['nettoIncomeBefore'] : null,
-		            'pphBefore' => isset($key['pphBefore']) ? $key['pphBefore'] : null,
-		            'posRoleId' => isset($key['posRoleId']) ? $key['posRoleId'] : null,
-		            'startYearPayment' => isset($key['startYearPayment']) ? $key['startYearPayment'] : null,
-		            'bankAccountName' => isset($key['bankAccountName']) ? $key['bankAccountName'] : null,
-		            'employeeTaxStatus' => isset($key['employeeTaxStatus']) ? $key['employeeTaxStatus'] : null,
-		            'bankAccount' => isset($key['bankAccount']) ? $key['bankAccount'] : null,
-		            'branchId' => isset($key['branchId']) ? $key['branchId'] : null,
-		            'bankCode' => isset($key['bankCode']) ? $key['bankCode'] : null,
-		            'domisiliType' => isset($key['domisiliType']) ? $key['domisiliType'] : null,
-		            'calculatePtkp' => isset($key['calculatePtkp']) ? $key['calculatePtkp'] : null,
-		            'pph' => isset($key['pph']) ? $key['pph'] : null,
-		            'npwpNo' => isset($key['npwpNo']) ? $key['npwpNo'] : null,
-		            'suspended' => isset($key['suspended']) ? $key['suspended'] : null,
-		            'employeeWorkStatus' => isset($key['employeeWorkStatus']) ? $key['employeeWorkStatus'] : null,
-		            'salesman' => isset($key['salesman']) ? $key['salesman'] : null,
-		            'resign' => isset($key['resign']) ? $key['resign'] : null,
-					]);
-			} else {
-				$form_data = array(
-		            'name' => isset($key['name']) ? $key['name'] : null,
-		            'jabatan' => $jabatan,
-		            'email'=>isset($key['email']) ? $key['email'] : null,
-		            'phoneNumber' => isset($key['mobilePhone']) ? $key['mobilePhone'] : null,
-		            'password'=>Hash::make('12345678'),
-		            'name' => isset($key['name']) ? $key['name'] : null,
-		            'resignMonth' => isset($key['resignMonth']) ? $key['resignMonth'] : null,
-		            'departmentId' => isset($key['departmentId']) ? $key['departmentId'] : null,
-		            'optLock' => 0,
-		            'joinDateView' => isset($key['joinDateView']) ? $key['joinDateView'] : null,
-		            'resignYear' => isset($key['resignYear']) ? $key['resignYear'] : null,
-		            'bankName' => isset($key['bankName']) ? $key['bankName'] : null,
-		            'contactInfoId' => isset($key['contactInfoId']) ? $key['contactInfoId'] : null,
-		            'startMonthPayment' => isset($key['startMonthPayment']) ? $key['startMonthPayment'] : null,
-		            'nikNo' => isset($key['nikNo']) ? $key['nikNo'] : null,
-		            'addressId' => isset($key['addressId']) ? $key['addressId'] : null,
-		            'username' => isset($key['number']) ? $key['number'] : null,
-		            'idKaryawan' => isset($key['number']) ? $key['number'] : null,
-		            'joinDate' => isset($key['joinDate']) ? $key['joinDate'] : null,
-		            'salesmanUserId' => isset($key['salesmanUserId']) ? $key['salesmanUserId'] : null,
-		            'nettoIncomeBefore' => isset($key['nettoIncomeBefore']) ? $key['nettoIncomeBefore'] : null,
-		            'pphBefore' => isset($key['pphBefore']) ? $key['pphBefore'] : null,
-		            'posRoleId' => isset($key['posRoleId']) ? $key['posRoleId'] : null,
-		            'startYearPayment' => isset($key['startYearPayment']) ? $key['startYearPayment'] : null,
-		            'bankAccountName' => isset($key['bankAccountName']) ? $key['bankAccountName'] : null,
-		            'employeeTaxStatus' => isset($key['employeeTaxStatus']) ? $key['employeeTaxStatus'] : null,
-		            'bankAccount' => isset($key['bankAccount']) ? $key['bankAccount'] : null,
-		            'branchId' => isset($key['branchId']) ? $key['branchId'] : null,
-		            'bankCode' => isset($key['bankCode']) ? $key['bankCode'] : null,
-		            'domisiliType' => isset($key['domisiliType']) ? $key['domisiliType'] : null,
-		            'calculatePtkp' => isset($key['calculatePtkp']) ? $key['calculatePtkp'] : null,
-		            'pph' => isset($key['pph']) ? $key['pph'] : null,
-		            'npwpNo' => isset($key['npwpNo']) ? $key['npwpNo'] : null,
-		            'suspended' => isset($key['suspended']) ? $key['suspended'] : null,
-		            'employeeWorkStatus' => isset($key['employeeWorkStatus']) ? $key['employeeWorkStatus'] : null,
-		            'salesman' => isset($key['salesman']) ? $key['salesman'] : null,
-		            'resign' => isset($key['resign']) ? $key['resign'] : null,
-	        	);
 
-				User::create($form_data);
-			}
+            $employeeLabel = $key['number'] . (isset($key['name']) ? ' (' . $key['name'] . ')' : '');
+
+            try {
+                if (User::where('idKaryawan', '=', $key['number'])->exists()) {
+                    User::where('idKaryawan', $key['number'])->update($this->mapAccurateEmployeeFields($key));
+                } else {
+                    User::create($this->mapAccurateEmployeeFields($key, $jabatan, true));
+                }
+                $syncedCount++;
+            } catch (\Throwable $exception) {
+                $syncErrors[] = 'Gagal sinkron karyawan ' . $employeeLabel . ': ' . $exception->getMessage();
+            }
 		}
 
+        if ($syncedCount === 0 && !empty($syncErrors)) {
+            return response()->json(['errors' => $syncErrors], 422);
+        }
+
+        if (!empty($syncErrors)) {
+            return response()->json([
+                'success' => 'Data is successfully updated',
+                'warnings' => $syncErrors,
+            ]);
+        }
+
 		return response()->json(['success' => 'Data is successfully updated']);
+    }
+
+    private function accurateField(array $key, $field, $default = null)
+    {
+        if (!array_key_exists($field, $key) || $key[$field] === null || $key[$field] === '') {
+            return $default;
+        }
+
+        return $key[$field];
+    }
+
+    private function mapAccurateEmployeeFields(array $key, $jabatan = null, $isNew = false)
+    {
+        $email = $this->accurateField($key, 'email');
+        if ($email === '') {
+            $email = null;
+        }
+
+        $fields = [
+            'name' => $this->accurateField($key, 'name', ''),
+            'email' => $email,
+            'phoneNumber' => $this->accurateField($key, 'mobilePhone'),
+            'resignMonth' => $this->accurateField($key, 'resignMonth'),
+            'departmentId' => $this->accurateField($key, 'departmentId'),
+            'joinDateView' => $this->accurateField($key, 'joinDateView', '-'),
+            'resignYear' => $this->accurateField($key, 'resignYear'),
+            'bankName' => $this->accurateField($key, 'bankName', '-'),
+            'contactInfoId' => $this->accurateField($key, 'contactInfoId', '-'),
+            'startMonthPayment' => $this->accurateField($key, 'startMonthPayment', '0'),
+            'nikNo' => $this->accurateField($key, 'nikNo'),
+            'addressId' => $this->accurateField($key, 'addressId', '-'),
+            'joinDate' => $this->accurateField($key, 'joinDate', '-'),
+            'salesmanUserId' => $this->accurateField($key, 'salesmanUserId'),
+            'nettoIncomeBefore' => $this->accurateField($key, 'nettoIncomeBefore', '0'),
+            'pphBefore' => $this->accurateField($key, 'pphBefore', '0'),
+            'posRoleId' => $this->accurateField($key, 'posRoleId'),
+            'startYearPayment' => $this->accurateField($key, 'startYearPayment', '0'),
+            'bankAccountName' => $this->accurateField($key, 'bankAccountName', '-'),
+            'employeeTaxStatus' => $this->accurateField($key, 'employeeTaxStatus', '-'),
+            'bankAccount' => $this->accurateField($key, 'bankAccount', '-'),
+            'branchId' => $this->accurateField($key, 'branchId', ''),
+            'bankCode' => $this->accurateField($key, 'bankCode', '-'),
+            'domisiliType' => $this->accurateField($key, 'domisiliType', '-'),
+            'calculatePtkp' => $this->accurateField($key, 'calculatePtkp', '0'),
+            'pph' => $this->accurateField($key, 'pph', '0'),
+            'npwpNo' => $this->accurateField($key, 'npwpNo', '-'),
+            'suspended' => $this->accurateField($key, 'suspended', '0'),
+            'employeeWorkStatus' => $this->accurateField($key, 'employeeWorkStatus', '-'),
+            'salesman' => $this->accurateField($key, 'salesman', '0'),
+            'resign' => $this->accurateField($key, 'resign', '0'),
+        ];
+
+        if ($isNew) {
+            $fields['jabatan'] = $jabatan;
+            $fields['password'] = Hash::make('12345678');
+            $fields['username'] = $this->accurateField($key, 'number');
+            $fields['idKaryawan'] = $this->accurateField($key, 'number');
+            $fields['optLock'] = $this->accurateField($key, 'optLock', '0');
+        }
+
+        return $fields;
     }
 
     public function update(Request $request)
