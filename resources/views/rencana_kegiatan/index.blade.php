@@ -111,20 +111,15 @@
             },
             success:function(data)
             {
-            var html = '';
-            if(data.errors)
-            {
-              alert('Proses Sinkronisasi Gagal! Ada kesalahan tampaknya.');
-            }
-            if(data.success)
-            {
-              alert('Sinkronisasi Data Berhasil');
-              $('#syncForm')[0].reset();
-              location.reload();
-            }
+              handleSyncResponse(data);
+            },
+            error: function() {
+              notifySyncError(null, function() {
+                $("#syncButton").prop("disabled", false);
+              });
             },
             complete: function(){
-              $('.loader').css("visibility", "hidden");
+              hideSyncLoading();
             }
             })
         

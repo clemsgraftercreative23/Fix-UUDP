@@ -171,21 +171,22 @@
           html += '<p>' + data.errors[count] + '</p>';
           }
           html += '</div>';
+          handleSyncResponse(data, { formSelector: '#sample_form', buttonSelector: '#action_button' });
           }
-          if(data.success)
+          else if(data.success)
           {
-          alert('Data Synchronization Successful');
-          $('#sample_form')[0].reset();
-          location.reload();
+          handleSyncResponse(data, { formSelector: '#sample_form', buttonSelector: '#action_button' });
           }
           $('#form_result').html(html);
           $('#formModal').modal('hide');
           },
+          error: function() {
+            notifySyncError(null, function() {
+              $("#action_button").prop("disabled", false);
+            });
+          },
           complete: function(){
-            $('.loader').css("visibility", "hidden");
-            $(".full-loading").hide()
-            $("span#loading").hide()
-            $("span#idle").show()
+            hideSyncLoading();
           }
           })
 

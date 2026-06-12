@@ -145,4 +145,64 @@
         @endif
         </script>
 
+        <script type="text/javascript">
+        window.hideSyncLoading = function() {
+            $('.loader').css("visibility", "hidden");
+            $(".full-loading").hide();
+            $("span#loading").hide();
+            $("span#idle").show();
+        };
+
+        window.notifySyncSuccess = function(callback) {
+            hideSyncLoading();
+            swal("Berhasil!", "Sinkronisasi Data Berhasil", "success").then(function() {
+                if (typeof callback === 'function') {
+                    callback();
+                }
+            });
+        };
+
+        window.notifySyncError = function(message, callback) {
+            hideSyncLoading();
+            swal("Gagal!", message || "Proses Sinkronisasi Gagal! Ada kesalahan tampaknya.", "error").then(function() {
+                if (typeof callback === 'function') {
+                    callback();
+                }
+            });
+        };
+
+        window.handleSyncResponse = function(data, options) {
+            options = options || {};
+            var formSelector = options.formSelector || '#syncForm';
+            var buttonSelector = options.buttonSelector || '#syncButton';
+
+            if (data.errors) {
+                var errMsg = Array.isArray(data.errors)
+                    ? data.errors.join('\n')
+                    : (typeof data.errors === 'string' ? data.errors : null);
+                notifySyncError(errMsg, function() {
+                    $(buttonSelector).prop("disabled", false);
+                });
+                return;
+            }
+
+            if (data.success) {
+                if ($(formSelector).length) {
+                    $(formSelector)[0].reset();
+                }
+                notifySyncSuccess(function() {
+                    location.reload();
+                });
+            }
+        };
+        </script>
+
+        @if(session()->has('success') && stripos(session()->get('success'), 'sinkronisasi') !== false)
+        <script type="text/javascript">
+        $(document).ready(function() {
+            swal("Berhasil!", {!! json_encode(session()->get('success')) !!}, "success");
+        });
+        </script>
+        @endif
+
         @stack('scripts')
