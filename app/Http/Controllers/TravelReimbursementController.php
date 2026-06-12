@@ -630,6 +630,41 @@ class TravelReimbursementController extends Controller
         return array_values(array_filter(array_merge($keptFileNames, $newFiles)));
     }
 
+    /**
+     * @return array{save: bool, save_draft: bool, save_item: bool, save_again: bool}
+     */
+    private function parseTravelFormActions(): array
+    {
+        $postKeys = is_array($_POST ?? null) ? array_keys($_POST) : [];
+
+        return [
+            'save' => in_array('save', $postKeys, true),
+            'save_draft' => in_array('save_draft', $postKeys, true),
+            'save_item' => in_array('save_item', $postKeys, true),
+            'save_again' => in_array('save_again', $postKeys, true),
+        ];
+    }
+
+    /**
+     * Tanpa tombol aksi eksplisit, jangan anggap submit pada reject/draft.
+     *
+     * @param array{save: bool, save_draft: bool, save_item: bool, save_again: bool} $actions
+     */
+    private function applyTravelFormActionFallback(int $currentStatus, array $actions): array
+    {
+        if ($actions['save'] || $actions['save_draft'] || $actions['save_item'] || $actions['save_again']) {
+            return $actions;
+        }
+
+        if ($currentStatus === 9 || $currentStatus === 10) {
+            $actions['save_draft'] = true;
+        } else {
+            $actions['save'] = true;
+        }
+
+        return $actions;
+    }
+
     /** Draft / tambah tab baru: boleh data belum lengkap. */
     private function travelItemAllowIncompleteForm(): bool
     {
@@ -693,8 +728,8 @@ class TravelReimbursementController extends Controller
         if ($isSave) {
             if ($currentStatus === 9) {
                 return [
-                    'status' => 9,
-                    'notif' => 'Reimbursement Successfully Updated',
+                    'status' => 10,
+                    'notif' => 'Reimbursement Successfully Saved as Draft',
                     'sendSubmissionNotifications' => false,
                 ];
             }
@@ -1383,28 +1418,13 @@ class TravelReimbursementController extends Controller
 
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 0);
 
-        // Deteksi intent submit yang lebih robust untuk tombol tanpa value.
-        $postKeys = is_array($_POST ?? null) ? array_keys($_POST) : [];
-        $isSave = in_array('save', $postKeys, true);
-        $isSaveDraft = in_array('save_draft', $postKeys, true);
-        $isSaveItem = in_array('save_item', $postKeys, true);
-        $isSaveAgain = in_array('save_again', $postKeys, true);
+        $actions = $this->applyTravelFormActionFallback($currentStatus, $this->parseTravelFormActions());
+        $isSave = $actions['save'];
+        $isSaveDraft = $actions['save_draft'];
+        $isSaveItem = $actions['save_item'];
+        $isSaveAgain = $actions['save_again'];
 
-        // Fallback: jangan otomatis submit jika status reject/draft.
-        if (!$isSave && !$isSaveDraft && !$isSaveItem && !$isSaveAgain) {
-            if ($currentStatus === 10) {
-                $isSaveDraft = true;
-            } else {
-                $isSave = true;
-            }
-        }
-
-        $resolved = $this->resolveTravelItemSaveStatus($currentStatus, [
-            'save' => $isSave,
-            'save_draft' => $isSaveDraft,
-            'save_item' => $isSaveItem,
-            'save_again' => $isSaveAgain,
-        ]);
+        $resolved = $this->resolveTravelItemSaveStatus($currentStatus, $actions);
         $status = $resolved['status'];
         $notif = $resolved['notif'];
         $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
@@ -2270,12 +2290,8 @@ class TravelReimbursementController extends Controller
         $sendSubmissionNotifications = false;
 
         if($request->id_user == $request->id_editor) {
-            $resolved = $this->resolveTravelItemSaveStatus($currentStatus, [
-                'save' => isset($_POST['save']),
-                'save_draft' => isset($_POST['save_draft']),
-                'save_item' => isset($_POST['save_item']),
-                'save_again' => isset($_POST['save_again']),
-            ]);
+            $actions = $this->applyTravelFormActionFallback($currentStatus, $this->parseTravelFormActions());
+            $resolved = $this->resolveTravelItemSaveStatus($currentStatus, $actions);
             $status = $resolved['status'];
             $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
 
@@ -2565,12 +2581,8 @@ class TravelReimbursementController extends Controller
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
 
         $currentStatus = (int) (Reimbursement::whereId($id_main)->value('status') ?? 9);
-        $resolved = $this->resolveTravelItemSaveStatus($currentStatus, [
-            'save' => isset($_POST['save']),
-            'save_draft' => isset($_POST['save_draft']),
-            'save_item' => isset($_POST['save_item']),
-            'save_again' => isset($_POST['save_again']),
-        ]);
+        $actions = $this->applyTravelFormActionFallback($currentStatus, $this->parseTravelFormActions());
+        $resolved = $this->resolveTravelItemSaveStatus($currentStatus, $actions);
         $status = $resolved['status'];
         $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
 

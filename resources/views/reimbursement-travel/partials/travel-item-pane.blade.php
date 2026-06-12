@@ -100,7 +100,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         @endforeach
         @if($canManageTabs)
         <li class="nav-item">
-            <button type="submit" class="nav-link" name="save_item" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
+            <button type="button" class="nav-link js-rt-save-item-tab" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
         </li>
         @endif
     </ul>

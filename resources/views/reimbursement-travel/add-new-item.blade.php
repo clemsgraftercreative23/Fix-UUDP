@@ -274,6 +274,9 @@ function rupiah($angka){
                              data-main-id="{{ $data['0']->id }}"
                              data-travel-id="0"
                              data-rt-new-item="1"
+                             @if(in_array((int) $data['0']->status, [9, 10], true))
+                             data-rt-clear-travel-drafts-on-load="{{ $data['0']->id }}"
+                             @endif
                              data-rt-new-item-url="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'?new=1') !!}"
                              data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
                         <div class="nav-tabs-container">
@@ -296,7 +299,7 @@ function rupiah($angka){
                                     <a class="nav-link active" data-toggle="tab" href="#reimburse-form"><span class="item-new">New Item</span></a>
                                 </li>
                                 <li class="nav-item">
-                                    <button type="submit" class="nav-link" name="save_item" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
+                                    <button type="button" class="nav-link js-rt-save-item-tab" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
                                 </li>
                                 @endif
                                 <!-- <li class="nav-item">
@@ -524,7 +527,7 @@ $(document).ready(function(){
     @endif
 
     $("#action_button").prop("disabled", true);
-    $("#action_button_draft").prop("disabled", true);
+    $("#action_button_draft, #action_button_submit").prop("disabled", true);
     $(".warning-upload").show();
     
     function numberWithCommas(x) {
@@ -849,7 +852,7 @@ $(document).ready(function(){
     
     $(".addMore").click(function(){
         $("#action_button").prop("disabled", false);
-        $("#action_button_draft").prop("disabled", false);
+        $("#action_button_draft, #action_button_submit").prop("disabled", false);
         $(".warning-upload").hide();
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
@@ -921,7 +924,7 @@ $(document).ready(function(){
         }
         if (!silent) {
             $("#action_button").prop("disabled", true);
-            $("#action_button_draft").prop("disabled", true);
+            $("#action_button_draft, #action_button_submit").prop("disabled", true);
             $(".warning-upload").show();
             i++;
         }
@@ -938,8 +941,7 @@ $(document).ready(function(){
     });
     
     $("body").on("click",".remove-detail",function(){ 
-       $("#action_button").prop("disabled", false);
-       $("#action_button_draft").prop("disabled", false);
+       $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", false);
        $(".warning-upload").hide();
        $(this).parents(".fieldGroupDetail").remove();
        total_nominal();
@@ -961,7 +963,7 @@ $(document).ready(function(){
 
           if (file) {
             $("#action_button").prop("disabled", false);
-            $("#action_button_draft").prop("disabled", false);
+            $("#action_button_draft, #action_button_submit").prop("disabled", false);
             $(".warning-upload").hide();
 
             let previewDiv = row.find('[id^="preview_"]').first();
@@ -1087,7 +1089,7 @@ $(document).ready(function(){
                             stream.getTracks().forEach(track => track.stop());
                             $("#modalPhoto").modal("hide");
                             $("#action_button").prop("disabled", false);
-                            $("#action_button_draft").prop("disabled", false);
+                            $("#action_button_draft, #action_button_submit").prop("disabled", false);
                             $(".warning-upload").hide();
                         }, "image/jpeg", 0.85); 
                     });

@@ -282,6 +282,9 @@ function rate_input($angka){
                              v-once
                              data-main-id="{{ $data['0']->id }}"
                              data-travel-id="{{ $data_travel['0']->id }}"
+                             @if(in_array((int) $data['0']->status, [9, 10], true))
+                             data-rt-clear-travel-drafts-on-load="{{ $data['0']->id }}"
+                             @endif
                              data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
                             @include('reimbursement-travel.partials.travel-item-pane')
                         </div>
@@ -869,8 +872,7 @@ $(document).ready(function(){
     });
 
     $(".addMore").click(function(){
-        $("#action_button").prop("disabled", false);
-        $("#action_button_draft").prop("disabled", false);
+        $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", false);
         $(".warning-upload").hide();
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
@@ -941,8 +943,7 @@ $(document).ready(function(){
             return false;
         }
         if (!silent) {
-            $("#action_button").prop("disabled", true);
-            $("#action_button_draft").prop("disabled", true);
+            $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", true);
             $(".warning-upload").show();
             i++;
         }
@@ -965,8 +966,7 @@ $(document).ready(function(){
     });
     
      $("body").on("click",".remove-detail",function(){ 
-         $("#action_button").prop("disabled", false);
-         $("#action_button_draft").prop("disabled", false);
+         $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", false);
          $(".warning-upload").hide();
 
          var $row = $(this).closest(".fieldGroupDetail");

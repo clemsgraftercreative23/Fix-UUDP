@@ -1110,6 +1110,18 @@
     initMaskMoney($pane);
   };
 
+  function rtTravelSyncActionButtons($pane) {
+    if (!$pane || !$pane.length) {
+      $pane = $('#rt-travel-item-pane');
+    }
+    if (!$pane || !$pane.length) return;
+    var $form = $pane.closest('form');
+    if (!$form.length) return;
+    var $warn = $pane.find('.warning-upload');
+    var needsUpload = $warn.length && $warn.is(':visible');
+    $form.find('#action_button, #action_button_draft, #action_button_submit').prop('disabled', !!needsUpload);
+  }
+
   /** Sembunyikan teks "upload file" jika sudah ada preview / file terpilih (termasuk setelah partial AJAX). */
   function rtTravelSyncFileUploadWarning($pane) {
     if (!$pane || !$pane.length) {
@@ -1131,6 +1143,7 @@
     if (hasPreview || hasPending) {
       $warn.hide();
     }
+    rtTravelSyncActionButtons($pane);
   }
 
   window.rtTravelSyncFileUploadWarning = rtTravelSyncFileUploadWarning;
@@ -1209,6 +1222,11 @@
 
     const $pane0 = $('#rt-travel-item-pane');
     if (!$pane0.length) return;
+
+    const clearOnEditLoad = String($pane0.attr('data-rt-clear-travel-drafts-on-load') || '');
+    if (clearOnEditLoad) {
+      clearAllDraftStorageForMain(clearOnEditLoad);
+    }
 
     restorePaneFull($pane0);
     const main0 = readMainIdAttr($pane0);
@@ -1416,6 +1434,21 @@
           localStorage.removeItem(itemsStateKey(mid));
         } catch (e) { /* ignore */ }
       }
+    });
+
+    $(document).on('click', '.js-rt-save-item-tab, #action_button_item', function (e) {
+      e.preventDefault();
+      const $form = $(this).closest('form');
+      if (!$form.length) return;
+      $form.find('input[type="hidden"][name="save_item"]').remove();
+      $('<input type="hidden" name="save_item" value="1">').appendTo($form);
+      $form[0].submit();
+    });
+
+    $(document).on('keydown', 'form:has(#rt-travel-item-pane) input, form:has(#rt-travel-item-pane) select', function (e) {
+      if (e.key !== 'Enter') return;
+      if ($(this).is('textarea')) return;
+      e.preventDefault();
     });
   });
 })(jQuery);
