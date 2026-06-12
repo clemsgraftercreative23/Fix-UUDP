@@ -2,15 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Master_project;
 use App\Master_daftar_rencana;
-use App\Api;
-use Illuminate\Http\Request;
-use Validator;
-use DataTables;
-use Auth;
+use App\Services\Accurate\AccurateApiTokenClient;
 use DB;
-use Hash;
 
 class DaftarRencanaController extends Controller
 {
@@ -27,70 +21,77 @@ class DaftarRencanaController extends Controller
     
     public function syncRencana()
     {
-		$token = Api::where('id', 1)->get()->pluck('token');
-		$session = Api::where('id', 1)->get()->pluck('session');
-		$miaw = curl_init();
-		curl_setopt($miaw, CURLOPT_URL,"https://zeus.accurate.id/accurate/api/glaccount/list.do?filter.accountType.val=COGS&fields=no,name,id,accountType,name,parentId,parentName,namaWithIndent,noWithIndent");
-		curl_setopt($miaw, CURLOPT_HTTPHEADER, array(
-			'Accept: application/json',
-			'header' => "Authorization: Bearer ".$token['0'],
-			'X-Session-ID: '.$session['0']));
-		curl_setopt($miaw, CURLOPT_POST, 1);
-		curl_setopt($miaw, CURLOPT_POST, 1);
-		curl_setopt($miaw, CURLOPT_RETURNTRANSFER, true);
-		$server_output = curl_exec ($miaw);
-		curl_close ($miaw);
-		$data = json_decode($server_output, TRUE);
-		$count =  $data['sp']['pageCount'];
-		//SETELAH DAPAT HASIL COUNT, KEMUDIAN LOOPING URL ACCURATE UNTUK HALAMAN PROJECT
-		for ($x = 1; $x <= $count; $x++) {
-		  $urls[] = "https://zeus.accurate.id/accurate/api/glaccount/list.do?filter.accountType.val=COGS&fields=no,name,id,accountType,name,parentId,parentName,namaWithIndent,noWithIndent&sp.page=$x";
-		}
-    	//LALU HASILNYA INITIATE KE CURL
-		foreach ($urls as $key => $url) {
-		    $ch[$key] = curl_init();
-		    curl_setopt($ch[$key], CURLOPT_URL,$url);
-			curl_setopt($ch[$key], CURLOPT_HTTPHEADER, array(
-				'Accept: application/json',
-				'header' => "Authorization: Bearer ".$token['0'],
-				'X-Session-ID: '.$session['0']));
-			curl_setopt($ch[$key], CURLOPT_POST, 1);
-			curl_setopt($ch[$key], CURLOPT_POST, 1);
-			curl_setopt($ch[$key], CURLOPT_RETURNTRANSFER, true);
-			$server_output = curl_exec ($ch[$key]);
-			curl_close ($ch[$key]);
-			$data = json_decode($server_output, TRUE);
-			$a = $data['d'];
+        $client = new AccurateApiTokenClient();
+        if (!$client->isConfigured()) {
+            return response()->json(['errors' => $client->configurationErrorMessages()], 422);
+        }
 
-			foreach ($a as $key ) {
-				
-			 	if($key['parentId']!='' && $key['parentName']!='KEGIATAN PROYEK') 
-			 	{
+        $fields = 'no,name,id,accountType,name,parentId,parentName,namaWithIndent,noWithIndent';
+        $basePath = '/accurate/api/glaccount/list.do?filter.accountType.val=COGS&fields=' . $fields . '&sp.pageSize=100';
 
+        $firstPageResponse = $client->request('GET', $basePath);
+        if (!($firstPageResponse['ok'] ?? false)) {
+            return response()->json(['errors' => ['Gagal mengambil data sub activity dari Accurate.']], 422);
+        }
 
-			 		if (Master_daftar_rencana::where('id_daftar', '=', $key['id'])->exists()) {
-							DB::table('master_daftar_rencana')
-							->where('id_daftar', $key['id'])
-							->update([
-				            'id_kelompok' => $key['parentId']['id'],
-				            'nama' => $key['name'],
-				            'noWithIndent' => preg_replace("/[^0-9]/", "", $key['noWithIndent']),
-							]);
-					} else {
-						$form_data = array(
-				            'id_kelompok' => $key['parentId']['id'],
-				            'nama' => $key['name'],
-				            'id_daftar' => $key['id'],
-				            'noWithIndent' => preg_replace("/[^0-9]/", "", $key['noWithIndent']),
-			        	);
+        $data = json_decode((string) ($firstPageResponse['body'] ?? ''), true);
+        if (!is_array($data)) {
+            return response()->json(['errors' => ['Response Accurate tidak valid.']], 422);
+        }
 
-						Master_daftar_rencana::create($form_data);
-					}
-			 	}
-		 	}
-		}
+        $totalPage = isset($data['sp']['pageCount']) ? (int) $data['sp']['pageCount'] : 1;
+        if ($totalPage < 1) {
+            $totalPage = 1;
+        }
 
-		return response()->json(['success' => 'Data is successfully syncroned']);
+        for ($page = 1; $page <= $totalPage; $page++) {
+            $pagePath = $basePath . '&sp.page=' . $page;
+            $pageResponse = $client->request('GET', $pagePath);
+            if (!($pageResponse['ok'] ?? false)) {
+                continue;
+            }
+
+            $record = json_decode((string) ($pageResponse['body'] ?? ''), true);
+            if (!isset($record['d']) || !is_array($record['d'])) {
+                continue;
+            }
+
+            foreach ($record['d'] as $item) {
+                $parentId = isset($item['parentId']) ? $item['parentId'] : null;
+                $parentKelompokId = is_array($parentId) && isset($parentId['id']) ? $parentId['id'] : null;
+
+                if (empty($parentId) || empty($parentKelompokId)) {
+                    continue;
+                }
+                if (!isset($item['parentName']) || $item['parentName'] === 'KEGIATAN PROYEK') {
+                    continue;
+                }
+                if (!isset($item['id'])) {
+                    continue;
+                }
+
+                $noWithIndent = isset($item['noWithIndent']) ? preg_replace('/[^0-9]/', '', $item['noWithIndent']) : null;
+
+                if (Master_daftar_rencana::where('id_daftar', '=', $item['id'])->exists()) {
+                    DB::table('master_daftar_rencana')
+                        ->where('id_daftar', $item['id'])
+                        ->update([
+                            'id_kelompok' => $parentKelompokId,
+                            'nama' => isset($item['name']) ? $item['name'] : null,
+                            'noWithIndent' => $noWithIndent,
+                        ]);
+                } else {
+                    Master_daftar_rencana::create([
+                        'id_kelompok' => $parentKelompokId,
+                        'nama' => isset($item['name']) ? $item['name'] : null,
+                        'id_daftar' => $item['id'],
+                        'noWithIndent' => $noWithIndent,
+                    ]);
+                }
+            }
+        }
+
+        return response()->json(['success' => 'Data is successfully syncroned']);
     }
 
     

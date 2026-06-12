@@ -6,6 +6,7 @@ use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Budgetproject;
 use App\Api;
+use App\Services\Accurate\AccurateApiTokenClient;
 use Illuminate\Http\Request;
 use Validator;
 use DataTables;
@@ -156,75 +157,64 @@ class ProjectController extends Controller
 
 
     public function syncProject() {
+        $client = new AccurateApiTokenClient();
+        if (!$client->isConfigured()) {
+            return response()->json(['errors' => $client->configurationErrorMessages()], 422);
+        }
 
-    	//HITUNG JUMLAH HALAMAN PAGINATION
-    	$token = Api::where('id', 1)->get()->pluck('token');
-		$session = Api::where('id', 1)->get()->pluck('session');
-		$miaw = curl_init();
-		curl_setopt($miaw, CURLOPT_URL,"https://zeus.accurate.id/accurate/api/project/list.do");
-		curl_setopt($miaw, CURLOPT_HTTPHEADER, array(
-			'Accept: application/json',
-			'header' => "Authorization: Bearer ".$token['0'],
-			'X-Session-ID: '.$session['0']));
-		curl_setopt($miaw, CURLOPT_POST, 1);
-		curl_setopt($miaw, CURLOPT_POST, 1);
-		curl_setopt($miaw, CURLOPT_RETURNTRANSFER, true);
-		$server_output = curl_exec ($miaw);
-		curl_close ($miaw);
-		$data = json_decode($server_output, TRUE);
-		$count =  $data['sp']['pageCount'];
-		//SETELAH DAPAT HASIL COUNT, KEMUDIAN LOOPING URL ACCURATE UNTUK HALAMAN PROJECT
-		for ($x = 1; $x <= $count; $x++) {
-		  $urls[] = "https://zeus.accurate.id/accurate/api/project/list.do?sp.page=".$x;
-		}
-		$result = [];
-		$response = [];
-		//LALU HASILNYA INITIATE KE CURL
-		foreach ($urls as $key => $url) {
-		    $ch[$key] = curl_init();
-		    curl_setopt($ch[$key], CURLOPT_URL,$url);
-			curl_setopt($ch[$key], CURLOPT_HTTPHEADER, array(
-				'Accept: application/json',
-				'header' => "Authorization: Bearer ".$token['0'],
-				'X-Session-ID: '.$session['0']));
-			curl_setopt($ch[$key], CURLOPT_POST, 1);
-			curl_setopt($ch[$key], CURLOPT_POST, 1);
-			curl_setopt($ch[$key], CURLOPT_RETURNTRANSFER, true);
-			$server_output = curl_exec ($ch[$key]);
-			curl_close ($ch[$key]);
-			$data = json_decode($server_output, TRUE);
-			$project = $data['d'];
-			$response[$url] = [];
-			//INSERT ATAU UPDATE TO DATABASE
-			foreach ($project as $dt ) {
-				$response[$url][] = $dt['id'];
+        $basePath = '/accurate/api/project/list.do?sp.pageSize=100';
+        $firstPageResponse = $client->request('GET', $basePath);
+        if (!($firstPageResponse['ok'] ?? false)) {
+            return response()->json(['errors' => ['Gagal mengambil data project dari Accurate.']], 422);
+        }
 
-				if (Master_project::where('id_project', '=', $dt['id'])->exists()) {
-					DB::table('master_project')
-						->where('id_project', $dt['id'])
-						->update([
-						'no_project' => $dt['no'],
-			            'keterangan' => $dt['description'],
-			            'nama' => $dt['name'],
-			            // 'id_project' => $dt['id'],
-						]);
-				} else {
-					$form_data = array(
-			            'no_project' => $dt['no'],
-			            'keterangan' => $dt['description'],
-			            'nama' => $dt['name'],
-			            'id_project' => $dt['id'],
-		        	);
+        $data = json_decode((string) ($firstPageResponse['body'] ?? ''), true);
+        if (!is_array($data)) {
+            return response()->json(['errors' => ['Response Accurate tidak valid.']], 422);
+        }
 
-					$result[] = Master_project::create($form_data);
-				}
-			}
-			//END INSERT ATAU UPDATE TO DATABASE
-		}
+        $totalPage = isset($data['sp']['pageCount']) ? (int) $data['sp']['pageCount'] : 1;
+        if ($totalPage < 1) {
+            $totalPage = 1;
+        }
 
-		//END LOOPING INITIATE KE CURL
-		return response()->json(['success' => 'Data is successfully updated']);
+        for ($page = 1; $page <= $totalPage; $page++) {
+            $pagePath = $basePath . '&sp.page=' . $page;
+            $pageResponse = $client->request('GET', $pagePath);
+            if (!($pageResponse['ok'] ?? false)) {
+                continue;
+            }
 
+            $record = json_decode((string) ($pageResponse['body'] ?? ''), true);
+            if (!isset($record['d']) || !is_array($record['d'])) {
+                continue;
+            }
+
+            foreach ($record['d'] as $item) {
+                if (!isset($item['id'])) {
+                    continue;
+                }
+
+                if (Master_project::where('id_project', '=', $item['id'])->exists()) {
+                    DB::table('master_project')
+                        ->where('id_project', $item['id'])
+                        ->update([
+                            'no_project' => isset($item['no']) ? $item['no'] : null,
+                            'keterangan' => isset($item['description']) ? $item['description'] : null,
+                            'nama' => isset($item['name']) ? $item['name'] : null,
+                        ]);
+                } else {
+                    Master_project::create([
+                        'no_project' => isset($item['no']) ? $item['no'] : null,
+                        'keterangan' => isset($item['description']) ? $item['description'] : null,
+                        'nama' => isset($item['name']) ? $item['name'] : null,
+                        'id_project' => $item['id'],
+                    ]);
+                }
+            }
+        }
+
+        return response()->json(['success' => 'Data is successfully updated']);
     }
 
     public function destroy($id)

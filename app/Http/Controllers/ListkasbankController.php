@@ -4,13 +4,8 @@ namespace App\Http\Controllers;
 
 
 use App\Listkasbank;
-use App\Api;
-use Illuminate\Http\Request;
-use Validator;
-use DataTables;
-use Auth;
+use App\Services\Accurate\AccurateApiTokenClient;
 use DB;
-use Hash;
 
 class ListkasbankController extends Controller
 {
@@ -27,68 +22,71 @@ class ListkasbankController extends Controller
     
     public function syncListkasbank()
     {
-		$token = Api::where('id', 1)->get()->pluck('token');
-		$session = Api::where('id', 1)->get()->pluck('session');
-		$miaw = curl_init();
-		curl_setopt($miaw, CURLOPT_URL,"https://zeus.accurate.id/accurate/api/glaccount/list.do?fields=no,name,id,parentId,parentName&accountType=CASH_BANK");
-		curl_setopt($miaw, CURLOPT_HTTPHEADER, array(
-			'Accept: application/json',
-			'header' => "Authorization: Bearer ".$token['0'],
-			'X-Session-ID: '.$session['0']));
-		curl_setopt($miaw, CURLOPT_POST, 1);
-		curl_setopt($miaw, CURLOPT_POST, 1);
-		curl_setopt($miaw, CURLOPT_RETURNTRANSFER, true);
-		$server_output = curl_exec ($miaw);
-		curl_close ($miaw);
-		$data = json_decode($server_output, TRUE);
-		$count =  $data['sp']['pageCount'];
-		//SETELAH DAPAT HASIL COUNT, KEMUDIAN LOOPING URL ACCURATE UNTUK HALAMAN PROJECT
-		for ($x = 1; $x <= $count; $x++) {
-		  $urls[] = "https://zeus.accurate.id/accurate/api/glaccount/list.do?fields=no,name,id,parentId,parentName&accountType=CASH_BANK&sp.page=$x";
-		}
-    	//LALU HASILNYA INITIATE KE CURL
-		foreach ($urls as $key => $url) {
-		    $ch[$key] = curl_init();
-		    curl_setopt($ch[$key], CURLOPT_URL,$url);
-			curl_setopt($ch[$key], CURLOPT_HTTPHEADER, array(
-				'Accept: application/json',
-				'header' => "Authorization: Bearer ".$token['0'],
-				'X-Session-ID: '.$session['0']));
-			curl_setopt($ch[$key], CURLOPT_POST, 1);
-			curl_setopt($ch[$key], CURLOPT_POST, 1);
-			curl_setopt($ch[$key], CURLOPT_RETURNTRANSFER, true);
-			$server_output = curl_exec ($ch[$key]);
-			curl_close ($ch[$key]);
-			$data = json_decode($server_output, TRUE);
-			$a = $data['d'];
+        $client = new AccurateApiTokenClient();
+        if (!$client->isConfigured()) {
+            return response()->json(['errors' => $client->configurationErrorMessages()], 422);
+        }
 
-			foreach ($a as $key ) {
-				
-			 	if($key['parentId']!='' && $key['parentName']!='Cash & Bank') 
-			 	{
+        $basePath = '/accurate/api/glaccount/list.do?fields=no,name,id,parentId,parentName&accountType=CASH_BANK&sp.pageSize=100';
+        $firstPageResponse = $client->request('GET', $basePath);
+        if (!($firstPageResponse['ok'] ?? false)) {
+            return response()->json(['errors' => ['Gagal mengambil data sub kas & bank dari Accurate.']], 422);
+        }
 
+        $data = json_decode((string) ($firstPageResponse['body'] ?? ''), true);
+        if (!is_array($data)) {
+            return response()->json(['errors' => ['Response Accurate tidak valid.']], 422);
+        }
 
-			 		if (Listkasbank::where('kode_kasbank', '=', $key['no'])->exists()) {
-							DB::table('listkasbank')
-							->where('kode_kasbank', $key['no'])
-							->update([
-				            'kode_list' => $key['parentId']['no'],
-				            'nama_list' => $key['name'],
-							]);
-					} else {
-						$form_data = array(
-				            'kode_list' => $key['parentId']['no'],
-				            'nama_list' => $key['name'],
-				            'kode_kasbank' => $key['no'],
-			        	);
+        $totalPage = isset($data['sp']['pageCount']) ? (int) $data['sp']['pageCount'] : 1;
+        if ($totalPage < 1) {
+            $totalPage = 1;
+        }
 
-						Listkasbank::create($form_data);
-					}
-			 	}
-		 	}
-		}
+        for ($page = 1; $page <= $totalPage; $page++) {
+            $pagePath = $basePath . '&sp.page=' . $page;
+            $pageResponse = $client->request('GET', $pagePath);
+            if (!($pageResponse['ok'] ?? false)) {
+                continue;
+            }
 
-		return response()->json(['success' => $a]);
+            $record = json_decode((string) ($pageResponse['body'] ?? ''), true);
+            if (!isset($record['d']) || !is_array($record['d'])) {
+                continue;
+            }
+
+            foreach ($record['d'] as $item) {
+                $parentId = isset($item['parentId']) ? $item['parentId'] : null;
+                $parentNo = is_array($parentId) && isset($parentId['no']) ? $parentId['no'] : null;
+
+                if (empty($parentId) || empty($parentNo)) {
+                    continue;
+                }
+                if (!isset($item['parentName']) || $item['parentName'] === 'Cash & Bank') {
+                    continue;
+                }
+                if (!isset($item['no'])) {
+                    continue;
+                }
+
+                if (Listkasbank::where('kode_kasbank', '=', $item['no'])->exists()) {
+                    DB::table('listkasbank')
+                        ->where('kode_kasbank', $item['no'])
+                        ->update([
+                            'kode_list' => $parentNo,
+                            'nama_list' => isset($item['name']) ? $item['name'] : null,
+                        ]);
+                } else {
+                    Listkasbank::create([
+                        'kode_list' => $parentNo,
+                        'nama_list' => isset($item['name']) ? $item['name'] : null,
+                        'kode_kasbank' => $item['no'],
+                    ]);
+                }
+            }
+        }
+
+        return response()->json(['success' => 'Data is successfully syncroned']);
     }
 
     
