@@ -236,11 +236,11 @@ class ApprovalReminderRepository
         }
 
         if ($status === 2) {
-            return 'Finance Supervisor / Owner';
+            return 'Finance Supervisor';
         }
 
         if ($status === 11) {
-            return 'Finance Manager / Owner';
+            return 'Finance Manager';
         }
 
         return 'Approval';
