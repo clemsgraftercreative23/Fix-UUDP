@@ -80,14 +80,18 @@ class KaryawanController extends Controller
             $employeeLabel = $key['number'] . (isset($key['name']) ? ' (' . $key['name'] . ')' : '');
 
             try {
-                if (User::where('idKaryawan', '=', $key['number'])->exists()) {
-                    User::where('idKaryawan', $key['number'])->update($this->mapAccurateEmployeeFields($key));
+                $fields = $this->mapAccurateEmployeeFields($key, $jabatan);
+                $existingUser = User::where('idKaryawan', '=', $key['number'])->first();
+
+                if ($existingUser) {
+                    unset($fields['password'], $fields['jabatan'], $fields['username'], $fields['idKaryawan'], $fields['optLock']);
+                    $existingUser->update($fields);
                 } else {
-                    User::create($this->mapAccurateEmployeeFields($key, $jabatan, true));
+                    User::create($fields);
                 }
                 $syncedCount++;
             } catch (\Throwable $exception) {
-                $syncErrors[] = 'Gagal sinkron karyawan ' . $employeeLabel . ': ' . $exception->getMessage();
+                $syncErrors[] = $this->formatSyncError($employeeLabel, $exception);
             }
 		}
 
@@ -114,12 +118,38 @@ class KaryawanController extends Controller
         return $key[$field];
     }
 
-    private function mapAccurateEmployeeFields(array $key, $jabatan = null, $isNew = false)
+    private function resolveSyncEmail($email, $idKaryawan)
     {
-        $email = $this->accurateField($key, 'email');
-        if ($email === '') {
-            $email = null;
+        if ($email === null || $email === '') {
+            return null;
         }
+
+        $conflictQuery = User::where('email', $email);
+        if ($idKaryawan !== null && $idKaryawan !== '') {
+            $conflictQuery->where('idKaryawan', '!=', $idKaryawan);
+        }
+
+        if ($conflictQuery->exists()) {
+            return null;
+        }
+
+        return $email;
+    }
+
+    private function formatSyncError($employeeLabel, \Throwable $exception)
+    {
+        $message = $exception->getMessage();
+        if (strpos($message, 'users_email_unique') !== false) {
+            return 'Karyawan ' . $employeeLabel . ': email sudah digunakan akun lain, data disimpan tanpa email.';
+        }
+
+        return 'Gagal sinkron karyawan ' . $employeeLabel . '.';
+    }
+
+    private function mapAccurateEmployeeFields(array $key, $jabatan = null)
+    {
+        $idKaryawan = $this->accurateField($key, 'number');
+        $email = $this->resolveSyncEmail($this->accurateField($key, 'email'), $idKaryawan);
 
         $fields = [
             'name' => $this->accurateField($key, 'name', ''),
@@ -155,13 +185,11 @@ class KaryawanController extends Controller
             'resign' => $this->accurateField($key, 'resign', '0'),
         ];
 
-        if ($isNew) {
-            $fields['jabatan'] = $jabatan;
-            $fields['password'] = Hash::make('12345678');
-            $fields['username'] = $this->accurateField($key, 'number');
-            $fields['idKaryawan'] = $this->accurateField($key, 'number');
-            $fields['optLock'] = $this->accurateField($key, 'optLock', '0');
-        }
+        $fields['jabatan'] = $jabatan;
+        $fields['password'] = Hash::make('12345678');
+        $fields['username'] = $idKaryawan;
+        $fields['idKaryawan'] = $idKaryawan;
+        $fields['optLock'] = $this->accurateField($key, 'optLock', '0');
 
         return $fields;
     }
