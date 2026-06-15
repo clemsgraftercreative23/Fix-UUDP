@@ -44,13 +44,6 @@
 			justify-content: center;
 			padding: 1rem;
 		}
-		/* password-manager: stage wrapper keeps splash layout independent from the clipped login form */
-		.login-stage {
-			position: relative;
-			width: 100%;
-			max-width: 1200px;
-			margin: 0 auto;
-		}
 		/* Splash (welcome) — uses prepared v2 artwork */
 		#lanjut.splash-lanjut {
 			width: 100%;
@@ -88,6 +81,7 @@
 				border-radius: 0.75rem;
 			}
 		}
+		/* Splash first: form hidden until user clicks — only one panel visible at a time */
 		#bg.login-form-panel {
 			width: 100%;
 			max-width: 1000px;
@@ -96,32 +90,10 @@
 			overflow: hidden;
 			border-radius: 1rem;
 			box-shadow: 0 12px 40px -12px rgba(26, 43, 60, 0.12);
-			display: flex;
+			display: none;
 			flex-wrap: wrap;
 			align-items: stretch;
 			flex-direction: row-reverse;
-		}
-		/*
-		 * password-manager: never use display:none on the login form.
-		 * Browsers (Chrome, Edge, Firefox, Safari) ignore hidden forms for Save/Autofill.
-		 * This visually-hidden (sr-only) clip keeps fields in the DOM and detectable
-		 * while the splash screen remains the only visible UI.
-		 */
-		#bg.login-form-panel.is-visually-hidden {
-			position: absolute;
-			width: 1px;
-			height: 1px;
-			padding: 0;
-			margin: -1px;
-			overflow: hidden;
-			clip: rect(0, 0, 0, 0);
-			clip-path: inset(50%);
-			white-space: nowrap;
-			border: 0;
-			pointer-events: none;
-			z-index: -1;
-			box-shadow: none;
-			border-radius: 0;
 		}
 		#bg .brand-side {
 			background: linear-gradient(160deg, var(--uudp-navy) 0%, #0d3d2a 45%, var(--uudp-green) 100%);
@@ -165,93 +137,87 @@
 	 </style>
 	<div class="limiter">
 		<div class="container-login100 w-100 p-0" style="background: transparent;">
-			<div class="login-stage">
-				<div id="lanjut" class="splash-lanjut"@if($errors->any()) style="display:none"@endif role="button" tabindex="0" aria-label="Lanjut ke halaman login">
-					<div class="splash-inner">
-						<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
-						<span class="splash-hit-hint" aria-hidden="true"></span>
-					</div>
+			<div id="lanjut" class="splash-lanjut"@if($errors->any()) style="display:none"@endif role="button" tabindex="0" aria-label="Lanjut ke halaman login">
+				<div class="splash-inner">
+					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
+					<span class="splash-hit-hint" aria-hidden="true"></span>
 				</div>
+			</div>
 
-				{{-- password-manager: standard POST form — Laravel AuthenticatesUsers redirects after success (required for Save Password prompt) --}}
-				<div id="bg" class="login-form-panel@if(!$errors->any()) is-visually-hidden@endif">
-					<div class="row no-gutters w-100 m-0">
-						<div class="col-md-6 order-md-last p-0">
-							<div class="p-3 p-md-4 d-flex justify-content-between align-items-start brand-side h-100">
-								<div>
-									<p class="small mb-1 text-white" style="opacity: 0.85;">Welcome to</p>
-									<h4 class="text-white font-weight-bold mb-0" style="font-size: 1rem; letter-spacing: 0.02em;">PT SUMITOMO</h4>
-									<h4 class="text-white font-weight-bold mb-0" style="font-size: 1rem; color: #a8e6c1;">FORESTRY INDONESIA</h4>
-									<p class="small mt-3 mb-0 text-white" style="opacity: 0.75;">UUDP — Cash Advance App</p>
-								</div>
-								<button type="button" id="login" class="btn btn-light btn-circle flex-shrink-0" title="Kembali" aria-label="Kembali ke layar sambutan">
-									<i class="fa fa-times text-success" aria-hidden="true"></i>
-								</button>
+			{{-- password-manager: native POST form; Laravel redirects after success (required for Save Password prompt) --}}
+			<div id="bg" class="login-form-panel"@if($errors->any()) style="display:flex"@endif>
+				<div class="row no-gutters w-100 m-0">
+					<div class="col-md-6 order-md-last p-0">
+						<div class="p-3 p-md-4 d-flex justify-content-between align-items-start brand-side h-100">
+							<div>
+								<p class="small mb-1 text-white" style="opacity: 0.85;">Welcome to</p>
+								<h4 class="text-white font-weight-bold mb-0" style="font-size: 1rem; letter-spacing: 0.02em;">PT SUMITOMO</h4>
+								<h4 class="text-white font-weight-bold mb-0" style="font-size: 1rem; color: #a8e6c1;">FORESTRY INDONESIA</h4>
+								<p class="small mt-3 mb-0 text-white" style="opacity: 0.75;">UUDP — Cash Advance App</p>
 							</div>
+							<button type="button" id="login" class="btn btn-light btn-circle flex-shrink-0" title="Kembali" aria-label="Kembali ke layar sambutan">
+								<i class="fa fa-times text-success" aria-hidden="true"></i>
+							</button>
 						</div>
-						<div class="col-md-6">
-							<div class="p-4 p-md-5">
-								<form id="myForm1" method="post" action="{{ route('login') }}" autocomplete="on">
-									@csrf
-									<h4 class="mb-1 font-weight-bold" style="color: var(--uudp-navy);">Welcome back</h4>
-									<p class="text-muted small mb-4">Log in to access our features</p>
-									<div class="row">
-										<div class="col-md-12">
-											<label for="username">Username / NIP</label>
-											<div class="form-group">
-												<div class="validate-input m-b-20" data-validate="Type user name">
-													{{-- password-manager: type=text + name=username + autocomplete=username --}}
-													<input
-														id="username"
-														type="text"
-														name="username"
-														class="form-control @error('username') is-invalid @enderror"
-														value="{{ old('username') }}"
-														autocomplete="username"
-														required
-														placeholder="Enter your NIP or username"
-													>
-												</div>
-												@error('username')
-													<span class="invalid-feedback d-block" role="alert">
-														<strong>{{ $message }}</strong>
-													</span>
-												@enderror
-											</div>
-										</div>
-										<div class="col-md-12">
-											<label for="passwordfield">Password</label>
-											<div class="password validate-input m-b-20" data-validate="Type password">
-												{{-- password-manager: type=password + name=password + autocomplete=current-password --}}
+					</div>
+					<div class="col-md-6">
+						<div class="p-4 p-md-5">
+							<form id="myForm1" method="post" action="{{ route('login') }}" autocomplete="on">
+								@csrf
+								<h4 class="mb-1 font-weight-bold" style="color: var(--uudp-navy);">Welcome back</h4>
+								<p class="text-muted small mb-4">Log in to access our features</p>
+								<div class="row">
+									<div class="col-md-12">
+										<label for="username">Username / NIP</label>
+										<div class="form-group">
+											<div class="validate-input m-b-20" data-validate="Type user name">
 												<input
-													id="passwordfield"
-													type="password"
-													name="password"
-													class="form-control @error('password') is-invalid @enderror"
-													autocomplete="current-password"
+													id="username"
+													type="text"
+													name="username"
+													class="form-control @error('username') is-invalid @enderror"
+													value="{{ old('username') }}"
+													autocomplete="username"
 													required
-													placeholder="Enter your password"
+													placeholder="Enter your NIP or username"
 												>
-												{{-- password-manager: type=button so it never interferes with form submit --}}
-												<button type="button" class="password-toggle btn btn-link p-0 border-0" aria-label="Tampilkan password" tabindex="-1">
-													<i class="fa fa-eye" aria-hidden="true"></i>
-												</button>
-												@error('password')
-													<span class="invalid-feedback" role="alert">
-														<strong>{{ $message }}</strong>
-													</span>
-												@enderror
 											</div>
-										</div>
-										<div class="col-12 mt-2">
-											{{-- password-manager: native submit triggers browser credential capture + full-page POST redirect --}}
-											<button type="submit" class="btn btn-success w-100 py-2 font-weight-bold" style="background: var(--uudp-green); border-color: var(--uudp-green-dark);">
-												Login
-											</button>
+											@error('username')
+												<span class="invalid-feedback d-block" role="alert">
+													<strong>{{ $message }}</strong>
+												</span>
+											@enderror
 										</div>
 									</div>
-								</form>
-							</div>
+									<div class="col-md-12">
+										<label for="passwordfield">Password</label>
+										<div class="password validate-input m-b-20" data-validate="Type password">
+											<input
+												id="passwordfield"
+												type="password"
+												name="password"
+												class="form-control @error('password') is-invalid @enderror"
+												autocomplete="current-password"
+												required
+												placeholder="Enter your password"
+											>
+											<button type="button" class="password-toggle btn btn-link p-0 border-0" aria-label="Tampilkan password" tabindex="-1">
+												<i class="fa fa-eye" aria-hidden="true"></i>
+											</button>
+											@error('password')
+												<span class="invalid-feedback" role="alert">
+													<strong>{{ $message }}</strong>
+												</span>
+											@enderror
+										</div>
+									</div>
+									<div class="col-12 mt-2">
+										<button type="submit" class="btn btn-success w-100 py-2 font-weight-bold" style="background: var(--uudp-green); border-color: var(--uudp-green-dark);">
+											Login
+										</button>
+									</div>
+								</div>
+							</form>
 						</div>
 					</div>
 				</div>
@@ -279,17 +245,12 @@
 <script>
 	function showLoginForm() {
 		document.getElementById("lanjut").style.display = "none";
-		var panel = document.getElementById("bg");
-		// password-manager: reveal the real form (remove clip) so user interaction + submit are visible to the browser
-		panel.classList.remove("is-visually-hidden");
-		panel.style.display = "flex";
+		document.getElementById("bg").style.display = "flex";
 		document.getElementById("username").focus();
 	}
 	function showSplash() {
 		document.getElementById("lanjut").style.display = "block";
-		var panel = document.getElementById("bg");
-		panel.classList.add("is-visually-hidden");
-		panel.style.display = "flex";
+		document.getElementById("bg").style.display = "none";
 	}
 	$('#lanjut').on('click keypress', function(e) {
 		if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) return;
@@ -303,7 +264,7 @@
 	$(document).ready(function(){
 		var currForm1 = document.getElementById('myForm1');
 		currForm1.addEventListener('submit', function(event) {
-			// password-manager: password must stay type=password at submit time or Chrome will not offer Save Password
+			// password-manager: field must be type=password when the form is submitted
 			document.getElementById('passwordfield').setAttribute('type', 'password');
 			if (currForm1.checkValidity() === false) {
 				event.preventDefault();
@@ -335,7 +296,6 @@ $("#passwordfield").on("keyup", function(){
 		$("#passwordfield").attr("type", "password");
 	}
 });
-// password-manager: click toggle only (never mousedown) — avoids accidental type=text during submit
 $(".password .password-toggle").on("click", function(e){
 	e.preventDefault();
 	var input = $("#passwordfield");
