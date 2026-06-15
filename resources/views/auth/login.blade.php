@@ -55,9 +55,6 @@
 			overflow: hidden;
 			cursor: pointer;
 		}
-		#lanjut.splash-lanjut.is-hidden {
-			display: none;
-		}
 		.splash-inner {
 			position: relative;
 			line-height: 0;
@@ -67,6 +64,7 @@
 			height: auto;
 			display: block;
 		}
+		/* Optional hit area if artwork already shows “Next” — keeps tap/click obvious */
 		.splash-hit-hint {
 			position: absolute;
 			bottom: 4%;
@@ -83,7 +81,7 @@
 				border-radius: 0.75rem;
 			}
 		}
-		/* Form panel — hidden visually behind splash, not display:none (keeps password manager working) */
+		/* Form step */
 		#bg.login-form-panel {
 			width: 100%;
 			max-width: 1000px;
@@ -92,22 +90,10 @@
 			overflow: hidden;
 			border-radius: 1rem;
 			box-shadow: 0 12px 40px -12px rgba(26, 43, 60, 0.12);
-			display: flex;
+			display: none;
 			flex-wrap: wrap;
 			align-items: stretch;
 			flex-direction: row-reverse;
-		}
-		#bg.login-form-panel.is-behind-splash {
-			position: fixed;
-			inset: 0;
-			width: 100%;
-			max-width: none;
-			margin: 0;
-			border-radius: 0;
-			box-shadow: none;
-			opacity: 0;
-			z-index: 0;
-			pointer-events: none;
 		}
 		#bg .brand-side {
 			background: linear-gradient(160deg, var(--uudp-navy) 0%, #0d3d2a 45%, var(--uudp-green) 100%);
@@ -117,7 +103,7 @@
 		.password {
 			position: relative;
 		}
-		.password .password-toggle {
+		.password .fa-eye {
 			display: none;
 			right: 12px;
 			position: absolute;
@@ -125,7 +111,6 @@
 			transform: translateY(-50%);
 			cursor: pointer;
 			color: #6c757d;
-			line-height: 1;
 		}
 		.btn-circle.btn-lg {
 			width: 50px;
@@ -151,14 +136,14 @@
 	 </style>
 	<div class="limiter">
 		<div class="container-login100 w-100 p-0" style="background: transparent;">
-			<div id="lanjut" class="splash-lanjut@if($errors->any()) is-hidden@endif" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
+			<div id="lanjut" class="splash-lanjut" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
 				<div class="splash-inner">
 					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
 					<span class="splash-hit-hint" aria-hidden="true"></span>
 				</div>
 			</div>
 
-			<div id="bg" class="login-form-panel@if(!$errors->any()) is-behind-splash@endif">
+			<div id="bg" class="login-form-panel">
 				<div class="row no-gutters w-100 m-0">
 					<div class="col-md-6 order-md-last p-0">
 						<div class="p-3 p-md-4 d-flex justify-content-between align-items-start brand-side h-100">
@@ -175,7 +160,7 @@
 					</div>
 					<div class="col-md-6">
 						<div class="p-4 p-md-5">
-							<form id="myForm1" method="POST" action="{{ route('login') }}" autocomplete="on">
+							<form id="myForm1" method="POST" action="{{ route('login') }}">
 								@csrf
 								<h4 class="mb-1 font-weight-bold" style="color: var(--uudp-navy);">Welcome back</h4>
 								<p class="text-muted small mb-4">Log in to access our features</p>
@@ -184,7 +169,7 @@
 										<label for="username">Username / NIP</label>
 										<div class="form-group">
 											<div class="validate-input m-b-20" data-validate="Type user name">
-												<input id="username" class="form-control @error('username') is-invalid @enderror" name="username" value="{{ old('username') }}" autocomplete="username" required placeholder="Enter your NIP or username"@if(!$errors->any()) tabindex="-1"@endif>
+												<input id="username" class="form-control @error('username') is-invalid @enderror" name="username" value="{{ old('username') }}" autocomplete="username" required placeholder="Enter your NIP or username">
 											</div>
 											@error('username')
 												<span class="invalid-feedback d-block" role="alert">
@@ -196,10 +181,8 @@
 									<div class="col-md-12">
 										<label for="passwordfield">Password</label>
 										<div class="password validate-input m-b-20" data-validate="Type password">
-											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password"@if(!$errors->any()) tabindex="-1"@endif>
-											<button type="button" class="password-toggle btn btn-link p-0 border-0" aria-label="Tampilkan password" tabindex="-1">
-												<i class="fa fa-eye" aria-hidden="true"></i>
-											</button>
+											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password">
+											<i class="fa fa-eye" aria-hidden="true"></i>
 											@error('password')
 												<span class="invalid-feedback" role="alert">
 													<strong>{{ $message }}</strong>
@@ -237,20 +220,26 @@
 	<script src="access/vendor/daterangepicker/moment.min.js"></script>
 	<script src="access/vendor/daterangepicker/daterangepicker.js"></script>
 	<script src="access/vendor/countdowntime/countdowntime.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
 	<script src="access/js/main.js"></script>
 <script>
 	function showLoginForm() {
-		document.getElementById("lanjut").classList.add("is-hidden");
-		document.getElementById("bg").classList.remove("is-behind-splash");
-		document.getElementById("username").removeAttribute("tabindex");
-		document.getElementById("passwordfield").removeAttribute("tabindex");
-		document.getElementById("username").focus();
+		var xq = document.getElementById("lanjut");
+		xq.style.display = "none";
+		var bg = document.getElementById("bg");
+		bg.style.display = "-webkit-box";
+		bg.style.display = "-webkit-flex";
+		bg.style.display = "-moz-box";
+		bg.style.display = "-ms-flexbox";
+		bg.style.display = "flex";
+		var form = document.getElementById("myForm1");
+		form.style.display = "block";
 	}
 	function showSplash() {
-		document.getElementById("lanjut").classList.remove("is-hidden");
-		document.getElementById("bg").classList.add("is-behind-splash");
-		document.getElementById("username").setAttribute("tabindex", "-1");
-		document.getElementById("passwordfield").setAttribute("tabindex", "-1");
+		var xq = document.getElementById("lanjut");
+		xq.style.display = "block";
+		var bg = document.getElementById("bg");
+		bg.style.display = "none";
 	}
 	$('#lanjut').on('click keypress', function(e) {
 		if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) return;
@@ -264,7 +253,6 @@
 	$(document).ready(function(){
 		var currForm1 = document.getElementById('myForm1');
 		currForm1.addEventListener('submit', function(event) {
-			document.getElementById('passwordfield').setAttribute('type', 'password');
 			if (currForm1.checkValidity() === false) {
 				event.preventDefault();
 				event.stopPropagation();
@@ -288,20 +276,17 @@
 </script>
 <script>
 $("#passwordfield").on("keyup", function(){
-	if ($(this).val()) {
-		$(".password .password-toggle").show();
-	} else {
-		$(".password .password-toggle").hide();
-		$("#passwordfield").attr("type", "password");
-		$(".password .password-toggle").attr("aria-label", "Tampilkan password");
-	}
+	if($(this).val())
+		$(".password .fa-eye").show();
+	else
+		$(".password .fa-eye").hide();
 });
-$(".password .password-toggle").on("click", function(e){
-	e.preventDefault();
-	var input = $("#passwordfield");
-	var show = input.attr("type") === "password";
-	input.attr("type", show ? "text" : "password");
-	$(this).attr("aria-label", show ? "Sembunyikan password" : "Tampilkan password");
+$(".password .fa-eye").mousedown(function(){
+	$("#passwordfield").attr('type','text');
+}).mouseup(function(){
+	$("#passwordfield").attr('type','password');
+}).mouseout(function(){
+	$("#passwordfield").attr('type','password');
 });
 </script>
 </body>
