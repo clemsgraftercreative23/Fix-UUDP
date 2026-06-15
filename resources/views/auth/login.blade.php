@@ -81,7 +81,13 @@
 				border-radius: 0.75rem;
 			}
 		}
-		/* Form step */
+		/* Login stage: form stays in DOM (visible to password managers); splash overlays on top */
+		.login-stage {
+			position: relative;
+			width: 100%;
+			max-width: 1200px;
+			margin: 0 auto;
+		}
 		#bg.login-form-panel {
 			width: 100%;
 			max-width: 1000px;
@@ -90,10 +96,20 @@
 			overflow: hidden;
 			border-radius: 1rem;
 			box-shadow: 0 12px 40px -12px rgba(26, 43, 60, 0.12);
-			display: none;
+			display: flex;
 			flex-wrap: wrap;
 			align-items: stretch;
 			flex-direction: row-reverse;
+		}
+		#lanjut.splash-lanjut.is-hidden {
+			display: none;
+		}
+		#lanjut.splash-lanjut:not(.is-hidden) {
+			position: absolute;
+			top: 0;
+			left: 50%;
+			transform: translateX(-50%);
+			z-index: 2;
 		}
 		#bg .brand-side {
 			background: linear-gradient(160deg, var(--uudp-navy) 0%, #0d3d2a 45%, var(--uudp-green) 100%);
@@ -103,7 +119,7 @@
 		.password {
 			position: relative;
 		}
-		.password .fa-eye {
+		.password .password-toggle {
 			display: none;
 			right: 12px;
 			position: absolute;
@@ -111,6 +127,7 @@
 			transform: translateY(-50%);
 			cursor: pointer;
 			color: #6c757d;
+			line-height: 1;
 		}
 		.btn-circle.btn-lg {
 			width: 50px;
@@ -136,14 +153,8 @@
 	 </style>
 	<div class="limiter">
 		<div class="container-login100 w-100 p-0" style="background: transparent;">
-			<div id="lanjut" class="splash-lanjut" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
-				<div class="splash-inner">
-					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
-					<span class="splash-hit-hint" aria-hidden="true"></span>
-				</div>
-			</div>
-
-			<div id="bg" class="login-form-panel">
+			<div class="login-stage">
+			<div id="bg" class="login-form-panel"@if(!$errors->any()) inert aria-hidden="true"@endif>
 				<div class="row no-gutters w-100 m-0">
 					<div class="col-md-6 order-md-last p-0">
 						<div class="p-3 p-md-4 d-flex justify-content-between align-items-start brand-side h-100">
@@ -160,7 +171,7 @@
 					</div>
 					<div class="col-md-6">
 						<div class="p-4 p-md-5">
-							<form id="myForm1" method="POST" action="{{ route('login') }}">
+							<form id="myForm1" method="POST" action="{{ route('login') }}" autocomplete="on">
 								@csrf
 								<h4 class="mb-1 font-weight-bold" style="color: var(--uudp-navy);">Welcome back</h4>
 								<p class="text-muted small mb-4">Log in to access our features</p>
@@ -182,7 +193,9 @@
 										<label for="passwordfield">Password</label>
 										<div class="password validate-input m-b-20" data-validate="Type password">
 											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password">
-											<i class="fa fa-eye" aria-hidden="true"></i>
+											<button type="button" class="password-toggle btn btn-link p-0 border-0" aria-label="Tampilkan password" tabindex="-1">
+												<i class="fa fa-eye" aria-hidden="true"></i>
+											</button>
 											@error('password')
 												<span class="invalid-feedback" role="alert">
 													<strong>{{ $message }}</strong>
@@ -200,6 +213,14 @@
 						</div>
 					</div>
 				</div>
+			</div>
+
+			<div id="lanjut" class="splash-lanjut@if($errors->any()) is-hidden@endif" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
+				<div class="splash-inner">
+					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
+					<span class="splash-hit-hint" aria-hidden="true"></span>
+				</div>
+			</div>
 			</div>
 		</div>
 	</div>
@@ -224,22 +245,17 @@
 	<script src="access/js/main.js"></script>
 <script>
 	function showLoginForm() {
-		var xq = document.getElementById("lanjut");
-		xq.style.display = "none";
+		document.getElementById("lanjut").classList.add("is-hidden");
 		var bg = document.getElementById("bg");
-		bg.style.display = "-webkit-box";
-		bg.style.display = "-webkit-flex";
-		bg.style.display = "-moz-box";
-		bg.style.display = "-ms-flexbox";
-		bg.style.display = "flex";
-		var form = document.getElementById("myForm1");
-		form.style.display = "block";
+		bg.removeAttribute("inert");
+		bg.removeAttribute("aria-hidden");
+		document.getElementById("username").focus();
 	}
 	function showSplash() {
-		var xq = document.getElementById("lanjut");
-		xq.style.display = "block";
+		document.getElementById("lanjut").classList.remove("is-hidden");
 		var bg = document.getElementById("bg");
-		bg.style.display = "none";
+		bg.setAttribute("inert", "");
+		bg.setAttribute("aria-hidden", "true");
 	}
 	$('#lanjut').on('click keypress', function(e) {
 		if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) return;
@@ -276,17 +292,20 @@
 </script>
 <script>
 $("#passwordfield").on("keyup", function(){
-	if($(this).val())
-		$(".password .fa-eye").show();
-	else
-		$(".password .fa-eye").hide();
+	if ($(this).val()) {
+		$(".password .password-toggle").show();
+	} else {
+		$(".password .password-toggle").hide();
+		$("#passwordfield").attr("type", "password");
+		$(".password .password-toggle").attr("aria-label", "Tampilkan password");
+	}
 });
-$(".password .fa-eye").mousedown(function(){
-	$("#passwordfield").attr('type','text');
-}).mouseup(function(){
-	$("#passwordfield").attr('type','password');
-}).mouseout(function(){
-	$("#passwordfield").attr('type','password');
+$(".password .password-toggle").on("click", function(e){
+	e.preventDefault();
+	var input = $("#passwordfield");
+	var show = input.attr("type") === "password";
+	input.attr("type", show ? "text" : "password");
+	$(this).attr("aria-label", show ? "Sembunyikan password" : "Tampilkan password");
 });
 </script>
 </body>
