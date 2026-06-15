@@ -81,10 +81,7 @@
 				border-radius: 0.75rem;
 			}
 		}
-		#lanjut.splash-lanjut.is-hidden {
-			display: none;
-		}
-		/* Form tetap di DOM agar browser bisa deteksi login form (untuk popup Save password) */
+		/* Form step — disembunyikan sampai splash diklik */
 		#bg.login-form-panel {
 			width: 100%;
 			max-width: 1000px;
@@ -93,22 +90,10 @@
 			overflow: hidden;
 			border-radius: 1rem;
 			box-shadow: 0 12px 40px -12px rgba(26, 43, 60, 0.12);
-			display: flex;
+			display: none;
 			flex-wrap: wrap;
 			align-items: stretch;
 			flex-direction: row-reverse;
-		}
-		#bg.login-form-panel.is-behind-splash {
-			position: fixed;
-			inset: 0;
-			width: 100%;
-			max-width: none;
-			margin: 0;
-			border-radius: 0;
-			box-shadow: none;
-			opacity: 0;
-			z-index: 0;
-			pointer-events: none;
 		}
 		#bg .brand-side {
 			background: linear-gradient(160deg, var(--uudp-navy) 0%, #0d3d2a 45%, var(--uudp-green) 100%);
@@ -152,14 +137,14 @@
 	 </style>
 	<div class="limiter">
 		<div class="container-login100 w-100 p-0" style="background: transparent;">
-			<div id="lanjut" class="splash-lanjut@if($errors->any()) is-hidden@endif" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
+			<div id="lanjut" class="splash-lanjut"@if($errors->any()) style="display:none"@endif role="button" tabindex="0" aria-label="Lanjut ke halaman login">
 				<div class="splash-inner">
 					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
 					<span class="splash-hit-hint" aria-hidden="true"></span>
 				</div>
 			</div>
 
-			<div id="bg" class="login-form-panel@if(!$errors->any()) is-behind-splash@endif">
+			<div id="bg" class="login-form-panel"@if($errors->any()) style="display:flex"@endif>
 				<div class="row no-gutters w-100 m-0">
 					<div class="col-md-6 order-md-last p-0">
 						<div class="p-3 p-md-4 d-flex justify-content-between align-items-start brand-side h-100">
@@ -185,7 +170,7 @@
 										<label for="username">Username / NIP</label>
 										<div class="form-group">
 											<div class="validate-input m-b-20" data-validate="Type user name">
-												<input id="username" class="form-control @error('username') is-invalid @enderror" name="username" value="{{ old('username') }}" autocomplete="username" required placeholder="Enter your NIP or username"@if(!$errors->any()) tabindex="-1"@endif>
+												<input id="username" class="form-control @error('username') is-invalid @enderror" name="username" value="{{ old('username') }}" autocomplete="username" required placeholder="Enter your NIP or username">
 											</div>
 											@error('username')
 												<span class="invalid-feedback d-block" role="alert">
@@ -197,7 +182,7 @@
 									<div class="col-md-12">
 										<label for="passwordfield">Password</label>
 										<div class="password validate-input m-b-20" data-validate="Type password">
-											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password"@if(!$errors->any()) tabindex="-1"@endif>
+											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password">
 											<button type="button" class="password-toggle btn btn-link p-0 border-0" aria-label="Tampilkan password" tabindex="-1">
 												<i class="fa fa-eye" aria-hidden="true"></i>
 											</button>
@@ -242,17 +227,13 @@
 	<script src="access/js/main.js"></script>
 <script>
 	function showLoginForm() {
-		document.getElementById("lanjut").classList.add("is-hidden");
-		document.getElementById("bg").classList.remove("is-behind-splash");
-		document.getElementById("username").removeAttribute("tabindex");
-		document.getElementById("passwordfield").removeAttribute("tabindex");
+		document.getElementById("lanjut").style.display = "none";
+		document.getElementById("bg").style.display = "flex";
 		document.getElementById("username").focus();
 	}
 	function showSplash() {
-		document.getElementById("lanjut").classList.remove("is-hidden");
-		document.getElementById("bg").classList.add("is-behind-splash");
-		document.getElementById("username").setAttribute("tabindex", "-1");
-		document.getElementById("passwordfield").setAttribute("tabindex", "-1");
+		document.getElementById("lanjut").style.display = "block";
+		document.getElementById("bg").style.display = "none";
 	}
 	$('#lanjut').on('click keypress', function(e) {
 		if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) return;
