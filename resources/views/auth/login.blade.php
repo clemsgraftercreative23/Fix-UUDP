@@ -55,6 +55,9 @@
 			overflow: hidden;
 			cursor: pointer;
 		}
+		#lanjut.splash-lanjut.is-hidden {
+			display: none;
+		}
 		.splash-inner {
 			position: relative;
 			line-height: 0;
@@ -64,7 +67,6 @@
 			height: auto;
 			display: block;
 		}
-		/* Optional hit area if artwork already shows “Next” — keeps tap/click obvious */
 		.splash-hit-hint {
 			position: absolute;
 			bottom: 4%;
@@ -81,13 +83,7 @@
 				border-radius: 0.75rem;
 			}
 		}
-		/* Login stage: form stays in DOM (visible to password managers); splash overlays on top */
-		.login-stage {
-			position: relative;
-			width: 100%;
-			max-width: 1200px;
-			margin: 0 auto;
-		}
+		/* Form panel — hidden visually behind splash, not display:none (keeps password manager working) */
 		#bg.login-form-panel {
 			width: 100%;
 			max-width: 1000px;
@@ -101,15 +97,17 @@
 			align-items: stretch;
 			flex-direction: row-reverse;
 		}
-		#lanjut.splash-lanjut.is-hidden {
-			display: none;
-		}
-		#lanjut.splash-lanjut:not(.is-hidden) {
-			position: absolute;
-			top: 0;
-			left: 50%;
-			transform: translateX(-50%);
-			z-index: 2;
+		#bg.login-form-panel.is-behind-splash {
+			position: fixed;
+			inset: 0;
+			width: 100%;
+			max-width: none;
+			margin: 0;
+			border-radius: 0;
+			box-shadow: none;
+			opacity: 0;
+			z-index: 0;
+			pointer-events: none;
 		}
 		#bg .brand-side {
 			background: linear-gradient(160deg, var(--uudp-navy) 0%, #0d3d2a 45%, var(--uudp-green) 100%);
@@ -153,8 +151,14 @@
 	 </style>
 	<div class="limiter">
 		<div class="container-login100 w-100 p-0" style="background: transparent;">
-			<div class="login-stage">
-			<div id="bg" class="login-form-panel"@if(!$errors->any()) inert aria-hidden="true"@endif>
+			<div id="lanjut" class="splash-lanjut@if($errors->any()) is-hidden@endif" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
+				<div class="splash-inner">
+					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
+					<span class="splash-hit-hint" aria-hidden="true"></span>
+				</div>
+			</div>
+
+			<div id="bg" class="login-form-panel@if(!$errors->any()) is-behind-splash@endif">
 				<div class="row no-gutters w-100 m-0">
 					<div class="col-md-6 order-md-last p-0">
 						<div class="p-3 p-md-4 d-flex justify-content-between align-items-start brand-side h-100">
@@ -180,7 +184,7 @@
 										<label for="username">Username / NIP</label>
 										<div class="form-group">
 											<div class="validate-input m-b-20" data-validate="Type user name">
-												<input id="username" class="form-control @error('username') is-invalid @enderror" name="username" value="{{ old('username') }}" autocomplete="username" required placeholder="Enter your NIP or username">
+												<input id="username" class="form-control @error('username') is-invalid @enderror" name="username" value="{{ old('username') }}" autocomplete="username" required placeholder="Enter your NIP or username"@if(!$errors->any()) tabindex="-1"@endif>
 											</div>
 											@error('username')
 												<span class="invalid-feedback d-block" role="alert">
@@ -192,7 +196,7 @@
 									<div class="col-md-12">
 										<label for="passwordfield">Password</label>
 										<div class="password validate-input m-b-20" data-validate="Type password">
-											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password">
+											<input class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password" id="passwordfield" type="password" placeholder="Enter your password"@if(!$errors->any()) tabindex="-1"@endif>
 											<button type="button" class="password-toggle btn btn-link p-0 border-0" aria-label="Tampilkan password" tabindex="-1">
 												<i class="fa fa-eye" aria-hidden="true"></i>
 											</button>
@@ -214,14 +218,6 @@
 					</div>
 				</div>
 			</div>
-
-			<div id="lanjut" class="splash-lanjut@if($errors->any()) is-hidden@endif" role="button" tabindex="0" aria-label="Lanjut ke halaman login">
-				<div class="splash-inner">
-					<img class="splash-art" src="{{ asset('assets/images/v2.png') }}" alt="Selamat datang di UUDP — PT Sumitomo Forestry Indonesia">
-					<span class="splash-hit-hint" aria-hidden="true"></span>
-				</div>
-			</div>
-			</div>
 		</div>
 	</div>
 
@@ -241,21 +237,20 @@
 	<script src="access/vendor/daterangepicker/moment.min.js"></script>
 	<script src="access/vendor/daterangepicker/daterangepicker.js"></script>
 	<script src="access/vendor/countdowntime/countdowntime.js"></script>
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
 	<script src="access/js/main.js"></script>
 <script>
 	function showLoginForm() {
 		document.getElementById("lanjut").classList.add("is-hidden");
-		var bg = document.getElementById("bg");
-		bg.removeAttribute("inert");
-		bg.removeAttribute("aria-hidden");
+		document.getElementById("bg").classList.remove("is-behind-splash");
+		document.getElementById("username").removeAttribute("tabindex");
+		document.getElementById("passwordfield").removeAttribute("tabindex");
 		document.getElementById("username").focus();
 	}
 	function showSplash() {
 		document.getElementById("lanjut").classList.remove("is-hidden");
-		var bg = document.getElementById("bg");
-		bg.setAttribute("inert", "");
-		bg.setAttribute("aria-hidden", "true");
+		document.getElementById("bg").classList.add("is-behind-splash");
+		document.getElementById("username").setAttribute("tabindex", "-1");
+		document.getElementById("passwordfield").setAttribute("tabindex", "-1");
 	}
 	$('#lanjut').on('click keypress', function(e) {
 		if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) return;
@@ -269,6 +264,7 @@
 	$(document).ready(function(){
 		var currForm1 = document.getElementById('myForm1');
 		currForm1.addEventListener('submit', function(event) {
+			document.getElementById('passwordfield').setAttribute('type', 'password');
 			if (currForm1.checkValidity() === false) {
 				event.preventDefault();
 				event.stopPropagation();
