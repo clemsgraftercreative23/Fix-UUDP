@@ -87,6 +87,7 @@
                         <div class="col-md-2 mb-3">
                             <label for="status">Status</label>
                             <select name="status" class="form-control select2 status" @change="searchStatus" v-model="status">
+                                <option value="ALL">ALL</option>
                                 <option value="1">APPROVED HEAD DEPT</option>
                                 <option value="2">APPROVED HR GA</option>
                                 <option value="3">APPROVED FINANCE MANAGER / PROCESS SETTLEMENT</option>
@@ -112,6 +113,10 @@
                                 </select>
                             </div>
                         @endif -->
+                        <div class="col-md-2 mb-3">
+                            <label for="inquiry_no">Inquiry No</label>
+                            <input type="text" class="form-control" v-model="inquiry_no" placeholder="998 / 00999" @keyup.enter="search()">
+                        </div>
                         <div class="col-md-3 mb-3">
                             <label for="daterange">Period</label>
                             <input type="text" name="daterange" class="form-control daterange"/>
@@ -391,6 +396,10 @@ $(document).ready(function(){
     $("#action_button").prop("disabled", true);
     $("#action_button_draft").prop("disabled", true);
     $(".warning-upload").show();
+
+    $('#sample_form').on('submit', function () {
+      $('#action_button, #action_button_draft').prop('disabled', true);
+    });
 
 
     $('.currency').mask("#.##0", {
@@ -2304,6 +2313,7 @@ $("body").on("click",".remove-item",function(){
         status: null,
         user_id: null,
                 payment_type: 'ALL',
+        inquiry_no: '',
           reimburses: [
             {
               id: null,
@@ -2323,7 +2333,7 @@ $("body").on("click",".remove-item",function(){
         
         // this.loadData()
         $('#show-data').on('change', () => {
-                    this.loadData(this.start, this.end, this.status, this.user_id, this.payment_type);
+                    this.loadData(this.start, this.end, this.status, this.user_id, this.payment_type, this.inquiry_no);
         });
         $(".number-format").change(function() {
           $(this).maskMoney({ thousands:'.', decimal:',', precision:0});
@@ -2336,14 +2346,14 @@ $("body").on("click",".remove-item",function(){
             });
         });
         self = this
-                self.loadData(self.start,self.end,self.status, self.user_id, self.payment_type);
+                self.loadData(self.start,self.end,self.status, self.user_id, self.payment_type, self.inquiry_no);
         $("input.daterange").on('apply.daterangepicker', function(ev, picker) {
           var startDate = picker.startDate.format('YYYY-MM-DD');
           var endDate = picker.endDate.format('YYYY-MM-DD');
           self.start = startDate
           self.end = endDate
           console.log("Selected date range: " + startDate + ' to ' + endDate);
-                    self.loadData(startDate,endDate,self.status, self.user_id, self.payment_type);
+                    self.loadData(startDate,endDate,self.status, self.user_id, self.payment_type, self.inquiry_no);
         });
         this.initSelectForm()
        
@@ -2354,18 +2364,21 @@ $("body").on("click",".remove-item",function(){
         searchDriver(){
 
         },
+        searchStatus(){
+        },
         reset(){
           this.status = null
           this.user_id = null
                     this.payment_type = 'ALL'
+          this.inquiry_no = ''
           this.start = null;
           this.end = null;
           $('input.daterange').val('');
-                    this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type);
+                    this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type, this.inquiry_no);
 
         },
         search(){
-                    this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type);
+                    this.loadData(this.start,this.end,this.status, this.user_id, this.payment_type, this.inquiry_no);
         },
 
         print(){
@@ -2379,14 +2392,14 @@ $("body").on("click",".remove-item",function(){
           // Tampilkan hasil
           if(selectedValues.length > 0){
               var id = selectedValues.join(",");
-              window.open("{{url('/')}}/reimbursement-driver-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type, "_blank")
+              window.open("{{url('/')}}/reimbursement-driver-print?selected="+id+"&start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type+"&inquiry_no="+encodeURIComponent(this.inquiry_no || ''), "_blank")
           } else {
-              window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type, "_blank")
+              window.open("{{url('/')}}/reimbursement-driver-print?start="+this.start+"&end="+this.end+"&driver="+this.user_id+"&status="+this.status+"&payment_type="+this.payment_type+"&inquiry_no="+encodeURIComponent(this.inquiry_no || ''), "_blank")
           }
           
         },
           
-                loadData(start = null,end = null, status= null, driver= null, payment_type = 'ALL') {
+                loadData(start = null,end = null, status= null, driver= null, payment_type = 'ALL', inquiry_no = '') {
           try {
             $('#myTable').dataTable().fnDestroy();
             
@@ -2414,6 +2427,7 @@ $("body").on("click",".remove-item",function(){
                 status:status,
                 driver:driver,
                                 payment_type:payment_type,
+                inquiry_no:inquiry_no,
               }
             },
             columns: [

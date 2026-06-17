@@ -15,6 +15,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         \App\Console\Commands\SendApprovalDelayReminder::class,
         \App\Console\Commands\BackfillActivityLogs::class,
+        \App\Console\Commands\RepairReimbursementTicketNumbers::class,
     ];
 
     /**

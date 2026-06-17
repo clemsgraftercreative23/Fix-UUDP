@@ -32,6 +32,28 @@ class DriverReimbursementController extends Controller
         FonnteMessenger::send($target, $message, array_merge($context, ['channel' => 'reimbursement_driver']));
     }
 
+    /**
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     */
+    private function applyInquiryNoFilter($query, Request $request)
+    {
+        if (!$request->filled('inquiry_no')) {
+            return $query;
+        }
+
+        $term = trim((string) $request->inquiry_no);
+        if ($term === '') {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($term) {
+            $q->where('reimbursement.no_reimbursement', 'like', '%' . $term . '%');
+            if (ctype_digit($term)) {
+                $q->orWhere('reimbursement.id', (int) $term);
+            }
+        });
+    }
+
     private function notifyDriverSubmission(Reimbursement $data, User $submitter, bool $resubmit = false): void
     {
         $detailUrl = url('/reimbursement-driver/' . $data->id);
@@ -426,11 +448,13 @@ class DriverReimbursementController extends Controller
                 });
             }
 
+            $data = $this->applyInquiryNoFilter($data, $request);
+
             if (auth()->user()->jabatan == 'karyawan') {
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
 
-            $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
+            $data = $data->orderBy('reimbursement.id', 'DESC');
             return datatables()
                 ->of($data)
                 ->addColumn('status_label', function ($data) {
@@ -584,11 +608,13 @@ class DriverReimbursementController extends Controller
                 });
             }
 
+            $data = $this->applyInquiryNoFilter($data, $request);
+
             if (auth()->user()->jabatan == 'karyawan') {
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
 
-            $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
+            $data = $data->orderBy('reimbursement.id', 'DESC');
             return datatables()
                 ->of($data)
                 ->addColumn('action', function ($data) {
@@ -662,6 +688,7 @@ class DriverReimbursementController extends Controller
                     ->get()
                     ->pluck('id_user')
             )->get(),
+            'default_approval_status' => in_array(auth()->user()->jabatan, ['Finance', 'HR GA'], true) ? '1' : null,
         ]);
     }
 
@@ -743,9 +770,7 @@ class DriverReimbursementController extends Controller
             ];
 
             $data = Reimbursement::create($data);
-            $ticketNumber = Reimbursement::buildTicketNumber('D', $data->id);
-            $data->update(['no_reimbursement' => $ticketNumber]);
-            $data->no_reimbursement = $ticketNumber;
+            $data->syncTicketNumber();
             ActivityLogger::log(
                 'reimbursement-driver',
                 $status == 10 ? 'draft' : 'create',
@@ -785,20 +810,17 @@ class DriverReimbursementController extends Controller
 
             return redirect('reimbursement-driver')
                 ->with(['success' => $notif]);
-        } catch (\Exception $e) {
-            // return var_dump($e);
-            dd($e->getMessage() . " at line " . $e->getLine());
-            DB::rollback();
-            return redirect()
-                ->back()
-                ->withErrors(['Error ' . $e->getMessage()]);
         } catch (\Throwable $e) {
-            // return var_dump($e);
-            dd($e->getMessage() . " at line " . $e->getLine());
+            DB::rollBack();
+            Log::error('Driver reimbursement store failed', [
+                'message' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'user_id' => auth()->id(),
+            ]);
 
-            DB::rollback();
             return redirect()
                 ->back()
+                ->withInput()
                 ->withErrors(['Error ' . $e->getMessage()]);
         }
     }

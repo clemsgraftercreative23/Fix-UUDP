@@ -75,6 +75,55 @@ class Reimbursement extends Model
     }
 
     /**
+     * Type letter used in UUDP ticket numbers for a reimbursement_type value.
+     */
+    public static function typeCodeForReimbursementType(int $reimbursementType): ?string
+    {
+        $map = [
+            1 => 'D',
+            2 => 'T',
+            3 => 'E',
+        ];
+
+        return $map[$reimbursementType] ?? null;
+    }
+
+    /**
+     * Expected ticket number for this row based on type + primary key.
+     */
+    public function expectedTicketNumber(): ?string
+    {
+        $typeCode = self::typeCodeForReimbursementType((int) $this->reimbursement_type);
+        if ($typeCode === null || (int) $this->id <= 0) {
+            return null;
+        }
+
+        return self::buildTicketNumber($typeCode, (int) $this->id);
+    }
+
+    /**
+     * Align no_reimbursement with reimbursement.id when drifted.
+     *
+     * @return string|null The corrected ticket number, or null if skipped.
+     */
+    public function syncTicketNumber(): ?string
+    {
+        $expected = $this->expectedTicketNumber();
+        if ($expected === null) {
+            return null;
+        }
+
+        if ($this->no_reimbursement === $expected) {
+            return $expected;
+        }
+
+        $this->update(['no_reimbursement' => $expected]);
+        $this->no_reimbursement = $expected;
+
+        return $expected;
+    }
+
+    /**
      * Display name of the reimbursement submitter for WhatsApp notifications.
      */
     public function applicantDisplayName(): string
