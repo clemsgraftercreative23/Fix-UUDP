@@ -222,16 +222,14 @@ class TravelReimbursementController extends Controller
             $raw = str_replace(',', '.', $raw);
         } else {
             $raw = str_replace(',', '', $raw);
-            $dotPos = strrpos($raw, '.');
-            if ($dotPos !== false) {
+            // Kurs: satu titik = desimal (17.883). Banyak titik = ribuan (1.234.567).
+            if (substr_count($raw, '.') > 1) {
+                $raw = str_replace('.', '', $raw);
+            } elseif (($dotPos = strrpos($raw, '.')) !== false) {
                 $intRaw = substr($raw, 0, $dotPos);
                 $frac = preg_replace('/\D/', '', substr($raw, $dotPos + 1));
                 $intPart = str_replace('.', '', $intRaw);
-                if (strlen($frac) === 3 && ctype_digit($frac) && $intPart !== '') {
-                    $raw = $intPart . $frac;
-                } else {
-                    $raw = ($intPart !== '' ? $intPart : '0') . '.' . $frac;
-                }
+                $raw = ($intPart !== '' ? $intPart : '0') . ($frac !== '' ? '.' . $frac : '');
             }
         }
 

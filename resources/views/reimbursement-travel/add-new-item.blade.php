@@ -138,6 +138,12 @@ function rupiah($angka){
     return $hasil_rupiah;
  
 }
+
+function rate_input($angka){
+    if ($angka === null || $angka === '') return '';
+    if (!is_numeric($angka)) return (string) $angka;
+    return number_format((float) $angka, 2, ',', '.');
+}
 ?>
 
 <div class="page-content" id="app">
@@ -224,7 +230,7 @@ function rupiah($angka){
                                     </div>
                                     <div class="col-md-6">
                                         <label for="">Exchange Rate</label>
-                                        <input type="text" inputmode="decimal" class="form-control currency exchange-rate-input" name="rate[]" value="{{ rupiah($row->rate) }}">
+                                        <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($row->rate) }}">
                                     </div>
                                     <div class="col-md-3">
                                         @if($loop->first)
@@ -638,6 +644,47 @@ $(document).ready(function(){
         return isNaN(n) ? 0 : n;
     }
 
+    /** Parse kurs: satu titik = desimal (17.883); banyak titik = ribuan (1.234.567). */
+    function normalizeExchangeRateCanonicalString(raw) {
+        var x = String(raw || '').trim().replace(/\s/g, '');
+        if (!x) return '0';
+        var neg = false;
+        if (x.charAt(0) === '-') {
+            neg = true;
+            x = x.slice(1);
+        } else if (x.charAt(0) === '+') {
+            x = x.slice(1);
+        }
+        if (!x) return '0';
+        var lastC = x.lastIndexOf(',');
+        var lastD = x.lastIndexOf('.');
+        var out;
+        if (lastC > lastD) {
+            x = x.replace(/\./g, '').replace(',', '.');
+            out = (x.replace(/[^\d.]/g, '') || '0');
+        } else {
+            x = x.replace(/,/g, '');
+            var dotCount = (x.match(/\./g) || []).length;
+            if (dotCount > 1) {
+                out = (x.replace(/\./g, '').replace(/[^\d]/g, '') || '0');
+            } else {
+                var idx = x.lastIndexOf('.');
+                if (idx === -1) {
+                    out = (x.replace(/[^\d]/g, '') || '0');
+                } else {
+                    var intRaw = x.slice(0, idx);
+                    var frac = x.slice(idx + 1).replace(/\D/g, '');
+                    var intPart = intRaw.replace(/\./g, '');
+                    out = (intPart || '0') + (frac ? '.' + frac : '');
+                }
+            }
+        }
+        if (neg && out !== '0' && out !== '') {
+            out = '-' + out;
+        }
+        return out;
+    }
+
     function sanitizeExchangeRateInput(value, finalize) {
         var s = (value || '').toString().trim().replace(/\s/g, '');
         if (!s) return '';
@@ -656,8 +703,8 @@ $(document).ready(function(){
         var parts = s.split('.');
         var intPart = parts[0] || '';
         var decPart = parts[1] || '';
-        if (decPart.length > 2) {
-            decPart = decPart.slice(0, 2);
+        if (decPart.length > 6) {
+            decPart = decPart.slice(0, 6);
         }
         if (finalize && intPart.length > 1) {
             intPart = intPart.replace(/^0+/, '') || '0';
@@ -671,7 +718,7 @@ $(document).ready(function(){
     function normalizeExchangeRateValue(value) {
         var s = sanitizeExchangeRateInput(value, true);
         if (s === '') return '0,00';
-        var canonical = normalizeEuropeanNumberString(s);
+        var canonical = normalizeExchangeRateCanonicalString(s);
         var n = parseFloat(canonical);
         if (isNaN(n)) return '0,00';
         n = Math.round(n * 100) / 100;
@@ -679,7 +726,7 @@ $(document).ready(function(){
     }
 
     function parseExchangeRateNumber(value) {
-        var canonical = normalizeEuropeanNumberString(String(value || '').trim());
+        var canonical = normalizeExchangeRateCanonicalString(String(value || '').trim());
         var n = parseFloat(canonical);
         if (isNaN(n)) return 0;
         return Math.round(n * 100) / 100;
@@ -804,6 +851,20 @@ $(document).ready(function(){
     window.rtCalculateTimeDifference = calculateTimeDifference;
     window.rtRecalculateAllowanceFromTripType = recalculateAllowanceFromTripType;
     window.rtOnExchangeRatesUpdated = onExchangeRatesUpdated;
+    window.rtNormalizeAllTripRateInputs = function () {
+        $('.fieldGroup').each(function () {
+            var $group = $(this);
+            var $rateInput = $group.find('input.exchange-rate-input[name="rate[]"]');
+            if (!$rateInput.length) {
+                return;
+            }
+            var raw = ($rateInput.val() || '').trim();
+            if (!raw) {
+                return;
+            }
+            $rateInput.val(normalizeExchangeRateValue(raw));
+        });
+    };
 
     $(document).on('change', '#rt-travel-item-pane input[name="amount[]"]', function () {
         var $tr = $(this).closest('tr');
@@ -872,17 +933,40 @@ $(document).ready(function(){
         total_nominal();
     });
 
-    $(document).on('input', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
+    $(document).on('input', 'input.exchange-rate-input[name="rate[]"]', function () {
         this.value = sanitizeExchangeRateInput(this.value, false);
     });
 
-    $(document).on('blur', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
-        this.value = normalizeExchangeRateValue(this.value);
+    $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
+        var $group = $(this).closest('.fieldGroup');
+        var displayRate = normalizeExchangeRateValue($(this).val());
+        $(this).val(displayRate);
         onExchangeRatesUpdated($('#rt-travel-item-pane'));
+        var currency = ($group.find('input[name="currency_rate[]"]').val() || '').trim();
+        if (!currency) {
+            return;
+        }
+        $.ajax({
+            url: '../../../update-currency',
+            type: 'POST',
+            data: {
+                reim_id: "{{ Request::segment('3') }}",
+                id_rate: $group.find('.id_rate').val(),
+                rate: displayRate,
+                currency: currency,
+                _token: $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function (response) {
+                if (response && response.id_rate) {
+                    $group.find('.id_rate').val(response.id_rate);
+                }
+            }
+        });
     });
     
     $(function() {
       applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
+      window.rtNormalizeAllTripRateInputs();
       if ($('#rt-travel-item-pane #trip_type_id').val()) {
         recalculateAllowanceFromTripType($('#rt-travel-item-pane'));
       }
@@ -911,7 +995,7 @@ $(document).ready(function(){
         i++;
         if($('body').find('.fieldGroup').length < maxGroup){
          
-          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" inputmode="decimal" class="form-control currency exchange-rate-input" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
+          var fieldHTML = '<div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
           $('body').find('.fieldGroup:last').after(fieldHTML);
           applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
       } else{
@@ -1282,35 +1366,6 @@ $(document).ready(function(){
       },
   });
 
-
-    $(document).on('blur', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
-        let $group = $(this).closest('.fieldGroup');
-
-        let id_rate = $group.find('.id_rate').val();
-        let displayRate = normalizeExchangeRateValue($(this).val());
-        $(this).val(displayRate);
-        let rate = parseExchangeRateNumber(displayRate).toFixed(2);
-        let currency = $group.find('input[name="currency_rate[]"]').val();
-        let reim_id = "{{Request::segment('3')}}";
-
-        $.ajax({
-            url: '../../../update-currency', // Ganti dengan URL yang sesuai
-            type: 'POST',
-            data: {
-                reim_id: reim_id,
-                id_rate: id_rate,
-                rate: rate,
-                currency: currency,
-                _token: $('meta[name="csrf-token"]').attr('content') // Laravel CSRF Token
-            },
-            success: function (response) {
-                console.log('Berhasil update:', response);
-            },
-            error: function (xhr, status, error) {
-                console.error('Gagal update:', error);
-            }
-        });
-    });
 
     $(document).on('focus', '.currency-select', function () {
         let $select = $(this);
