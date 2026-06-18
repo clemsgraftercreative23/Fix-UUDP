@@ -1072,6 +1072,9 @@ $(document).ready(function(){
     });
     window.rtNormalizeAllTripRateInputs();
     refreshAllCurrencySelects();
+    if ($('#rt-travel-item-pane #trip_type_id').val()) {
+        recalculateAllowanceFromTripType($('#rt-travel-item-pane'));
+    }
   });
   
 </script>

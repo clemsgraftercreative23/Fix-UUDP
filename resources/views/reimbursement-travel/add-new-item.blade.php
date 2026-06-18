@@ -725,9 +725,85 @@ $(document).ready(function(){
         $('.total-nominal').val(numberWithCommas(total));
     }
 
+    function getExchangeRateFormRoot() {
+        var pane = document.getElementById('rt-travel-item-pane');
+        if (pane) {
+            var form = pane.closest('form');
+            if (form) {
+                return form;
+            }
+        }
+        return document;
+    }
+
+    function getTripRateForCurrency(currencyCode) {
+        var code = String(currencyCode || '').trim().toUpperCase();
+        if (!code || code === 'IDR') {
+            return 1;
+        }
+        var root = getExchangeRateFormRoot();
+        var currencyInputs = root.querySelectorAll('[name="currency_rate[]"]');
+        var rateInputs = root.querySelectorAll('[name="rate[]"]');
+        for (var index = 0; index < currencyInputs.length; index++) {
+            if (String(currencyInputs[index].value || '').trim().toUpperCase() === code) {
+                return parseExchangeRateNumber(rateInputs[index] ? rateInputs[index].value : '') || 0;
+            }
+        }
+        return 0;
+    }
+
+    function computeAllowanceInIdr(allowance, currency) {
+        var cur = String(currency || '').trim().toUpperCase();
+        if (cur === 'IDR' || !cur) {
+            return Number(allowance) || 0;
+        }
+        var rate = getTripRateForCurrency(cur);
+        if (rate <= 0) {
+            alert('Please enter the ' + cur + ' exchange rate first.');
+            return null;
+        }
+        return (Number(allowance) || 0) * rate;
+    }
+
+    function recalculateAllowanceFromTripType($scope) {
+        $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
+        var id = $scope.find('#trip_type_id').val();
+        if (!id) {
+            $scope.find('.allowance').val(numberWithCommas(0));
+            total_nominal();
+            return;
+        }
+        $.ajax({
+            url: "../../../get-trip-type/" + id,
+            dataType: "json",
+            success: function (data) {
+                var row = data.data && data.data[0] ? data.data[0] : null;
+                if (!row) {
+                    return;
+                }
+                var allowanceInIDR = computeAllowanceInIdr(row.allowance, row.currency);
+                if (allowanceInIDR === null) {
+                    return;
+                }
+                $scope.find('.allowance').val(numberWithCommas(allowanceInIDR));
+                total_nominal();
+            }
+        });
+    }
+
+    function onExchangeRatesUpdated($scope) {
+        $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
+        total_nominal();
+        if ($scope.find('#trip_type_id').val()) {
+            recalculateAllowanceFromTripType($scope);
+        }
+    }
+
     window.rtNumberWithCommas = numberWithCommas;
     window.rtTotalNominalTravel = total_nominal;
     window.rtCalculateTimeDifference = calculateTimeDifference;
+    window.rtRecalculateAllowanceFromTripType = recalculateAllowanceFromTripType;
+    window.rtOnExchangeRatesUpdated = onExchangeRatesUpdated;
 
     $(document).on('change', '#rt-travel-item-pane input[name="amount[]"]', function () {
         var $tr = $(this).closest('tr');
@@ -784,42 +860,15 @@ $(document).ready(function(){
     //    })
     // });
   
-    $(document).on('change', '#rt-travel-item-pane #trip_type_id', function(){
-        id = $('#trip_type_id').val();
-        if (!id) {
-            $('.allowance ').val(numberWithCommas(0));
-            total_nominal();
-            return;
-        }
-        let usd_rate = parseTravelMoney($('input[name="rate[]"]').eq(1).val()) || 0;
-        $.ajax({
-            url:"../../../get-trip-type/"+id,
-            dataType:"json",
-            success:function(data){
-                allowance = data.data[0].allowance;
-                type = data.data[0].type;
-                currency = data.data[0].currency;
-              
-              	if(type=='INTERNATIONAL') {
-                  val = allowance * usd_rate;
-                } else {
-                  if(currency=='IDR') {
-					val = allowance;
-                  } else {
-					val = allowance * usd_rate;
-                  }
-                }
-                $('.allowance ').val(numberWithCommas(val));
-                total_nominal();
-            }
-        })
+    $(document).on('change', '#rt-travel-item-pane #trip_type_id', function () {
+        recalculateAllowanceFromTripType($(this).closest('#rt-travel-item-pane'));
     });
-    
-    $(document).on('change', '.change-rate', function(){
-        total_nominal();
+
+    $(document).on('change', '.change-rate', function () {
+        onExchangeRatesUpdated($('#rt-travel-item-pane'));
     });
-    
-    $(document).on('change', '#rt-travel-item-pane .change-type', function(){
+
+    $(document).on('change', '#rt-travel-item-pane .change-type', function () {
         total_nominal();
     });
 
@@ -829,10 +878,14 @@ $(document).ready(function(){
 
     $(document).on('blur', '#rt-travel-item-pane input.exchange-rate-input[name="rate[]"]', function () {
         this.value = normalizeExchangeRateValue(this.value);
+        onExchangeRatesUpdated($('#rt-travel-item-pane'));
     });
     
     $(function() {
       applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
+      if ($('#rt-travel-item-pane #trip_type_id').val()) {
+        recalculateAllowanceFromTripType($('#rt-travel-item-pane'));
+      }
     });
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:2});
