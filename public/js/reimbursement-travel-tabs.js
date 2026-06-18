@@ -253,9 +253,11 @@
 
     const $preview = $tr.find('[id^="preview_"]').first();
     if ($preview.length) {
-      $preview.empty();
+      // Jangan hapus lampiran server / upload pending — hanya ganti preview draft sementara.
+      $preview.find('.rt-temp-file-preview').remove();
       const previewMime = (tf.file_type || '').trim() || inferImageMimeFromFileName(tf.file_name);
       if (previewMime.indexOf('image/') === 0) {
+        const $wrap = $('<div class="rt-temp-file-preview" style="margin-top:6px;"></div>');
         const $img = $('<img>')
           .attr('src', tf.data_url)
           .attr('data-preview-src', tf.data_url)
@@ -268,7 +270,8 @@
             marginTop: '5px',
             cursor: 'pointer'
           });
-        $preview.append($img);
+        $wrap.append($img);
+        $preview.append($wrap);
       }
     }
   }
@@ -1132,14 +1135,24 @@
     if (!$warn.length) return;
     var hasPreview =
       $pane.find('[id^="preview_"] img').length > 0 ||
-      $pane.find('[id^="preview_"] a').length > 0;
+      $pane.find('[id^="preview_"] a').length > 0 ||
+      $pane.find('.pending-attachment-item').length > 0 ||
+      $pane.find('.existing-attachment-item').length > 0;
     var hasPending = false;
-    $pane.find('input.file-input[type="file"], input.camera-input[type="file"]').each(function () {
+    $pane.find('input.pending-attachment-input[type="file"]').each(function () {
       if (this.files && this.files.length) {
         hasPending = true;
         return false;
       }
     });
+    if (!hasPending) {
+      $pane.find('input.file-input[type="file"], input.camera-input[type="file"]').each(function () {
+        if (this.files && this.files.length) {
+          hasPending = true;
+          return false;
+        }
+      });
+    }
     if (hasPreview || hasPending) {
       $warn.hide();
     }
@@ -1244,7 +1257,12 @@
       schedulePersist();
     });
 
-    $(document).on('change', '#rt-travel-item-pane input.file-input[type="file"], #rt-travel-item-pane input.camera-input[type="file"]', function () {
+    $(document).on('change', '#rt-travel-item-pane input.file-input[type="file"], #rt-travel-item-pane input.camera-input[type="file"]', function (e) {
+      if (window.TravelUpload || (e.originalEvent && e.originalEvent.__rtTravelUploadHandled)) {
+        rtTravelSyncFileUploadWarning($('#rt-travel-item-pane'));
+        return;
+      }
+
       const $input = $(this);
       const $row = $input.closest('tr.fieldGroupDetail');
       if (!$row.length) return;
