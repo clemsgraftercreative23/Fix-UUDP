@@ -962,6 +962,9 @@ $(document).ready(function(){
             .replace(/__PREVIEW__/g, String(ct));
         $root.find('.fieldGroupDetail:last').after(fieldHTML);
         applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
+        if (typeof window.rtInitDestinationInputs === 'function') {
+            window.rtInitDestinationInputs($('#rt-travel-item-pane'));
+        }
         return true;
     };
 

@@ -190,7 +190,10 @@
     if (!$tr.length || !r) return;
     $tr.find('input[name="id_detail[]"]').val(r.id_detail || '');
     $tr.find('select[name="cost_type_id[]"]').val(r.cost_type_id || '');
-    $tr.find('input[name="destination[]"]').val(r.destination || '');
+    var $dest = $tr.find('input[name="destination[]"]');
+    if (!$dest.is(':focus')) {
+      $dest.val(r.destination || '');
+    }
     $tr.find('select[name="currency[]"]').val(r.currency || '');
     $tr.find('input[name="amount[]"]').val(r.amount || '');
     $tr.find('input[name="idr_rate[]"]').val(r.idr_rate || '');
@@ -1195,7 +1198,29 @@
     $arrival.prop('disabled', false);
   }
 
+  /** Pastikan kolom destination bebas ketik (bukan autocomplete browser / select). */
+  function rtInitDestinationInputs($pane) {
+    if (!$pane || !$pane.length) {
+      $pane = $('#rt-travel-item-pane');
+    }
+    if (!$pane || !$pane.length) return;
+    $pane.find('input.destination-input[name="destination[]"], input[name="destination[]"]').each(function (idx) {
+      var $el = $(this);
+      $el.prop('readonly', false);
+      $el.prop('disabled', false);
+      $el.attr({
+        autocomplete: 'rt-travel-destination-' + idx,
+        autocorrect: 'off',
+        autocapitalize: 'off',
+        spellcheck: 'false'
+      });
+    });
+  }
+
+  window.rtInitDestinationInputs = rtInitDestinationInputs;
+
   function afterPaneHydrated($pane) {
+    rtInitDestinationInputs($pane);
     if (typeof window.rtNormalizeAllTripRateInputs === 'function') {
       window.rtNormalizeAllTripRateInputs();
     }

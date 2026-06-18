@@ -191,7 +191,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control destination-input" name="destination[]" value="{{ $rtRow0->destination }}">
+                        <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="{{ $rtRow0->destination }}">
                     </td>
                     <td>
                         <select class="form-control currency0 currency-select" name="currency[]" style="width:130%">
@@ -285,7 +285,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="form-control destination-input" name="destination[]" value="{{$row->destination}}">
+                        <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="{{$row->destination}}">
                     </td>
                     <td>
                         <select class="form-control currency{{$key}} currency-select" name="currency[]" style="width:130%">
@@ -382,7 +382,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         </select>
     </td>
     <td>
-        <input type="text" class="form-control destination-input" name="destination[]" value="">
+        <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="">
     </td>
     <td>
         <select class="form-control currency__IDX__ currency-select" name="currency[]" style="width:130%">
