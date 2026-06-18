@@ -18,11 +18,25 @@
 
         * {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 8pt
-
+            font-size: 8pt;
         }
+
         @page {
-            size: 'A4';
+            size: A4 portrait;
+            margin: 8mm;
+        }
+
+        @media print {
+            html, body {
+                width: 210mm;
+                margin: 0;
+                padding: 0;
+            }
+
+            .report {
+                width: 100%;
+                max-width: 100%;
+            }
         }
         table td, table th {
             padding: 8px;
@@ -51,6 +65,13 @@
         /* Grid travel + detail: kolom sejajar, garis vertikal kanan lurus */
         .table-style.travel-detail-block {
             table-layout: fixed;
+            font-size: 7pt;
+        }
+
+        .table-style.travel-detail-block td,
+        .table-style.travel-detail-block th {
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
         }
 
         .table-style.travel-detail-block .cell-date,
@@ -58,19 +79,15 @@
         .table-style.travel-detail-block .cell-hotel,
         .table-style.travel-detail-block .cell-label-hotel {
             white-space: nowrap;
-            font-size: 7.5pt;
         }
 
         .table-style.travel-detail-block .cell-purpose,
         .table-style.travel-detail-block .cell-remarks,
-        .table-style.travel-detail-block .cell-trip-type {
-            font-size: 7pt;
-            line-height: 1.15;
-            display: -webkit-box;
-            -webkit-box-orient: vertical;
-            -webkit-line-clamp: 2;
-            overflow: hidden;
-            word-break: break-word;
+        .table-style.travel-detail-block .cell-trip-type,
+        .table-style.travel-detail-block .cell-cost-type,
+        .table-style.travel-detail-block .cell-destination {
+            white-space: normal;
+            line-height: 1.2;
         }
 
         .table-style th,.table-style td {
@@ -166,18 +183,18 @@
       </table>
       <table class="table-style table-bordered mb-2 travel-detail-block">
               <colgroup>
-                  <col style="width:10%">
                   <col style="width:9%">
+                  <col style="width:8%">
+                  <col style="width:7%">
+                  <col style="width:11%">
+                  <col style="width:7%">
+                  <col style="width:8%">
                   <col style="width:7%">
                   <col style="width:8%">
                   <col style="width:9%">
                   <col style="width:9%">
-                  <col style="width:7%">
-                  <col style="width:7%">
-                  <col style="width:8%">
-                  <col style="width:8%">
                   <col style="width:9%">
-                  <col style="width:9%">
+                  <col style="width:8%">
               </colgroup>
               @foreach (($data->travels ?? collect()) as $item)
                 @php
@@ -217,9 +234,9 @@
                     <th class="cell-label-date">Transaction Date</th>
                     <td class="bg-secondary cell-date">{{$item->date}}</td>
                     <th>Trip Type</th>
-                    <td class="bg-secondary cell-trip-type">{{ optional($item->tripType)->name ?? 'None' }}</td>
+                    <td class="bg-secondary cell-trip-type" colspan="3">{{ optional($item->tripType)->name ?? 'None' }}</td>
                     <th class="cell-label-hotel">Stay (Hotel)</th>
-                    <td class="bg-secondary cell-hotel">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
+                    <td class="bg-secondary cell-hotel" colspan="2">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
                     <th>Allowance</th>
                     <td class="bg-secondary">
                         @if($tripTypeModel)
@@ -228,20 +245,20 @@
                             0
                         @endif
                     </td>
-                    <th>Allowance (IDR)</th>
+                    <th>Allow. (IDR)</th>
                     <td class="bg-secondary">{{ number_format($allowanceIdrDisplay, 0, ',', '.') }}</td>
-                    {{-- Samakan 12 kolom dengan baris Cost Type agar border kanan rapi --}}
-                    <td colspan="2">&nbsp;</td>
                 </tr>
                 <tr>
-                    <th>Purpose</th>
-                    <td class="bg-secondary cell-purpose">{{$item->purpose}}</td>
+                    <th colspan="2">Purpose</th>
+                    <td class="bg-secondary cell-purpose" colspan="10">{{$item->purpose}}</td>
+                </tr>
+                <tr>
                     <th>Start</th>
                     <td class="bg-secondary">{{$item->start_time}}</td>
                     <th>Arrival</th>
                     <td class="bg-secondary">{{$item->end_time}}</td>
-                    <th>Travel Time</th>
-                    <td class="bg-secondary" colspan="5">
+                    <th colspan="2">Travel Time</th>
+                    <td class="bg-secondary" colspan="6">
                         @php
                             if($item->start_time != null && $item->end_time != null) {
                                 $start = strtotime($item->start_time);
@@ -255,22 +272,22 @@
           {{-- </table>
           <table class="table-style table-bordered mb-2"> --}}
             <tr>
-                <th colspan="2">Cost Type</th>
-                <th colspan="2">Destination</th>
+                <th colspan="3">Cost Type</th>
+                <th colspan="3">Destination</th>
                 <th colspan="2">Remarks</th>
                 <th>Currency</th>
-                <th colspan="2">Amount</th>
-                <th colspan="2">Amount (IDR)</th>
+                <th>Amount</th>
+                <th>Amount (IDR)</th>
                 <th>Payment</th>
             </tr>
             @foreach (($item->details ?? collect()) as $dt)                
             <tr>
-                <td colspan="2">{{ optional($dt->costType)->name ?? '-' }}</td>
-                <td colspan="2">{{$dt->destination}}</td>
+                <td colspan="3" class="cell-cost-type">{{ optional($dt->costType)->name ?? '-' }}</td>
+                <td colspan="3" class="cell-destination">{{$dt->destination}}</td>
                 <td colspan="2" class="cell-remarks">{{ $data->remark ?? '' }}</td>
                 <td>{{$dt->currency}}</td>
-                <td colspan="2" align="right">{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
-                <td colspan="2" align="right">{{number_format($dt->idr_rate,0,',','.')}}</td>
+                <td align="right">{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
+                <td align="right">{{number_format($dt->idr_rate,0,',','.')}}</td>
               
                 <td>{{$dt->payment_type}}</td>
             </tr>
