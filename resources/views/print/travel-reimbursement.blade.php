@@ -28,6 +28,13 @@
             padding: 8px;
         }
 
+        .table-style.travel-detail-block td,
+        .table-style.travel-detail-block th {
+            padding: 3px 4px;
+            line-height: 1.2;
+            vertical-align: top;
+        }
+
         /* Halaman cetak ini tidak memuat Bootstrap; class bg-secondary perlu warna eksplisit + print */
         .table-style td.bg-secondary,
         .table-style th.bg-secondary {
@@ -44,6 +51,26 @@
         /* Grid travel + detail: kolom sejajar, garis vertikal kanan lurus */
         .table-style.travel-detail-block {
             table-layout: fixed;
+        }
+
+        .table-style.travel-detail-block .cell-date,
+        .table-style.travel-detail-block .cell-label-date,
+        .table-style.travel-detail-block .cell-hotel,
+        .table-style.travel-detail-block .cell-label-hotel {
+            white-space: nowrap;
+            font-size: 7.5pt;
+        }
+
+        .table-style.travel-detail-block .cell-purpose,
+        .table-style.travel-detail-block .cell-remarks,
+        .table-style.travel-detail-block .cell-trip-type {
+            font-size: 7pt;
+            line-height: 1.15;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+            word-break: break-word;
         }
 
         .table-style th,.table-style td {
@@ -138,6 +165,20 @@
             </tr>
       </table>
       <table class="table-style table-bordered mb-2 travel-detail-block">
+              <colgroup>
+                  <col style="width:10%">
+                  <col style="width:9%">
+                  <col style="width:7%">
+                  <col style="width:8%">
+                  <col style="width:9%">
+                  <col style="width:9%">
+                  <col style="width:7%">
+                  <col style="width:7%">
+                  <col style="width:8%">
+                  <col style="width:8%">
+                  <col style="width:9%">
+                  <col style="width:9%">
+              </colgroup>
               @foreach (($data->travels ?? collect()) as $item)
                 @php
                     $tripTypeModel = optional($item->tripType)->id ? $item->tripType : \App\TravelTripType::where('id', $item->trip_type_id)->first();
@@ -173,12 +214,12 @@
                     $allowanceIdrDisplay = $storedAllowanceIdr > 0 ? $storedAllowanceIdr : $allowanceIdrComputed;
                 @endphp
                 <tr>
-                    <th>Transaction Date</th>
-                    <td class="bg-secondary">{{$item->date}}</td>
+                    <th class="cell-label-date">Transaction Date</th>
+                    <td class="bg-secondary cell-date">{{$item->date}}</td>
                     <th>Trip Type</th>
-                    <td class="bg-secondary">{{ optional($item->tripType)->name ?? 'None' }}</td>
-                    <th>Hotel At</th>
-                    <td class="bg-secondary">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
+                    <td class="bg-secondary cell-trip-type">{{ optional($item->tripType)->name ?? 'None' }}</td>
+                    <th class="cell-label-hotel">Stay (Hotel)</th>
+                    <td class="bg-secondary cell-hotel">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
                     <th>Allowance</th>
                     <td class="bg-secondary">
                         @if($tripTypeModel)
@@ -194,7 +235,7 @@
                 </tr>
                 <tr>
                     <th>Purpose</th>
-                    <td class="bg-secondary">{{$item->purpose}}</td>
+                    <td class="bg-secondary cell-purpose">{{$item->purpose}}</td>
                     <th>Start</th>
                     <td class="bg-secondary">{{$item->start_time}}</td>
                     <th>Arrival</th>
@@ -226,7 +267,7 @@
             <tr>
                 <td colspan="2">{{ optional($dt->costType)->name ?? '-' }}</td>
                 <td colspan="2">{{$dt->destination}}</td>
-                <td colspan="2">{{ $data->remark ?? '' }}</td>
+                <td colspan="2" class="cell-remarks">{{ $data->remark ?? '' }}</td>
                 <td>{{$dt->currency}}</td>
                 <td colspan="2" align="right">{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
                 <td colspan="2" align="right">{{number_format($dt->idr_rate,0,',','.')}}</td>
