@@ -461,7 +461,7 @@ if (!function_exists('driver_attachment_rows')) {
                               <label for="exampleFormControlInput1">Department</label>
                               <select name="reimbursement_department_id" id="" class="form-control">
                                 @foreach (\App\Departemen::get() as $item)
-                                    <option value="{{$item->id}}" @if($reim['0']->remark == $item->id) selected @endif>{{$item->nama_departemen}}</option>
+                                    <option value="{{$item->id}}" @if((string) ($reim['0']->reimbursement_department_id ?? '') === (string) $item->id) selected @endif>{{$item->nama_departemen}}</option>
                                 @endforeach
                               </select>
                             </div>
@@ -516,10 +516,11 @@ if (!function_exists('driver_attachment_rows')) {
                                     <input type="text" class="form-control amount-total currency subtotal1 change-price" name="total[]" readonly placeholder="Total" value="{{rupiah($detail['0']->subtotal)}}">
                                   </td>
                                   <td>
+                                        @php $paymentType0 = trim((string) ($detail['0']->payment_type ?? '')); @endphp
                                         <select name="payment_type[]" class="form-control" required>
-                                            <option value="" selected disabled>Select...</option>
-                                            <option value="Cash" @if($detail['0']->payment_type=='Cash') selected @endif>Cash</option>
-                                            <option value="Fleet" @if($detail['0']->payment_type=='Fleet') selected @endif>Fleet</option>
+                                            <option value="" @if($paymentType0 === '') selected @endif disabled>Select...</option>
+                                            <option value="Cash" @if($paymentType0 === 'Cash') selected @endif>Cash</option>
+                                            <option value="Fleet" @if($paymentType0 === 'Fleet') selected @endif>Fleet</option>
                                         </select>
                                    </td>
                                   <td class="file-proof">
@@ -595,10 +596,11 @@ if (!function_exists('driver_attachment_rows')) {
                                     <input type="text" class="form-control amount-total currency subtotal{{$numb}} change-price" name="total[]" readonly placeholder="Total" value="{{rupiah($row->subtotal)}}" required>
                                   </td>
                                   <td>
+                                        @php $paymentTypeRow = trim((string) ($row->payment_type ?? '')); @endphp
                                         <select name="payment_type[]" class="form-control" required>
-                                            <option value="" selected disabled>Select...</option>
-                                            <option value="Cash" @if($row->payment_type=='Cash') selected @endif>Cash</option>
-                                            <option value="Fleet" @if($row->payment_type=='Fleet') selected @endif>Fleet</option>
+                                            <option value="" @if($paymentTypeRow === '') selected @endif disabled>Select...</option>
+                                            <option value="Cash" @if($paymentTypeRow === 'Cash') selected @endif>Cash</option>
+                                            <option value="Fleet" @if($paymentTypeRow === 'Fleet') selected @endif>Fleet</option>
                                         </select>
                                    </td>
                                   <td class="file-proof">
@@ -687,9 +689,11 @@ if (!function_exists('driver_attachment_rows')) {
                           @endphp
                           @if(!$conflictVerifierModal)
                           @if($driverEditCanDraft)
-                          <button class="btn btn-warning" type="submit" name="save_draft">Draft</button>
+                          <button class="btn btn-primary" type="submit" name="save" value="1">Submit</button>
+                          <button class="btn btn-warning" type="submit" name="save_draft" value="1">Draft</button>
+                          @else
+                          <button class="btn btn-primary" type="submit" name="save" value="1">Submit</button>
                           @endif
-                          <button class="btn btn-primary" type="submit" name="save">Submit</button>
                           @endif
                       </div>
                   </div>
@@ -2924,6 +2928,27 @@ $(document).ready(function () {
 });
 </script>
 @endif
+
+<script>
+$(document).ready(function () {
+    var $driverForm = $('#sample_form');
+    if (!$driverForm.length) {
+        return;
+    }
+
+    $driverForm[0].addEventListener('invalid', function (event) {
+        event.preventDefault();
+        var field = event.target;
+        $('#formModaEdit').modal('show');
+        if (field && typeof field.reportValidity === 'function') {
+            field.reportValidity();
+        }
+        if (field && typeof field.focus === 'function') {
+            field.focus();
+        }
+    }, true);
+});
+</script>
 
 @endpush
 @endsection

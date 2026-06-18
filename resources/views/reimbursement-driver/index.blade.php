@@ -322,8 +322,8 @@
               <span style="color:#62d49e;text-align:right;" class="warning-upload">The button is disabled until a file is uploaded.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
               <div class="modal-footer">
                   <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
-                  <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
-                  <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft">Draft</button>
+                  <button class="btn btn-primary" type="submit" id="action_button" name="save" value="1">Submit</button>
+                  <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" value="1">Draft</button>
               </div>
           </div>
       </div>

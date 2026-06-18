@@ -749,6 +749,9 @@ class DriverReimbursementController extends Controller
         if (isset($_POST['save'])) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
+        } elseif ($request->has('save_draft')) {
+            $status = 10; // DRAFT
+            $notif = 'Reimbursement Successfully Saved as Draft';
         } else {
             $status = 10; // DRAFT
             $notif = 'Reimbursement Successfully Saved as Draft';
@@ -1026,14 +1029,25 @@ class DriverReimbursementController extends Controller
 		$cek_iduser = DB::select(DB::raw("SELECT id_user FROM reimbursement WHERE id='$id'"))['0']->id_user;
         
 		if(auth()->user()->id == $cek_iduser) {
-          
-          if (isset($_POST['save'])) {
+
+          if ($request->has('save')) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
-          } else if (isset($_POST['save_draft'])) {
-              $status = 10; 
+          } elseif ($request->has('save_draft')) {
+              $status = 10;
               $notif = 'Reimbursement Successfully Saved as Draft';
-          } 
+          } else {
+              return redirect()
+                  ->back()
+                  ->withErrors(['Tindakan tidak dikenali. Gunakan tombol Submit atau Draft.']);
+          }
+
+          $tollRows = $request->input('toll', []);
+          if (!is_array($tollRows) || count($tollRows) === 0) {
+              return redirect()
+                  ->back()
+                  ->withErrors(['Detail reimbursement wajib diisi minimal satu baris.']);
+          }
 
           try {
               $payload = [
@@ -1059,7 +1073,7 @@ class DriverReimbursementController extends Controller
 
               DB::select(DB::raw("UPDATE reimbursement_driver SET status=0  WHERE reimbursement_id = '$id'"));
 
-              for ($i = 0; $i < count($request->toll); $i++) {
+              for ($i = 0; $i < count($tollRows); $i++) {
                   $oldDetailId = isset($request->id_detail[$i]) && ctype_digit((string) $request->id_detail[$i])
                       ? (int) $request->id_detail[$i]
                       : 0;
@@ -1098,20 +1112,23 @@ class DriverReimbursementController extends Controller
 
               DB::commit();
 
+              if ((int) $status === 0) {
+                  $user = User::find($data->id_user);
+                  if ($user) {
+                      $this->notifyDriverSubmission($data->fresh(), $user, true);
+                      $this->queueDriverApprovalReminder($data->fresh());
+                  }
+              }
+
               return redirect()
                   ->back()
                   ->with(['success' => $notif]);
           } catch (\Exception $e) {
-              // return var_dump($e);
-              dd($e->getMessage() . " at line " . $e->getLine());
               DB::rollback();
               return redirect()
                   ->back()
                   ->withErrors(['Error ' . $e->getMessage()]);
           } catch (\Throwable $e) {
-              // return var_dump($e);
-              dd($e->getMessage() . " at line " . $e->getLine());
-
               DB::rollback();
               return redirect()
                   ->back()
