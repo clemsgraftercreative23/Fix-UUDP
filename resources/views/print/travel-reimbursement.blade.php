@@ -75,10 +75,14 @@
         }
 
         .table-style.travel-detail-block .cell-date,
-        .table-style.travel-detail-block .cell-label-date,
-        .table-style.travel-detail-block .cell-hotel,
-        .table-style.travel-detail-block .cell-label-hotel {
+        .table-style.travel-detail-block .cell-hotel {
             white-space: nowrap;
+        }
+
+        .table-style.travel-detail-block .cell-label-date,
+        .table-style.travel-detail-block .cell-label-hotel {
+            white-space: normal;
+            line-height: 1.15;
         }
 
         .table-style.travel-detail-block .cell-purpose,
@@ -231,14 +235,16 @@
                     $allowanceIdrDisplay = $storedAllowanceIdr > 0 ? $storedAllowanceIdr : $allowanceIdrComputed;
                 @endphp
                 <tr>
-                    <th class="cell-label-date">Transaction Date</th>
-                    <td class="bg-secondary cell-date">{{$item->date}}</td>
-                    <th>Trip Type</th>
-                    <td class="bg-secondary cell-trip-type" colspan="3">{{ optional($item->tripType)->name ?? 'None' }}</td>
-                    <th class="cell-label-hotel">Stay (Hotel)</th>
-                    <td class="bg-secondary cell-hotel" colspan="2">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
-                    <th>Allowance</th>
-                    <td class="bg-secondary">
+                    <th colspan="2" class="cell-label-date">Transaction Date</th>
+                    <td colspan="4" class="bg-secondary cell-date">{{$item->date}}</td>
+                    <th colspan="2" class="cell-label-hotel">Stay (Hotel)</th>
+                    <td colspan="4" class="bg-secondary cell-hotel">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
+                </tr>
+                <tr>
+                    <th colspan="2">Trip Type</th>
+                    <td colspan="4" class="bg-secondary cell-trip-type">{{ optional($item->tripType)->name ?? 'None' }}</td>
+                    <th colspan="2">Allowance</th>
+                    <td colspan="2" class="bg-secondary">
                         @if($tripTypeModel)
                             {{ number_format($allowanceTripAmount, 0, ',', '.') }} {{ $tripCurrency }}
                         @else
