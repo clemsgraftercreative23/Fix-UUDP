@@ -292,8 +292,8 @@
                 <td colspan="3" class="cell-destination">{{$dt->destination}}</td>
                 <td colspan="2" class="cell-remarks">{{ $data->remark ?? '' }}</td>
                 <td>{{$dt->currency}}</td>
-                <td align="right">{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
-                <td align="right">{{number_format($dt->idr_rate,0,',','.')}}</td>
+                <td align="right">{{$dt->currency}} {{ number_format((float) $dt->amount, 2, ',', '.') }}</td>
+                <td align="right">{{ number_format((float) $dt->idr_rate, 2, ',', '.') }}</td>
               
                 <td>{{$dt->payment_type}}</td>
             </tr>

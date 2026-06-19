@@ -265,7 +265,7 @@ if (!function_exists('travel_attachment_rows')) {
                     <td>{{$dt->destination}}</td>
                     <td>{{ $data->remark ?? '' }}</td>
                     <td>{{$dt->currency}}</td>
-                    <td>{{$dt->currency}} {{ (int) floor((float) $dt->amount) }}</td>
+                    <td>{{$dt->currency}} {{ travel_detail_idr($dt->amount) }}</td>
                     <td>{{ travel_detail_idr($dt->idr_rate) }}</td>
                     
                     <td>{{$dt->payment_type}}</td>
