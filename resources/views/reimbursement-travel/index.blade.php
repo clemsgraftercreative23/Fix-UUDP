@@ -93,7 +93,11 @@
                           </div>
                         @endif -->
                         
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-2 mb-3">
+                            <label for="inquiry_no">Inquiry No</label>
+                            <input type="text" class="form-control" v-model="inquiry_no" placeholder="998 / 00999" @keyup.enter="search()">
+                        </div>
+                        <div class="col-md-2 mb-3">
                           <label for="daterange">Period</label>
                           <input 
                             type="text" 
@@ -102,7 +106,7 @@
                           />
                         </div>
                         
-                        <div class="col-md-5 mb-3">
+                        <div class="col-md-3 mb-3">
                             <div class="btn-group" role="group" aria-label="Basic example">
                                 <button class="btn btn-primary d-block" @click="search()" style="margin-top:32px" title="Search"><i class="fa fa-search"></i></button>
                                 <button class="btn btn-primary d-block" @click="reset()" style="margin-top:32px" title="Reset"><i class="fa fa-fas fa-sync-alt fa-fw"></i></button>
@@ -398,6 +402,7 @@ $(document).ready(function(){
         end: null,
         status: null,
         user_id: null,
+        inquiry_no: '',
         employees: [],
           reimburses: [
             {
@@ -463,6 +468,7 @@ $(document).ready(function(){
         reset(){
           this.status = null
           this.user_id = null
+          this.inquiry_no = ''
           this.start = null;
           this.end = null;
           $('input.daterange').val('');
@@ -620,6 +626,7 @@ $(document).ready(function(){
                 last:end,
                 status:status,
                 user_id:user,
+                inquiry_no: self.inquiry_no,
               }
             },
             columns: [

@@ -16,6 +16,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use App\Support\ActivityLogger;
 use App\Support\FonnteMessenger;
+use App\Support\ReimbursementInquiryNoFilter;
 class EntertaimentReimbursementController extends Controller
 {
 
@@ -255,6 +256,8 @@ class EntertaimentReimbursementController extends Controller
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
 
+            $data = ReimbursementInquiryNoFilter::apply($data, $request);
+
 
             $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');
             return datatables()->of($data)
@@ -391,6 +394,8 @@ class EntertaimentReimbursementController extends Controller
             if(auth()->user()->jabatan == 'karyawan') {
                 $data = $data->where('reimbursement.id_user', auth()->user()->id);
             }
+
+            $data = ReimbursementInquiryNoFilter::apply($data, $request);
 
 
             $data = $data->orderBy('reimbursement.no_reimbursement', 'DESC');

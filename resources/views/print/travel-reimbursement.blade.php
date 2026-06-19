@@ -107,6 +107,28 @@
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
+
+        /* Jarak dalam blok: Transaction Date ↔ Trip Type */
+        .table-style.travel-detail-block tr.travel-date-header td,
+        .table-style.travel-detail-block tr.travel-date-header th {
+            padding-bottom: 10px;
+        }
+
+        .table-style.travel-detail-block tr.travel-trip-row td,
+        .table-style.travel-detail-block tr.travel-trip-row th {
+            padding-top: 8px;
+        }
+
+        /* Jarak antar hari: setelah Total baris sebelumnya */
+        .table-style.travel-detail-block tr.travel-section-total-row.travel-section-gap-after td,
+        .table-style.travel-detail-block tr.travel-section-total-row.travel-section-gap-after th {
+            padding-bottom: 14px;
+        }
+
+        .table-style.travel-detail-block tr.travel-date-header.travel-day-continued td,
+        .table-style.travel-detail-block tr.travel-date-header.travel-day-continued th {
+            padding-top: 14px;
+        }
         .paid-watermark {
             position: fixed;
             top: 45%;
@@ -234,13 +256,13 @@
                     $allowanceIdrComputed = $allowanceTripAmount * $convRate;
                     $allowanceIdrDisplay = $storedAllowanceIdr > 0 ? $storedAllowanceIdr : $allowanceIdrComputed;
                 @endphp
-                <tr>
+                <tr class="travel-date-header{{ $loop->first ? '' : ' travel-day-continued' }}">
                     <th colspan="2" class="cell-label-date">Transaction Date</th>
                     <td colspan="4" class="bg-secondary cell-date">{{$item->date}}</td>
                     <th colspan="2" class="cell-label-hotel">Stay (Hotel)</th>
                     <td colspan="4" class="bg-secondary cell-hotel">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
                 </tr>
-                <tr>
+                <tr class="travel-trip-row">
                     <th colspan="2">Trip Type</th>
                     <td colspan="4" class="bg-secondary cell-trip-type">{{ optional($item->tripType)->name ?? 'None' }}</td>
                     <th colspan="2">Allowance</th>
@@ -302,7 +324,7 @@
                 @php
                     $sectionTotal = \App\Support\TravelDayTotal::compute($item, $item->details ?? collect());
                 @endphp
-                <tr class="travel-section-total-row">
+                <tr class="travel-section-total-row{{ $loop->last ? '' : ' travel-section-gap-after' }}">
                     <td colspan="2">Total</td>
                     <td class="text-right" align="right" colspan="9">{{ number_format($sectionTotal, 0, ',', '.') }}</td>
                     <td>&nbsp;</td>
