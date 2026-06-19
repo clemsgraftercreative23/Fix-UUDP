@@ -108,26 +108,22 @@
             print-color-adjust: exact;
         }
 
-        /* Jarak dalam blok: Transaction Date ↔ Trip Type */
-        .table-style.travel-detail-block tr.travel-date-header td,
-        .table-style.travel-detail-block tr.travel-date-header th {
-            padding-bottom: 10px;
+        /* Spacer baris — lebih andal di dialog print/PDF daripada padding saja */
+        .table-style.travel-detail-block tr.travel-inner-gap td,
+        .table-style.travel-detail-block tr.travel-day-gap td {
+            height: 14px;
+            padding: 0 !important;
+            line-height: 0;
+            font-size: 0;
+            border-top: 0 !important;
+            border-bottom: 0 !important;
+            background: #fff !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
-        .table-style.travel-detail-block tr.travel-trip-row td,
-        .table-style.travel-detail-block tr.travel-trip-row th {
-            padding-top: 8px;
-        }
-
-        /* Jarak antar hari: setelah Total baris sebelumnya */
-        .table-style.travel-detail-block tr.travel-section-total-row.travel-section-gap-after td,
-        .table-style.travel-detail-block tr.travel-section-total-row.travel-section-gap-after th {
-            padding-bottom: 14px;
-        }
-
-        .table-style.travel-detail-block tr.travel-date-header.travel-day-continued td,
-        .table-style.travel-detail-block tr.travel-date-header.travel-day-continued th {
-            padding-top: 14px;
+        .table-style.travel-detail-block tr.travel-day-gap td {
+            height: 22px;
         }
         .paid-watermark {
             position: fixed;
@@ -256,11 +252,14 @@
                     $allowanceIdrComputed = $allowanceTripAmount * $convRate;
                     $allowanceIdrDisplay = $storedAllowanceIdr > 0 ? $storedAllowanceIdr : $allowanceIdrComputed;
                 @endphp
-                <tr class="travel-date-header{{ $loop->first ? '' : ' travel-day-continued' }}">
+                <tr class="travel-date-header">
                     <th colspan="2" class="cell-label-date">Transaction Date</th>
                     <td colspan="4" class="bg-secondary cell-date">{{$item->date}}</td>
                     <th colspan="2" class="cell-label-hotel">Stay (Hotel)</th>
                     <td colspan="4" class="bg-secondary cell-hotel">{{ optional($item->hotelCondition)->name ?? '-' }}</td>
+                </tr>
+                <tr class="travel-inner-gap" aria-hidden="true">
+                    <td colspan="12">&nbsp;</td>
                 </tr>
                 <tr class="travel-trip-row">
                     <th colspan="2">Trip Type</th>
@@ -314,7 +313,7 @@
                 <td colspan="3" class="cell-destination">{{$dt->destination}}</td>
                 <td colspan="2" class="cell-remarks">{{ $data->remark ?? '' }}</td>
                 <td>{{$dt->currency}}</td>
-                <td align="right">{{$dt->currency}} {{ number_format((float) $dt->amount, 2, ',', '.') }}</td>
+                <td align="right">{{ number_format((float) $dt->amount, 2, ',', '.') }}</td>
                 <td align="right">{{ number_format((float) $dt->idr_rate, 2, ',', '.') }}</td>
               
                 <td>{{$dt->payment_type}}</td>
@@ -324,11 +323,16 @@
                 @php
                     $sectionTotal = \App\Support\TravelDayTotal::compute($item, $item->details ?? collect());
                 @endphp
-                <tr class="travel-section-total-row{{ $loop->last ? '' : ' travel-section-gap-after' }}">
+                <tr class="travel-section-total-row">
                     <td colspan="2">Total</td>
                     <td class="text-right" align="right" colspan="9">{{ number_format($sectionTotal, 0, ',', '.') }}</td>
                     <td>&nbsp;</td>
                 </tr>
+                @if(!$loop->last)
+                <tr class="travel-day-gap" aria-hidden="true">
+                    <td colspan="12">&nbsp;</td>
+                </tr>
+                @endif
             @endforeach
           </table>
           <br>
