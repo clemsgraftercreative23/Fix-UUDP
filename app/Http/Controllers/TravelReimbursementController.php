@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Redirect;
 use App\Support\ActivityLogger;
+use App\Support\ExchangeRateParser;
 use App\Support\FonnteMessenger;
 
 class TravelReimbursementController extends Controller
@@ -194,56 +195,10 @@ class TravelReimbursementController extends Controller
         return false;
     }
 
-    /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 139,88 / 12.89 / 16.400,50 / 16400 / -1.234,50. */
+    /** Normalisasi input exchange rate ke format desimal DB: 17000.50 (2 desimal). Mendukung 17.883 (=17883) / 139,88 / 16400. */
     private function normalizeExchangeRateValue($value): string
     {
-        $raw = trim((string) $value);
-        if ($raw === '') {
-            return '0.00';
-        }
-
-        $isNegative = false;
-        if (isset($raw[0]) && $raw[0] === '-') {
-            $isNegative = true;
-            $raw = trim(substr($raw, 1));
-        } elseif (isset($raw[0]) && $raw[0] === '+') {
-            $raw = trim(substr($raw, 1));
-        }
-
-        if ($raw === '' || $raw === '.') {
-            return '0.00';
-        }
-
-        $lastComma = strrpos($raw, ',');
-        $lastDot = strrpos($raw, '.');
-
-        if ($lastComma !== false && ($lastDot === false || $lastComma > $lastDot)) {
-            $raw = str_replace('.', '', $raw);
-            $raw = str_replace(',', '.', $raw);
-        } else {
-            $raw = str_replace(',', '', $raw);
-            // Kurs: satu titik = desimal (17.883). Banyak titik = ribuan (1.234.567).
-            if (substr_count($raw, '.') > 1) {
-                $raw = str_replace('.', '', $raw);
-            } elseif (($dotPos = strrpos($raw, '.')) !== false) {
-                $intRaw = substr($raw, 0, $dotPos);
-                $frac = preg_replace('/\D/', '', substr($raw, $dotPos + 1));
-                $intPart = str_replace('.', '', $intRaw);
-                $raw = ($intPart !== '' ? $intPart : '0') . ($frac !== '' ? '.' . $frac : '');
-            }
-        }
-
-        $raw = preg_replace('/[^0-9.]/', '', $raw);
-        if ($raw === '' || $raw === '.') {
-            return '0.00';
-        }
-
-        $num = (float) $raw;
-        if ($isNegative) {
-            $num = -$num;
-        }
-
-        return number_format($num, 2, '.', '');
+        return ExchangeRateParser::normalizeForStorage($value);
     }
 
     /**
@@ -332,6 +287,29 @@ class TravelReimbursementController extends Controller
         }
 
         return $base * $rate;
+    }
+
+    /** Total per hari = allowance IDR + jumlah detail IDR (Cash/BDC). */
+    private function recomputeTravelDayTotal(int $travelId): float
+    {
+        $row = ReimbursementTravel::find($travelId);
+        if (!$row) {
+            return 0.0;
+        }
+
+        $allowance = (float) $row->allowance;
+        $detailsSum = (float) ReimbursementTravelDetail::where('reimbursement_travel_id', $travelId)
+            ->where('status', 1)
+            ->sum('idr_rate');
+
+        return $allowance + $detailsSum;
+    }
+
+    private function syncTravelDayTotalAfterDetailsSave(int $travelId): void
+    {
+        ReimbursementTravel::whereKey($travelId)->update([
+            'total' => $this->recomputeTravelDayTotal($travelId),
+        ]);
     }
 
     /** Perbaiki allowance INT32 overflow di DB & objek yang dikirim ke view. */
@@ -1586,6 +1564,10 @@ class TravelReimbursementController extends Controller
                 $new->save();
             }
 
+            if ($id_detail) {
+                $this->syncTravelDayTotalAfterDetailsSave((int) $id_detail);
+            }
+
             $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
             
             $form_data = array(
@@ -2161,9 +2143,13 @@ class TravelReimbursementController extends Controller
 
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
 
+        $this->syncTravelDayTotalAfterDetailsSave((int) $id_detail);
+
+        $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id'"))['0']->total;
+
         $form_data = array(
             'status'        =>  0,
-            'nominal_pengajuan' =>  $this->normalizeTravelMoneyValue($request->nominal_pengajuan ?? ''),
+            'nominal_pengajuan' =>  $this->normalizeTravelMoneyValue($total ?? ''),
         );
 
         Reimbursement::where('id', $id)->update($form_data);
@@ -2438,6 +2424,8 @@ class TravelReimbursementController extends Controller
 
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
 
+        $this->syncTravelDayTotalAfterDetailsSave((int) $id_detail);
+
         $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
 
         $form_data = array(
@@ -2684,6 +2672,8 @@ class TravelReimbursementController extends Controller
 
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
 
+        $this->syncTravelDayTotalAfterDetailsSave((int) $id_detail);
+
         $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
 
         $form_data = array(
@@ -2928,6 +2918,8 @@ class TravelReimbursementController extends Controller
         }
 
         $delete  = DB::select( DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$id_detail' AND status=0"));
+
+        $this->syncTravelDayTotalAfterDetailsSave((int) $id_detail);
 
         $total  = DB::select( DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
 
