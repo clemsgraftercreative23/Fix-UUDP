@@ -339,7 +339,7 @@ if (!function_exists('travel_attachment_rows')) {
                 <tfoot>
                     <tr>
                         <td>Total</td>
-                        <td class="bg-secondary text-right" colspan="7">{{ travel_detail_idr($item->total) }}</td>
+                        <td class="bg-secondary text-right" colspan="7">{{ travel_detail_idr(\App\Support\TravelDayTotal::compute($item, $item->details ?? collect())) }}</td>
                     </tr>
                 </tfoot>
                 </table>

@@ -46,6 +46,12 @@ if (!function_exists('rt_travel_detail_attachments')) {
         return $rows;
     }
 }
+if (!function_exists('rt_travel_pane_day_total')) {
+    function rt_travel_pane_day_total($travelRow, $travelDetails)
+    {
+        return \App\Support\TravelDayTotal::compute($travelRow, $travelDetails);
+    }
+}
 $taxFirstExtra = !empty($is_overseas) ? ' tax-input' : '';
 // Some travel rows have no reimbursement_travel_details yet (e.g. new tab); avoid $travel_detail[0] errors.
 $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
@@ -61,6 +67,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         'payment_type' => '',
         'evidence' => '',
     ];
+$rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
 @endphp
 @php
     $statusInt = (int) ($data[0]->status ?? 0);
@@ -431,7 +438,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
 <div class="row">
     <div class="col-md-3">
         <label for="">Total</label>
-        <input type="text" readonly class="form-control total-nominal" name="nominal_pengajuan" value="{{ rt_travel_pane_rupiah($data_travel['0']->total) }}">
+        <input type="text" readonly class="form-control total-nominal" name="nominal_pengajuan" value="{{ rt_travel_pane_rupiah($rtDayTotal) }}">
     </div>
     <div class="col-md-9">
         <br><span style="color:#62d49e; float: right; display: none;" class="warning-upload">

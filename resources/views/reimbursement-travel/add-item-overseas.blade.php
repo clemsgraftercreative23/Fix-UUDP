@@ -379,6 +379,7 @@ $(document).ready(function(){
     function formatTravelIdrMoney(num) {
         var n = Number(num);
         if (isNaN(n)) n = 0;
+        n = Math.round(n);
         return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
 
@@ -1031,9 +1032,8 @@ $(document).ready(function(){
     });
     window.rtNormalizeAllTripRateInputs();
     refreshAllCurrencySelects();
-    if ($('#rt-travel-item-pane #trip_type_id').val()) {
-        recalculateAllowanceFromTripType($('#rt-travel-item-pane'));
-    }
+    recalculateAllDetailIdrRates($('#rt-travel-item-pane'));
+    total_nominal();
   });
   
 </script>

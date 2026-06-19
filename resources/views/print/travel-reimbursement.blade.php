@@ -299,9 +299,12 @@
             </tr>
             @endforeach
             
+                @php
+                    $sectionTotal = \App\Support\TravelDayTotal::compute($item, $item->details ?? collect());
+                @endphp
                 <tr class="travel-section-total-row">
                     <td colspan="2">Total</td>
-                    <td class="text-right" align="right" colspan="9">{{ number_format($item->total, 0, ',', '.') }}</td>
+                    <td class="text-right" align="right" colspan="9">{{ number_format($sectionTotal, 0, ',', '.') }}</td>
                     <td>&nbsp;</td>
                 </tr>
             @endforeach

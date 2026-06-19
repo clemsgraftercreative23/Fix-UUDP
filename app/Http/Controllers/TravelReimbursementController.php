@@ -25,6 +25,7 @@ use Redirect;
 use App\Support\ActivityLogger;
 use App\Support\ExchangeRateParser;
 use App\Support\FonnteMessenger;
+use App\Support\TravelDayTotal;
 
 class TravelReimbursementController extends Controller
 {
@@ -310,6 +311,72 @@ class TravelReimbursementController extends Controller
         ReimbursementTravel::whereKey($travelId)->update([
             'total' => $this->recomputeTravelDayTotal($travelId),
         ]);
+    }
+
+    /** Perbaiki kurs USD/JPY yang tersimpan sebagai desimal (17,88) padahal allowance sudah benar. */
+    private function repairTripRatesFromStoredAllowances(int $reimbursementId): void
+    {
+        $travels = ReimbursementTravel::where('reimbursement_id', $reimbursementId)->get();
+
+        foreach ($travels as $travel) {
+            $tripTypeId = (int) ($travel->trip_type_id ?? 0);
+            $storedAllowance = (float) ($travel->allowance ?? 0);
+
+            if ($tripTypeId <= 0 || $storedAllowance < 1000) {
+                continue;
+            }
+
+            $trip = TravelTripType::find($tripTypeId);
+            if (!$trip) {
+                continue;
+            }
+
+            $currency = strtoupper(trim((string) ($trip->currency ?? 'IDR')));
+            $baseAllowance = (float) ($trip->allowance ?? 0);
+
+            if ($currency === 'IDR' || $currency === '' || $baseAllowance <= 0) {
+                continue;
+            }
+
+            $impliedRate = $storedAllowance / $baseAllowance;
+            if ($impliedRate < 100) {
+                continue;
+            }
+
+            $rateRow = TravelTripRate::where('reimbursement_id', $reimbursementId)
+                ->where('currency', $currency)
+                ->first();
+
+            if (!$rateRow) {
+                continue;
+            }
+
+            $currentRate = (float) $rateRow->rate;
+            if ($currentRate >= 1000) {
+                continue;
+            }
+
+            if ($impliedRate / max($currentRate, 0.01) >= 50) {
+                TravelTripRate::whereKey($rateRow->id)->update([
+                    'rate' => ExchangeRateParser::normalizeForStorage((string) $impliedRate),
+                ]);
+            }
+        }
+    }
+
+    private function recomputeAllTravelDayTotalsForReimbursement(int $reimbursementId): float
+    {
+        $travelIds = ReimbursementTravel::where('reimbursement_id', $reimbursementId)->pluck('id');
+
+        foreach ($travelIds as $travelId) {
+            $this->syncTravelDayTotalAfterDetailsSave((int) $travelId);
+        }
+
+        $nominal = (float) ReimbursementTravel::where('reimbursement_id', $reimbursementId)->sum('total');
+
+        Reimbursement::whereKey($reimbursementId)->update(['nominal_pengajuan' => $nominal]);
+
+        return $nominal;
     }
 
     /** Perbaiki allowance INT32 overflow di DB & objek yang dikirim ke view. */
@@ -1723,6 +1790,9 @@ class TravelReimbursementController extends Controller
 
     public function show($id)
     {
+        $this->repairTripRatesFromStoredAllowances((int) $id);
+        $this->recomputeAllTravelDayTotalsForReimbursement((int) $id);
+
         $data = Reimbursement::find($id);
         $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, allowance_cash, metode_allowance, metode_cash FROM reimbursement WHERE id = '$id'"));
         $bdc = $cek['0']->total_bdc;
@@ -1793,9 +1863,13 @@ class TravelReimbursementController extends Controller
             $this->repairCorruptTravelAllowance($travelRow, (int) $id_main);
         }
 
-        $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
+        $this->repairTripRatesFromStoredAllowances((int) $id_main);
+        $this->recomputeAllTravelDayTotalsForReimbursement((int) $id_main);
+
+        $data_travel  = DB::select(DB::raw("SELECT * FROM reimbursement_travel WHERE id='$id_travel'"));
+        $travel_trip  = DB::select(DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = $id_travel;
-        $travel_detail  = DB::select( DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
+        $travel_detail  = DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb' "));
 
         $payload = [
@@ -3409,6 +3483,12 @@ class TravelReimbursementController extends Controller
         if ($printedRows->count() === 0) {
             echo "Data not found. Please make sure the <strong>search button has been clicked first</strong>.";
         } else {
+            foreach ($printedRows as $printedRow) {
+                $this->repairTripRatesFromStoredAllowances((int) $printedRow->id);
+                $this->recomputeAllTravelDayTotalsForReimbursement((int) $printedRow->id);
+            }
+            $printedRows = $data->get();
+
             $period = $this->travelPrintPeriodLabels($request, $printedRows);
 
             $driverRaw = $request->input('driver');
