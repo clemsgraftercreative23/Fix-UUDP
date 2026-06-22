@@ -921,7 +921,7 @@ $(document).ready(function(){
         return true;
     };
 
-    $(".addMoreDetail").click(function(){
+    $(document).on('click', '.addMoreDetail', function () {
         window.rtTravelAppendDetailRow({});
     });
     
