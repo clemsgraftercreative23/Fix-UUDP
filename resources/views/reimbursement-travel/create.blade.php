@@ -363,6 +363,8 @@
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
+<script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
+<script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
@@ -542,10 +544,11 @@ $(document).ready(function(){
             const n = parseInt(s, 10);
             return isNaN(n) ? 0 : n;
         },
+        formatIdrForPayment(num, paymentType) {
+            return formatTravelIdrMoney(roundIdrForPayment(num, paymentType), paymentType || 'Cash');
+        },
         formatIdrInteger(num) {
-            const n = Number(num);
-            if (isNaN(n)) return '0';
-            return n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+            return this.formatIdrForPayment(num, 'Cash');
         },
         /**
          * Jangan destroy + re-init semua mask: itu mereset nilai tampilan jadi 0/1.
@@ -931,14 +934,18 @@ $(document).ready(function(){
                 this.reimburses[i].total = allowance.toLocaleString('de-DE')
 
                 tax = self.types.filter(a => a.id == id)[0].tax
-                const idrVal = this.getRate(currency, amount)
-                this.reimburses[i].details[a].idr_rate = this.formatIdrInteger(idrVal)
-                this.reimburses[i].details[a].tax = this.formatIdrInteger(idrVal * tax / 100)
+                const paymentType = this.reimburses[i].details[a].payment_type
+                const idrVal = roundIdrForPayment(this.getRate(currency, amount), paymentType)
+                this.reimburses[i].details[a].idr_rate = this.formatIdrForPayment(idrVal, paymentType)
+                this.reimburses[i].details[a].tax = this.formatIdrForPayment(idrVal * tax / 100, paymentType)
+                const hasBdc = (this.reimburses[i].details || []).some(function (d) {
+                    return isBdcPayment(d.payment_type);
+                });
                 this.reimburses[i].details.forEach(element => {
-                    subtotal += parseInt(element.idr_rate.replaceAll(".",""))                    
-                    allowance = self.reimburses[i].trip_allowance.replaceAll(".","")                    
-                    total = +subtotal + +allowance                    
-                    this.reimburses[i].total = total.toLocaleString('de-DE')
+                    subtotal += parseTravelMoney(element.idr_rate)
+                    allowance = parseTravelMoney(self.reimburses[i].trip_allowance)
+                    total = +subtotal + +allowance
+                    this.reimburses[i].total = formatTravelDayTotal(total, hasBdc)
                 });
 
             } catch (error) {

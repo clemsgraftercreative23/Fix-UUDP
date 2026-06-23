@@ -338,6 +338,7 @@ function rate_input($angka){
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
+<script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
 
 <script type="text/javascript">
 $(document).ready(function(){
@@ -348,12 +349,7 @@ $(document).ready(function(){
     $(".warning-upload").hide();
     
     function numberWithCommas(x) {
-        var n = Number(x);
-        if (isNaN(n)) return '0';
-        var neg = n < 0;
-        var absRounded = Math.abs(Math.round(n));
-        var s = String(absRounded).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        return neg ? '-' + s : s;
+        return formatTravelIdrMoney(x, 'Cash');
     }
   
    
@@ -397,20 +393,6 @@ $(document).ready(function(){
 
     calculateTimeDifference();
     
-    /** Selaras dengan TravelReimbursementController::normalizeExchangeRateValue (titik ribuan vs desimal). */
-    function parseTravelMoney(raw) {
-        var canonical = normalizeEuropeanNumberString(String(raw || '').trim());
-        var n = parseFloat(String(canonical || '0'));
-        return isNaN(n) ? 0 : n;
-    }
-
-    function formatTravelIdrMoney(num) {
-        var n = Number(num);
-        if (isNaN(n)) n = 0;
-        n = Math.round(n);
-        return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    }
-
     /** Kolom Amount: integer; bagian desimal (setelah koma) diabaikan. */
     function parseTravelAmountInteger(raw) {
         var s = String(raw || '').trim();
@@ -540,16 +522,17 @@ $(document).ready(function(){
         var currency = String($tr.find('select[name="currency[]"]').val() || '').trim().toUpperCase();
         var amount = parseTravelAmountInteger($tr.find('input[name="amount[]"]').val());
         var cost_type = $tr.find('select[name="cost_type_id[]"]').val();
+        var paymentType = getPaymentTypeFromRow($tr);
         if (!currency) {
             return;
         }
         var rate = getTripRateForCurrency(currency);
-        var val = amount * (currency === 'IDR' ? 1 : rate);
-        $tr.find('input[name="idr_rate[]"]').val(formatTravelIdrMoney(val));
+        var val = roundIdrForPayment(amount * (currency === 'IDR' ? 1 : rate), paymentType);
+        $tr.find('input[name="idr_rate[]"]').val(formatTravelIdrMoney(val, paymentType));
         if (cost_type == 3) {
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(val * 2 / 100));
+            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(val * 2 / 100, paymentType));
         } else {
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0));
+            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0, paymentType));
         }
     }
 
@@ -616,11 +599,12 @@ $(document).ready(function(){
     };
 
     function total_nominal() {
+        var $pane = $('#rt-travel-item-pane');
         var total = parseTravelMoney($('.allowance').val());
-        $('#rt-travel-item-pane input[name="idr_rate[]"]').each(function () {
+        $pane.find('input[name="idr_rate[]"]').each(function () {
             total += parseTravelMoney($(this).val());
         });
-        $('.total-nominal').val(formatTravelIdrMoney(total));
+        $('.total-nominal').val(formatTravelDayTotal(total, scopeHasBdcPayment($pane)));
     }
 
     window.rtNumberWithCommas = numberWithCommas;
@@ -632,16 +616,22 @@ $(document).ready(function(){
         total_nominal();
     });
 
+    $(document).on('change', '#rt-travel-item-pane select[name="payment_type[]"]', function () {
+        recalculateDetailIdrRate($(this).closest('tr'));
+        total_nominal();
+    });
+
     $(document).on('change', '#rt-travel-item-pane select[name="cost_type_id[]"]', function () {
         var cost_type = $(this).val();
         var $tr = $(this).closest('tr');
         var $idr = $tr.find('input[name="idr_rate[]"]');
+        var paymentType = getPaymentTypeFromRow($tr);
         var val = parseTravelMoney($idr.val());
         if (cost_type == 3) {
             var tax = val * 2 / 100;
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(isNaN(tax) ? 0 : tax));
+            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(isNaN(tax) ? 0 : tax, paymentType));
         } else {
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0));
+            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0, paymentType));
         }
     });
     
@@ -744,46 +734,8 @@ $(document).ready(function(){
     var i = 1;
     var j = 1;
 
-    function normalizeEuropeanNumberString(raw) {
-        var x = String(raw || '').trim().replace(/\s/g, '');
-        if (!x) return '0';
-        var neg = false;
-        if (x.charAt(0) === '-') {
-            neg = true;
-            x = x.slice(1);
-        } else if (x.charAt(0) === '+') {
-            x = x.slice(1);
-        }
-        if (!x) return '0';
-        var lastC = x.lastIndexOf(',');
-        var lastD = x.lastIndexOf('.');
-        var out;
-        if (lastC > lastD) {
-            x = x.replace(/\./g, '').replace(',', '.');
-            out = (x.replace(/[^\d.]/g, '') || '0');
-        } else {
-            x = x.replace(/,/g, '');
-            var idx = x.lastIndexOf('.');
-            if (idx === -1) {
-                out = (x.replace(/[^\d]/g, '') || '0');
-            } else {
-                var intRaw = x.slice(0, idx);
-                var frac = x.slice(idx + 1).replace(/\D/g, '');
-                var intPart = intRaw.replace(/\./g, '');
-                if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
-                    out = intPart + frac;
-                } else {
-                    out = (intPart || '0') + '.' + frac;
-                }
-            }
-        }
-        if (neg && out !== '0' && out !== '') {
-            out = '-' + out;
-        }
-        return out;
-    }
-
     /* Exchange rate helpers: public/js/exchange-rate-parser.js */
+    /* IDR money helpers: public/js/travel-idr-money.js */
 
     $(document).on('input', 'input.exchange-rate-input[name="rate[]"]', function () {
         this.value = sanitizeExchangeRateInput(this.value, false);
@@ -1256,13 +1208,15 @@ $(document).ready(function(){
             currency = this.reimburses[i].details[a].currency
             amount = this.reimburses[i].details[a].amount
             id = this.reimburses[i].details[a].cost_type
+            paymentType = this.reimburses[i].details[a].payment_type
 
             try {
                 tax = self.types.filter(a => a.id == id)[0].tax
-                this.reimburses[i].details[a].idr_rate = this.getRate(currency, amount).toLocaleString("de-DE")
-                this.reimburses[i].details[a].tax = (this.getRate(currency, amount) * tax / 100).toLocaleString('de-DE')
+                const idrVal = roundIdrForPayment(this.getRate(currency, amount), paymentType)
+                this.reimburses[i].details[a].idr_rate = formatTravelIdrMoney(idrVal, paymentType)
+                this.reimburses[i].details[a].tax = formatTravelIdrMoney(idrVal * tax / 100, paymentType)
                 this.reimburses[i].details.forEach(element => {
-                    subtotal += parseInt(element.idr_rate.replaceAll(".",""))
+                    subtotal += parseTravelMoney(element.idr_rate)
                 });
             } catch (error) {
                 

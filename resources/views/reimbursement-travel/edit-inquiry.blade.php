@@ -346,6 +346,7 @@ function rupiah($angka){
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
+<script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
 
 <script type="text/javascript">
 $(document).ready(function(){
@@ -362,49 +363,9 @@ $(document).ready(function(){
         return neg ? '-' + s : s;
     }
 
-    function normalizeEuropeanNumberString(raw) {
-        var x = String(raw || '').trim().replace(/\s/g, '');
-        if (!x) return '0';
-        var neg = false;
-        if (x.charAt(0) === '-') {
-            neg = true;
-            x = x.slice(1);
-        } else if (x.charAt(0) === '+') {
-            x = x.slice(1);
-        }
-        if (!x) return '0';
-        var lastC = x.lastIndexOf(',');
-        var lastD = x.lastIndexOf('.');
-        var out;
-        if (lastC > lastD) {
-            x = x.replace(/\./g, '').replace(',', '.');
-            out = (x.replace(/[^\d.]/g, '') || '0');
-        } else {
-            x = x.replace(/,/g, '');
-            var idx = x.lastIndexOf('.');
-            if (idx === -1) {
-                out = (x.replace(/[^\d]/g, '') || '0');
-            } else {
-                var intRaw = x.slice(0, idx);
-                var frac = x.slice(idx + 1).replace(/\D/g, '');
-                var intPart = intRaw.replace(/\./g, '');
-                if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
-                    out = intPart + frac;
-                } else {
-                    out = (intPart || '0') + (frac ? '.' + frac : '');
-                }
-            }
-        }
-        if (neg && out !== '0' && out !== '') {
-            out = '-' + out;
-        }
-        return out;
-    }
-
-    function parseTravelMoney(raw) {
-        var canonical = normalizeEuropeanNumberString(String(raw || '').trim());
-        var n = parseFloat(String(canonical || '0'));
-        return isNaN(n) ? 0 : n;
+    function paymentTypeAtIndex(idx) {
+        var $pt = $('select[name="payment_type[]"]');
+        return ($pt.eq(idx).val() || 'Cash');
     }
 
     function parseTravelAmountInteger(raw) {
@@ -419,10 +380,9 @@ $(document).ready(function(){
         return isNaN(n) ? 0 : n;
     }
 
-    function formatTravelIdrMoney(num) {
-        var n = Number(num);
-        if (isNaN(n)) n = 0;
-        return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    function formatTravelIdrMoney(num, paymentType) {
+        var pt = paymentType || 'Cash';
+        return window.formatTravelIdrMoney(roundIdrForPayment(num, pt), pt);
     }
     
     function total_nominal() {
@@ -439,7 +399,7 @@ $(document).ready(function(){
         var idr_9 = $('.idr_rate_9').val() ? parseTravelMoney($('.idr_rate_9').val()) : 0;
         var idr_10 = $('.idr_rate_10').val() ? parseTravelMoney($('.idr_rate_10').val()) : 0;
         var total_append = allowance + idr_main + idr_1 + idr_2 + idr_3 + idr_4 + idr_5 + idr_6 + idr_7 + idr_8 + idr_9 + idr_10;
-        $('.total-nominal').val(formatTravelIdrMoney(total_append));
+        $('.total-nominal').val(formatTravelDayTotal(total_append, $('select[name="payment_type[]"]').toArray().some(function (el) { return isBdcPayment(el.value); })));
     }
     
     const notStayHotelConditionId = @json($not_stay_hotel_condition_id);
@@ -569,12 +529,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_main').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(0);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_main').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax0').val(formatTravelIdrMoney(tax));
+                            $('.tax0').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax0').val(0);
                         }
@@ -592,12 +553,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_1').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(1);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_1').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax1').val(formatTravelIdrMoney(tax));
+                            $('.tax1').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax1').val(0);
                         }
@@ -615,12 +577,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_2').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(2);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_2').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax2').val(formatTravelIdrMoney(tax));
+                            $('.tax2').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax2').val(0);
                         }
@@ -638,12 +601,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_3').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(3);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_3').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax3').val(formatTravelIdrMoney(tax));
+                            $('.tax3').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax3').val(0);
                         }
@@ -661,12 +625,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_4').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(4);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_4').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax4').val(formatTravelIdrMoney(tax));
+                            $('.tax4').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax4').val(0);
                         }
@@ -684,12 +649,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_5').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(5);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_5').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax5').val(formatTravelIdrMoney(tax));
+                            $('.tax5').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax5').val(0);
                         }
@@ -707,12 +673,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_6').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(6);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_6').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax6').val(formatTravelIdrMoney(tax));
+                            $('.tax6').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax6').val(0);
                         }
@@ -730,12 +697,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_7').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(7);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_7').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax7').val(formatTravelIdrMoney(tax));
+                            $('.tax7').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax7').val(0);
                         }
@@ -753,12 +721,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_8').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(8);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_8').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax8').val(formatTravelIdrMoney(tax));
+                            $('.tax8').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax8').val(0);
                         }
@@ -776,12 +745,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_9').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(9);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_9').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax9').val(formatTravelIdrMoney(tax));
+                            $('.tax9').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax9').val(0);
                         }
@@ -799,12 +769,13 @@ $(document).ready(function(){
                     url:"../../get-currency/"+id+"/"+currency,
                     dataType:"json",
                     success:function(data){
-                        val = data.data * amount;
-                        $('.idr_rate_10').val(formatTravelIdrMoney(val));
+                        var pt = paymentTypeAtIndex(10);
+                        val = roundIdrForPayment(data.data * amount, pt);
+                        $('.idr_rate_10').val(formatTravelIdrMoney(val, pt));
                         total_nominal();
                         if(cost_type==3) {
                             tax = val * 2/100;
-                            $('.tax10').val(formatTravelIdrMoney(tax));
+                            $('.tax10').val(formatTravelIdrMoney(tax, pt));
                         } else {
                             $('.tax10').val(0);
                         }
@@ -817,7 +788,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_1").val());
                     tax = val * 2/100;
-                    $('.tax1').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(1);
+                    $('.tax1').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax1').val(0);
                 }
@@ -828,7 +800,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_2").val());
                     tax = val * 2/100;
-                    $('.tax2').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(2);
+                    $('.tax2').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax2').val(0);
                 }
@@ -840,7 +813,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_3").val());
                     tax = val * 2/100;
-                    $('.tax3').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(3);
+                    $('.tax3').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax3').val(0);
                 }
@@ -851,7 +825,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_4").val());
                     tax = val * 2/100;
-                    $('.tax4').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(4);
+                    $('.tax4').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax4').val(0);
                 }
@@ -862,7 +837,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_5").val());
                     tax = val * 2/100;
-                    $('.tax5').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(5);
+                    $('.tax5').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax5').val(0);
                 }
@@ -873,7 +849,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_6").val());
                     tax = val * 2/100;
-                    $('.tax6').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(6);
+                    $('.tax6').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax6').val(0);
                 }
@@ -884,7 +861,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_7").val());
                     tax = val * 2/100;
-                    $('.tax7').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(7);
+                    $('.tax7').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax7').val(0);
                 }
@@ -895,7 +873,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_8").val());
                     tax = val * 2/100;
-                    $('.tax8').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(8);
+                    $('.tax8').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax8').val(0);
                 }
@@ -906,7 +885,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_9").val());
                     tax = val * 2/100;
-                    $('.tax9').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(9);
+                    $('.tax9').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax9').val(0);
                 }
@@ -917,7 +897,8 @@ $(document).ready(function(){
                 if(cost_type==3) {
                     val = parseTravelMoney($(".idr_rate_10").val());
                     tax = val * 2/100;
-                    $('.tax10').val(formatTravelIdrMoney(tax));
+                    var pt = paymentTypeAtIndex(10);
+                    $('.tax10').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax10').val(0);
                 }
@@ -1019,13 +1000,14 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_main').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(0);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_main').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax0').val(formatTravelIdrMoney(tax));
+                    $('.tax0').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax0').val(0);
                 }
@@ -1043,12 +1025,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_1').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(1);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_1').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax1').val(formatTravelIdrMoney(tax));
+                    $('.tax1').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax1').val(0);
                 }
@@ -1066,12 +1049,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_2').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(2);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_2').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax2').val(formatTravelIdrMoney(tax));
+                    $('.tax2').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax2').val(0);
                 }
@@ -1089,12 +1073,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_3').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(3);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_3').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax3').val(formatTravelIdrMoney(tax));
+                    $('.tax3').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax3').val(0);
                 }
@@ -1112,12 +1097,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_4').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(4);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_4').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax4').val(formatTravelIdrMoney(tax));
+                    $('.tax4').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax4').val(0);
                 }
@@ -1135,12 +1121,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_5').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(5);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_5').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax5').val(formatTravelIdrMoney(tax));
+                    $('.tax5').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax5').val(0);
                 }
@@ -1158,12 +1145,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_6').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(6);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_6').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax6').val(formatTravelIdrMoney(tax));
+                    $('.tax6').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax6').val(0);
                 }
@@ -1181,12 +1169,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_7').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(7);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_7').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax7').val(formatTravelIdrMoney(tax));
+                    $('.tax7').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax7').val(0);
                 }
@@ -1204,12 +1193,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_8').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(8);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_8').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax8').val(formatTravelIdrMoney(tax));
+                    $('.tax8').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax8').val(0);
                 }
@@ -1227,12 +1217,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_9').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(9);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_9').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax9').val(formatTravelIdrMoney(tax));
+                    $('.tax9').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax9').val(0);
                 }
@@ -1250,12 +1241,13 @@ $(document).ready(function(){
             url:"../../get-currency/"+id+"/"+currency,
             dataType:"json",
             success:function(data){
-                val = data.data * amount;
-                $('.idr_rate_10').val(formatTravelIdrMoney(val));
+                var pt = paymentTypeAtIndex(10);
+                val = roundIdrForPayment(data.data * amount, pt);
+                $('.idr_rate_10').val(formatTravelIdrMoney(val, pt));
                 total_nominal();
                 if(cost_type==3) {
                     tax = val * 2/100;
-                    $('.tax10').val(formatTravelIdrMoney(tax));
+                    $('.tax10').val(formatTravelIdrMoney(tax, pt));
                 } else {
                     $('.tax10').val(0);
                 }
@@ -1269,7 +1261,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_main").val());
             tax = val * 2/100;
-            $('.tax0').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(0);
+            $('.tax0').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax0').val(0);
         }
@@ -1280,7 +1273,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_1").val());
             tax = val * 2/100;
-            $('.tax1').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(1);
+            $('.tax1').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax1').val(0);
         }
@@ -1291,7 +1285,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_2").val());
             tax = val * 2/100;
-            $('.tax2').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(2);
+            $('.tax2').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax2').val(0);
         }
@@ -1302,7 +1297,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_3").val());
             tax = val * 2/100;
-            $('.tax3').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(3);
+            $('.tax3').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax3').val(0);
         }
@@ -1313,7 +1309,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_4").val());
             tax = val * 2/100;
-            $('.tax4').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(4);
+            $('.tax4').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax4').val(0);
         }
@@ -1324,7 +1321,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_5").val());
             tax = val * 2/100;
-            $('.tax5').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(5);
+            $('.tax5').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax5').val(0);
         }
@@ -1335,7 +1333,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_6").val());
             tax = val * 2/100;
-            $('.tax6').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(6);
+            $('.tax6').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax6').val(0);
         }
@@ -1346,7 +1345,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_7").val());
             tax = val * 2/100;
-            $('.tax7').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(7);
+            $('.tax7').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax7').val(0);
         }
@@ -1357,7 +1357,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_8").val());
             tax = val * 2/100;
-            $('.tax8').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(8);
+            $('.tax8').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax8').val(0);
         }
@@ -1368,7 +1369,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_9").val());
             tax = val * 2/100;
-            $('.tax9').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(9);
+            $('.tax9').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax9').val(0);
         }
@@ -1379,7 +1381,8 @@ $(document).ready(function(){
         if(cost_type==3) {
             val = parseTravelMoney($(".idr_rate_10").val());
             tax = val * 2/100;
-            $('.tax10').val(formatTravelIdrMoney(tax));
+            var pt = paymentTypeAtIndex(10);
+            $('.tax10').val(formatTravelIdrMoney(tax, pt));
         } else {
             $('.tax10').val(0);
         }
@@ -1652,7 +1655,7 @@ $(document).ready(function(){
                 this.reimburses[i].details[a].idr_rate = this.getRate(currency, amount).toLocaleString("de-DE")
                 this.reimburses[i].details[a].tax = (this.getRate(currency, amount) * tax / 100).toLocaleString('de-DE')
                 this.reimburses[i].details.forEach(element => {
-                    subtotal += parseInt(element.idr_rate.replaceAll(".",""))
+                    subtotal += parseTravelMoney(element.idr_rate)
                 });
             } catch (error) {
                 
