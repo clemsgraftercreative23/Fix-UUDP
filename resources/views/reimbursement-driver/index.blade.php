@@ -397,9 +397,9 @@ $(document).ready(function(){
     $("#action_button_draft").prop("disabled", true);
     $(".warning-upload").show();
 
-    $('#sample_form').on('submit', function () {
-      $('#action_button, #action_button_draft').prop('disabled', true);
-    });
+    if (window.DriverUpload && typeof window.DriverUpload.bindSubmitActionCapture === 'function') {
+      window.DriverUpload.bindSubmitActionCapture('#sample_form');
+    }
 
 
     $('.currency').mask("#.##0", {

@@ -746,15 +746,17 @@ class DriverReimbursementController extends Controller
     public function store(Request $request)
     {
         DB::beginTransaction();
-        if (isset($_POST['save'])) {
+        if ($request->has('save') && !$request->has('save_draft')) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
         } elseif ($request->has('save_draft')) {
             $status = 10; // DRAFT
             $notif = 'Reimbursement Successfully Saved as Draft';
         } else {
-            $status = 10; // DRAFT
-            $notif = 'Reimbursement Successfully Saved as Draft';
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors(['Tindakan tidak dikenali. Gunakan tombol Submit atau Draft.']);
         }
         try {
             $data = [
@@ -1030,7 +1032,7 @@ class DriverReimbursementController extends Controller
         
 		if(auth()->user()->id == $cek_iduser) {
 
-          if ($request->has('save')) {
+          if ($request->has('save') && !$request->has('save_draft')) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
           } elseif ($request->has('save_draft')) {

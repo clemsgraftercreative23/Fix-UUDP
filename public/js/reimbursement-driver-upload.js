@@ -240,6 +240,33 @@ window.DriverUpload = (function () {
     $('.warning-upload').hide();
   }
 
+  /**
+   * Tombol submit yang di-disable saat form submit tidak ikut terkirim di POST.
+   * Simpan name/value ke hidden input saat klik agar aksi Submit/Draft tetap dikenali server.
+   */
+  function bindSubmitActionCapture(formSelector) {
+    var $form = $(formSelector);
+    if (!$form.length) {
+      return;
+    }
+
+    $form.on('click', 'button[type="submit"][name]', function () {
+      $form.find('input.driver-form-action').remove();
+      $('<input type="hidden" class="driver-form-action">')
+        .attr('name', this.name)
+        .val(this.value || '1')
+        .appendTo($form);
+    });
+
+    $form.on('submit', function () {
+      setTimeout(function () {
+        $form.find(
+          '#action_button, #action_button_draft, button[type="submit"][name="save"], button[type="submit"][name="save_draft"]'
+        ).prop('disabled', true);
+      }, 0);
+    });
+  }
+
   function processAndAppendFile(row, file) {
     return compressImageFile(file).then(function (processed) {
       var rowIndex = getRowIndex(row);
@@ -342,6 +369,7 @@ window.DriverUpload = (function () {
     removePendingPreview: removePendingPreview,
     processAndAppendFile: processAndAppendFile,
     enableSubmitButtons: enableSubmitButtons,
+    bindSubmitActionCapture: bindSubmitActionCapture,
     bindAttachmentHandlers: bindAttachmentHandlers
   };
 })();

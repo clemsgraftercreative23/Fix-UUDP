@@ -2936,6 +2936,10 @@ $(document).ready(function () {
         return;
     }
 
+    if (window.DriverUpload && typeof window.DriverUpload.bindSubmitActionCapture === 'function') {
+        window.DriverUpload.bindSubmitActionCapture('#sample_form');
+    }
+
     $driverForm[0].addEventListener('invalid', function (event) {
         event.preventDefault();
         var field = event.target;
