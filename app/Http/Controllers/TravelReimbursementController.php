@@ -36,6 +36,19 @@ class TravelReimbursementController extends Controller
         return Schema::hasTable('reimbursement_attachments');
     }
 
+    private function resolveListkasbankName($kode): string
+    {
+        if ($kode === null || $kode === '') {
+            return '';
+        }
+
+        $nama = DB::table('listkasbank')
+            ->where('kode_kasbank', (string) $kode)
+            ->value('nama_list');
+
+        return $nama !== null ? (string) $nama : (string) $kode;
+    }
+
     /**
      * JS often builds URLs as "...start=null&end=null" (string) when Vue date range is unset.
      */
@@ -1822,23 +1835,12 @@ class TravelReimbursementController extends Controller
 
         $data = Reimbursement::find($id);
         $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, allowance_cash, metode_allowance, metode_cash FROM reimbursement WHERE id = '$id'"));
-        $bdc = $cek['0']->total_bdc;
-        $cash = $cek['0']->total_cash;
-        $allowance = $cek['0']->allowance_cash;
-        $metode_allowance_ = $cek['0']->metode_allowance;
-        $metode_cash_ = $cek['0']->metode_cash;
-        
-        if ($metode_allowance_ == null) {
-            $metode_allowance = "";
-        } else {
-            $metode_allowance = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_allowance_'"))['0']->nama_list;  
-        }
-
-        if ($metode_cash_ == null) {
-            $metode_cash = "";
-        } else {
-            $metode_cash = DB::select( DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;    
-        }
+        $row = $cek[0] ?? null;
+        $bdc = $row->total_bdc ?? 0;
+        $cash = $row->total_cash ?? 0;
+        $allowance = $row->allowance_cash ?? 0;
+        $metode_allowance = $this->resolveListkasbankName($row ? $row->metode_allowance : null);
+        $metode_cash = $this->resolveListkasbankName($row ? $row->metode_cash : null);
 
         return view('reimbursement-travel.detail',[
             'data' => $data,
