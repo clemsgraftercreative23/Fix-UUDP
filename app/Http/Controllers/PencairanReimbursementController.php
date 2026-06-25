@@ -14,7 +14,6 @@ use App\Support\FonnteMessenger;
 use App\Services\Accurate\AccurateApiTokenClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Ixudra\Curl\Facades\Curl;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -343,30 +342,32 @@ class PencairanReimbursementController extends Controller
 
             $nama_approval = ucfirst(auth()->user()->name);
 
-            if($cek_type==1) {
-                $direct = "/reimbursement-driver/";
-            } else if($cek_type==2) {
-                $direct = "/reimbursement-travel/";
+            if ($cek_type == 1) {
+                $direct = '/reimbursement-driver';
+            } elseif ($cek_type == 2) {
+                $direct = '/reimbursement-travel';
             } else {
-                $direct = "/reimbursement-entertainment/";
+                $direct = '/reimbursement-entertaiment';
             }
-            
-            $user = \App\User::where('id', $data->id_user)->first();
-            $curl = Curl::to('https://api.fonnte.com/send')
-                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
-                ->withData([
-                    'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                    'message' =>
-                        "Hai *" .
-                        $user->name .
-                        "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
-                        $data->no_reimbursement .
-                        "* sebesar *Rp " .
-                        number_format($data->nominal_pengajuan, 0, ',', '.') .
-                        "* telah dicairkan oleh *".$nama_approval." (FINANCE)*.\n\nTerima kasih.
-                        \n\nKlik untuk melihat detail pengajuan : " .
-                        url(''.$direct.'' . $data->id),
-                ])->post();
+
+            $user = User::where('id', $data->id_user)->first();
+            if ($user) {
+                $detailUrl = url($direct . '/' . $data->id);
+                $message = 'Hai *' . $user->name . "*,\n\n"
+                    . 'Pengajuan reimbursement Anda dengan nomor *' . $data->no_reimbursement . '* sebesar *Rp '
+                    . number_format($data->nominal_pengajuan, 0, ',', '.')
+                    . '* telah dicairkan oleh *' . $nama_approval . " (FINANCE)*.\n\n"
+                    . "Terima kasih.\n\n"
+                    . "Klik untuk melihat detail pengajuan:\n"
+                    . $detailUrl;
+
+                FonnteMessenger::send($user->phoneNumber, $message, [
+                    'reimbursement_id' => $data->id,
+                    'no_reimbursement' => $data->no_reimbursement,
+                    'recipient_role' => 'submitter',
+                    'event' => 'settled',
+                ]);
+            }
 
             DB::commit();
         return redirect()->back()->with(['success' => 'Data Berhasil Dicairkan']);
