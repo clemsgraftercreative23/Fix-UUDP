@@ -48,7 +48,19 @@
     $firstReimbursement = $firstReimbursementNo
         ? \App\Reimbursement::where('no_reimbursement', $firstReimbursementNo)->first()
         : null;
-    $isSettledPrint = ((int) ($_GET['status'] ?? 0) === 5) || ((int) ($firstReimbursement->status ?? 0) === 5);
+    $statusFromQuery = $_GET['status'] ?? null;
+    $recordStatus = (int) ($firstReimbursement->status ?? 0);
+    $effectivePrintStatus = $recordStatus;
+    if ($statusFromQuery !== null && $statusFromQuery !== '' && $statusFromQuery !== 'null') {
+        $effectivePrintStatus = (int) $statusFromQuery;
+    }
+    $isSettledPrint = ($effectivePrintStatus === 5) || ((int) ($firstReimbursement->status ?? 0) === 5);
+    $showHeadDeptStamp = in_array($effectivePrintStatus, [1, 2, 3, 5, 11], true)
+        || (!empty(optional($firstReimbursement)->mengetahui_op) && optional($firstReimbursement)->mengetahui_op !== '-');
+    $showHrGaStamp = in_array($effectivePrintStatus, [2, 3, 5, 11], true)
+        || (!empty(optional($firstReimbursement)->mengetahui_finance) && optional($firstReimbursement)->mengetahui_finance !== '-');
+    $showFinanceStamp = in_array($effectivePrintStatus, [3, 5], true)
+        || (!empty(optional($firstReimbursement)->mengetahui_owner) && optional($firstReimbursement)->mengetahui_owner !== '-');
     $approvalTimes = [1 => null, 2 => null, 3 => null];
     if ($firstReimbursement) {
         $approvalLogs = \Illuminate\Support\Facades\DB::table('activity_logs')
@@ -177,7 +189,7 @@
                 <tr>
                     <td style="border-bottom: 1px solid #000">
                         <center style="margin-bottom: 4px;">{{ $formatApprovalTime(1) }}</center>
-                        @if($_GET['status']==1 || $_GET['status']==2 || $_GET['status']==3 || $_GET['status']==5)
+                        @if($showHeadDeptStamp)
                             <center><img src="{!!url('access/images/ttd.png')!!}" style="width:200px;height:100px;object-fit:contain"><br>{{strtoupper($head_dept)}}</center>
                         @else
                             <br>
@@ -191,7 +203,7 @@
 
                     <td style="border-bottom: 1px solid #000">
                         <center style="margin-bottom: 4px;">{{ $formatApprovalTime(2) }}</center>
-                        @if($_GET['status']==2 || $_GET['status']==3 || $_GET['status']==5)
+                        @if($showHrGaStamp)
                             <center><img src="{!!url('access/images/ttd.png')!!}" style="width:200px;height:100px;object-fit:contain"><br>{{strtoupper($data[0]->mengetahui_finance)}}</center>
                         @else
                             <br>
@@ -205,7 +217,7 @@
 
                     <td style="border-bottom: 1px solid #000">
                         <center style="margin-bottom: 4px;">{{ $formatApprovalTime(3) }}</center>
-                        @if($_GET['status']==3 || $_GET['status']==5)
+                        @if($showFinanceStamp)
                             <center><img src="{!!url('access/images/ttd.png')!!}" style="width:200px;height:100px;object-fit:contain"><br>{{strtoupper($data[0]->mengetahui_owner)}}</center>
                         @else
                             <br>

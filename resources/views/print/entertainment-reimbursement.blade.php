@@ -69,8 +69,19 @@ function entertainmentStatusLabel($s) {
     ];
     return $map[(int) $s] ?? (string) $s;
 }
-$printStatus = request('status');
 $signRow = $data->last();
+$printStatus = request('status');
+if ($printStatus === null || $printStatus === '' || $printStatus === 'null') {
+    $printStatus = (string) ((int) ($signRow->reimbursement_status ?? 0));
+}
+$printStart = request('start');
+$printEnd = request('end');
+if ($printStart === null || $printStart === '' || $printStart === 'null') {
+    $printStart = $data->isNotEmpty() ? date('Y-m-d', strtotime($data->first()->created_at)) : '—';
+}
+if ($printEnd === null || $printEnd === '' || $printEnd === 'null') {
+    $printEnd = $data->isNotEmpty() ? date('Y-m-d', strtotime($data->last()->created_at)) : '—';
+}
 $isSettledPrint = ((int) ($signRow->reimbursement_status ?? 0) === 5) || ((int) $printStatus === 5);
 $approvalTimes = [1 => null, 2 => null, 3 => null];
 if ($signRow && !empty($signRow->id_main)) {
@@ -105,7 +116,7 @@ $formatApprovalTime = function ($statusCode) use ($approvalTimes) {
 
         <center>
             <h3>Entertainment Reimbursement</h3>
-            <p>{{ request('start') }} - {{ request('end') }}</p>
+            <p>{{ $printStart }} - {{ $printEnd }}</p>
         </center>
         <br>
         <br>
