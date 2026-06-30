@@ -29,6 +29,22 @@ class EntertaimentReimbursementController extends Controller
         return Schema::hasTable('reimbursement_attachments');
     }
 
+    /**
+     * JS often builds URLs as "...start=null" (string) when Vue date range is unset.
+     */
+    private function sanitizeEntertainmentPrintQueryValue($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $s = trim((string) $value);
+        if ($s === '' || strtolower($s) === 'null') {
+            return null;
+        }
+
+        return $s;
+    }
+
     private function storeAttachmentFile(?UploadedFile $file): string
     {
         if (!$file) {
@@ -1137,6 +1153,11 @@ class EntertaimentReimbursementController extends Controller
             . 'reimbursement.reimbursement_department_id, users.name, users.idKaryawan AS nik, '
             . 'departemen.nama_departemen, reimbursement.created_at';
 
+        $start = $this->sanitizeEntertainmentPrintQueryValue($request->input('start'));
+        $end = $this->sanitizeEntertainmentPrintQueryValue($request->input('end'));
+        $status = $this->sanitizeEntertainmentPrintQueryValue($request->input('status'));
+        $driver = $this->sanitizeEntertainmentPrintQueryValue($request->input('driver'));
+
         if ($request->filled('selected')) {
 
             $selected = explode(',', $request->selected);
@@ -1152,22 +1173,22 @@ class EntertaimentReimbursementController extends Controller
             $total_cash = Reimbursement::selectRaw('SUM(total_cash) as total')->whereIn('reimbursement.id', $selected)
                 ->where('reimbursement_type', 3);
 
-            if ($request->filled('start')) {
-                $data = $data->whereDate('reimbursement.created_at', '>=', $request->start);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $request->start);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $request->start);
+            if ($start !== null) {
+                $data = $data->whereDate('reimbursement.created_at', '>=', $start);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $start);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $start);
             }
 
-            if ($request->filled('end')) {
-                $data = $data->whereDate('reimbursement.created_at', '<=', $request->end);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $request->end);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $request->end);
+            if ($end !== null) {
+                $data = $data->whereDate('reimbursement.created_at', '<=', $end);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $end);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $end);
             }
 
-            if ($request->filled('status') && $request->status !== 'ALL') {
-                $data = $data->where('reimbursement.status', $request->status);
-                $bdc = $bdc->where('reimbursement.status', $request->status);
-                $total_cash = $total_cash->where('reimbursement.status', $request->status);
+            if ($status !== null && $status !== 'ALL') {
+                $data = $data->where('reimbursement.status', $status);
+                $bdc = $bdc->where('reimbursement.status', $status);
+                $total_cash = $total_cash->where('reimbursement.status', $status);
             }
 
             $data = $data->orderBy('reimbursement.id', 'DESC')->get();
@@ -1184,35 +1205,35 @@ class EntertaimentReimbursementController extends Controller
                 ->leftJoin('departemen', 'departemen.id', '=', 'reimbursement.reimbursement_department_id')
                 ->where('reimbursement.reimbursement_type', 3);
 
-            $id_user = $request->input('driver', auth()->user()->id);
+            $id_user = $driver ?? auth()->user()->id;
             $head_dept_row = DB::table('users')->where('id', $id_user)->value('nama_approval');
             $head_dept = $head_dept_row ?? '-';
 
             $bdc = Reimbursement::selectRaw('SUM(total_bdc) as total')->where('reimbursement_type', 3);
             $total_cash = Reimbursement::selectRaw('SUM(total_cash) as total')->where('reimbursement_type', 3);
 
-            if ($request->filled('start')) {
-                $data = $data->whereDate('reimbursement.created_at', '>=', $request->start);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $request->start);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $request->start);
+            if ($start !== null) {
+                $data = $data->whereDate('reimbursement.created_at', '>=', $start);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '>=', $start);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '>=', $start);
             }
 
-            if ($request->filled('end')) {
-                $data = $data->whereDate('reimbursement.created_at', '<=', $request->end);
-                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $request->end);
-                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $request->end);
+            if ($end !== null) {
+                $data = $data->whereDate('reimbursement.created_at', '<=', $end);
+                $bdc = $bdc->whereDate('reimbursement.created_at', '<=', $end);
+                $total_cash = $total_cash->whereDate('reimbursement.created_at', '<=', $end);
             }
 
-            if ($request->filled('status') && $request->status !== 'ALL') {
-                $data = $data->where('reimbursement.status', $request->status);
-                $bdc = $bdc->where('reimbursement.status', $request->status);
-                $total_cash = $total_cash->where('reimbursement.status', $request->status);
+            if ($status !== null && $status !== 'ALL') {
+                $data = $data->where('reimbursement.status', $status);
+                $bdc = $bdc->where('reimbursement.status', $status);
+                $total_cash = $total_cash->where('reimbursement.status', $status);
             }
 
-            if ($request->filled('driver')) {
-                $data = $data->where('reimbursement.id_user', '=', $request->driver);
-                $bdc = $bdc->where('reimbursement.id_user', '=', $request->driver);
-                $total_cash = $total_cash->where('reimbursement.id_user', '=', $request->driver);
+            if ($driver !== null) {
+                $data = $data->where('reimbursement.id_user', '=', $driver);
+                $bdc = $bdc->where('reimbursement.id_user', '=', $driver);
+                $total_cash = $total_cash->where('reimbursement.id_user', '=', $driver);
             }
 
             $data = $data->orderBy('reimbursement.id', 'DESC')->get();
