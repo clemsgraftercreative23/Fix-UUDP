@@ -1125,7 +1125,7 @@
     if (!$form.length) return;
     var $warn = $pane.find('.warning-upload');
     var needsUpload = $warn.length && $warn.is(':visible');
-    $form.find('#action_button, #action_button_draft, #action_button_submit').prop('disabled', !!needsUpload);
+    $form.find('#action_button, #action_button_draft, #action_button_submit, #edit_finance, #edit_owner').prop('disabled', !!needsUpload);
   }
 
   /** Sembunyikan teks "upload file" jika sudah ada preview / file terpilih (termasuk setelah partial AJAX). */

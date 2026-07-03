@@ -965,17 +965,6 @@ $(document).ready(function(){
                 $('#previewImageModal').modal('show');
             });
 
-            $('body').on('click', '.remove-existing-attachment', function () {
-                var $btn = $(this);
-                var $item = $btn.closest('.existing-attachment-item');
-                var $preview = $btn.closest('[id^="preview_"]');
-                var attachmentId = String($btn.data('attachment-id') || '');
-                if (attachmentId !== '') {
-                    $preview.find('input.keep-attachment-input[value="' + attachmentId + '"]').remove();
-                }
-                $item.remove();
-            });
-
     $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
         var $group = $(this).closest('.fieldGroup');
         enforceIdrExchangeRate($group);

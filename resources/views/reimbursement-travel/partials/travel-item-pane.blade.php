@@ -46,6 +46,41 @@ if (!function_exists('rt_travel_detail_attachments')) {
         return $rows;
     }
 }
+if (!function_exists('rt_travel_pane_render_attachments')) {
+    /** Preview lampiran per baris detail; $rowIndex = indeks array form (0, 1, 2…). */
+    function rt_travel_pane_render_attachments(array $attachments, int $rowIndex, bool $canEditAttachments, string $previewId)
+    {
+        $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        echo '<div id="' . e($previewId) . '">';
+        if ($canEditAttachments && count($attachments) > 0) {
+            echo '<input type="hidden" name="keep_attachment_ids_present[' . (int) $rowIndex . ']" value="1" class="keep-attachment-present-marker">';
+        }
+        foreach ($attachments as $att) {
+            $file = $att['file_name'] ?? '';
+            $name = $att['original_name'] ?? $file;
+            $attId = (int) ($att['id'] ?? 0);
+            $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            if ($attId > 0) {
+                echo '<input type="hidden" name="keep_attachment_ids[' . (int) $rowIndex . '][]" value="' . (int) $attId . '" class="keep-attachment-input">';
+            }
+            echo '<div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">';
+            echo '<div style="display:flex; gap:6px; align-items:center;">';
+            if ($file !== '' && in_array($ext, $imageExt, true)) {
+                $imgUrl = url('images/file_bukti/' . $file);
+                echo '<img src="' . e($imgUrl) . '" class="preview-thumbnail" data-preview-src="' . e($imgUrl) . '" style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">';
+            } else {
+                $fileUrl = url('images/file_bukti/' . $file);
+                echo '<a href="' . e($fileUrl) . '" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;"></a>';
+            }
+            echo '<a href="' . e(url('images/file_bukti/' . $file)) . '" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">' . e($name) . '</a>';
+            if ($canEditAttachments && $file !== '') {
+                echo '<button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="' . (int) $attId . '" data-legacy-file="' . e($file) . '" style="margin-left:auto;">x</button>';
+            }
+            echo '</div></div>';
+        }
+        echo '</div>';
+    }
+}
 if (!function_exists('rt_travel_pane_day_total')) {
     function rt_travel_pane_day_total($travelRow, $travelDetails)
     {
@@ -87,6 +122,20 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
         $canManageTabs = true;
     } elseif ($statusInt === 9) {
         $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
+    }
+    $canEditAttachments = false;
+    if ($statusInt === 10 || $statusInt === 9) {
+        $canEditAttachments = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
+    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+        $canEditAttachments = true;
+    } elseif (in_array($jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && in_array($statusInt, [1, 2], true)) {
+        $canEditAttachments = true;
+    } elseif ($jabatan === 'Finance Supervisor' && in_array($statusInt, [1, 2], true)) {
+        $canEditAttachments = true;
+    } elseif ($jabatan === 'Owner' && in_array($statusInt, [2, 11], true)) {
+        $canEditAttachments = true;
+    } elseif ($jabatan === 'Finance Manager' && $statusInt === 11) {
+        $canEditAttachments = true;
     }
 @endphp
 <div class="nav-tabs-container">
@@ -237,40 +286,8 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                     <td>
                         @php
                             $attachments = rt_travel_detail_attachments($rtRow0->id ?? 0, $rtRow0->evidence ?? '');
-                            $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                            rt_travel_pane_render_attachments($attachments, 0, $canEditAttachments, 'preview_1');
                         @endphp
-
-                        <div id="preview_1">
-                            @foreach($attachments as $att)
-                                @php
-                                    $file = $att['file_name'] ?? '';
-                                    $name = $att['original_name'] ?? $file;
-                                    $attId = (int) ($att['id'] ?? 0);
-                                    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-                                @endphp
-                                @if($attId > 0)
-                                    <input type="hidden" name="keep_attachment_ids[0][]" value="{{ $attId }}" class="keep-attachment-input">
-                                @endif
-                                <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
-                                    <div style="display:flex; gap:6px; align-items:center;">
-                                        @if($file !== '' && in_array($ext, $imageExt))
-                                            <img src="{{ url('images/file_bukti/'.$file) }}"
-                                                 class="preview-thumbnail"
-                                                 data-preview-src="{{ url('images/file_bukti/'.$file) }}"
-                                                 style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">
-                                        @else
-                                            <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
-                                                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;">
-                                            </a>
-                                        @endif
-                                        <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $name }}</a>
-                                        @if($attId > 0)
-                                        <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
                     </td>
                     <td>
                         <button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button>
@@ -331,40 +348,8 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                     <td>
                         @php
                             $attachments = rt_travel_detail_attachments($row->id ?? 0, $row->evidence ?? '');
-                            $imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                            rt_travel_pane_render_attachments($attachments, (int) $key, $canEditAttachments, 'preview_' . $n);
                         @endphp
-
-                        <div id="preview_{{$n}}">
-                            @foreach($attachments as $att)
-                                @php
-                                    $file = $att['file_name'] ?? '';
-                                    $name = $att['original_name'] ?? $file;
-                                    $attId = (int) ($att['id'] ?? 0);
-                                    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-                                @endphp
-                                @if($attId > 0)
-                                    <input type="hidden" name="keep_attachment_ids[{{$key}}][]" value="{{ $attId }}" class="keep-attachment-input">
-                                @endif
-                                <div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">
-                                    <div style="display:flex; gap:6px; align-items:center;">
-                                        @if($file !== '' && in_array($ext, $imageExt))
-                                            <img src="{{ url('images/file_bukti/'.$file) }}"
-                                                 class="preview-thumbnail"
-                                                 data-preview-src="{{ url('images/file_bukti/'.$file) }}"
-                                                 style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">
-                                        @else
-                                            <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank">
-                                                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;">
-                                            </a>
-                                        @endif
-                                        <a href="{{ url('images/file_bukti/'.$file) }}" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{{ $name }}</a>
-                                        @if($attId > 0)
-                                        <button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="{{ $attId }}" style="margin-left:auto;">x</button>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
                     </td>
                     <td>
                         <button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button>
@@ -463,7 +448,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
 
     @if(
         ((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && in_array((int) $data['0']->status, [1, 2], true))
-        || (auth()->user()->jabatan == 'Finance Supervisor' && (int) $data['0']->status === 2)
+        || (auth()->user()->jabatan == 'Finance Supervisor' && in_array((int) $data['0']->status, [1, 2], true))
     )
         <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
     @endif

@@ -242,11 +242,11 @@ window.TravelUpload = (function () {
   }
 
   function syncUploadWarning() {
-    $('#action_button, #action_button_draft, #action_button_submit').prop('disabled', false);
+    $('#action_button, #action_button_draft, #action_button_submit, #edit_finance, #edit_owner').prop('disabled', false);
   }
 
   function enableSubmitButtons() {
-    $('#action_button, #action_button_draft, #action_button_submit').prop('disabled', false);
+    $('#action_button, #action_button_draft, #action_button_submit, #edit_finance, #edit_owner').prop('disabled', false);
     $(PANE).find('.warning-upload').hide();
     if (typeof window.rtTravelSyncFileUploadWarning === 'function') {
       window.rtTravelSyncFileUploadWarning($(PANE));
@@ -287,6 +287,21 @@ window.TravelUpload = (function () {
 
     $('body').on('click', PANE + ' .remove-pending-attachment', function () {
       removePendingPreview($(this).closest('.pending-attachment-item'));
+    });
+
+    $('body').on('click', PANE + ' .remove-existing-attachment', function () {
+      var $btn = $(this);
+      var $item = $btn.closest('.existing-attachment-item');
+      var $preview = $btn.closest('[id^="preview_"]');
+      var attachmentId = String($btn.data('attachment-id') || '');
+      if (attachmentId !== '' && attachmentId !== '0') {
+        $preview.find('input.keep-attachment-input[value="' + attachmentId + '"]').remove();
+      }
+      $item.remove();
+      syncUploadWarning();
+      if (typeof window.rtTravelSyncFileUploadWarning === 'function') {
+        window.rtTravelSyncFileUploadWarning($(PANE));
+      }
     });
 
     $('body').on('click', PANE + ' .addFile', function () {

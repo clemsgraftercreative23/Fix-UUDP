@@ -660,7 +660,8 @@ class TravelReimbursementController extends Controller
                 ->orderBy('id')
                 ->get();
 
-            $hasKeepField = $request->has('keep_attachment_ids.' . $rowIndex);
+            $hasKeepField = $request->has('keep_attachment_ids_present.' . $rowIndex)
+                || $request->has('keep_attachment_ids.' . $rowIndex);
             $keepIds = $hasKeepField
                 ? collect((array) data_get($request->input('keep_attachment_ids', []), $rowIndex, []))
                     ->map(function ($v) { return (int) $v; })
@@ -755,6 +756,10 @@ class TravelReimbursementController extends Controller
             !isset($_POST['save_finance']) &&
             !isset($_POST['edit_owner']) &&
             !isset($_POST['edit_finance']);
+
+        if ($isUpdateItemPath && (isset($_POST['edit_finance']) || isset($_POST['edit_owner']))) {
+            return true;
+        }
 
         return $isUpdateItemPath && $isPlainUpdateSave;
     }
@@ -1899,6 +1904,17 @@ class TravelReimbursementController extends Controller
         $travel_trip  = DB::select(DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = $id_travel;
         $travel_detail  = DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
+        if ($this->attachmentTableReady()) {
+            foreach ($travel_detail as $detailRow) {
+                $this->ensureLegacyAttachmentMigrated(
+                    (int) $id_main,
+                    'travel',
+                    'reimbursement_travel_details',
+                    (int) ($detailRow->id ?? 0),
+                    (string) ($detailRow->evidence ?? '')
+                );
+            }
+        }
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb' "));
 
         $payload = [
