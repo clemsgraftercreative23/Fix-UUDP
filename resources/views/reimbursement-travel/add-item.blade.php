@@ -406,7 +406,24 @@ $(document).ready(function(){
         return isNaN(n) ? 0 : n;
     }
 
-    /** Amount: integer tanpa pemisah ribuan di mask; allowance tetap 2 desimal. */
+    function applyIdrTaxMaskForRow($tr) {
+        if (!$tr || !$tr.length || !$.fn.maskMoney) {
+            return;
+        }
+        var paymentType = getPaymentTypeFromRow($tr);
+        var precision = isBdcPayment(paymentType) ? 2 : 0;
+        var opts = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: precision };
+        $tr.find('input[name="idr_rate[]"], input[name="tax[]"]').each(function () {
+            var $input = $(this);
+            var raw = parseTravelMoney($input.val());
+            try { $input.maskMoney('destroy'); } catch (e2) { /* not initialized */ }
+            $input.maskMoney(opts);
+            $input.val(formatTravelIdrMoney(raw, paymentType));
+            $input.maskMoney('mask');
+        });
+    }
+
+    /** Amount: integer dengan pemisah ribuan titik; allowance tetap 2 desimal. */
     function applyTravelReimbursementCurrencyMasks($pane) {
         if (!$pane || !$pane.length || !$.fn.maskMoney) return;
         var $allCurrency = $pane.find('.currency');
@@ -420,7 +437,7 @@ $(document).ready(function(){
             });
         } catch (e) { /* ignore */ }
         var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
-        var optsAmountInt = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+        var optsAmountInt = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
         var opts0 = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
         var $allowanceOnly = $maskSrc.filter('input[name="allowance"]');
         var $amountOnly = $maskSrc.filter('input[name="amount[]"]');
@@ -437,6 +454,12 @@ $(document).ready(function(){
             $intLike.maskMoney(opts0);
             $intLike.maskMoney('mask');
         }
+        $pane.find('tbody tr.fieldGroupDetail').each(function () {
+            applyIdrTaxMaskForRow($(this));
+        });
+        $pane.find('input.idr_rate_main').each(function () {
+            applyIdrTaxMaskForRow($(this).closest('tr'));
+        });
     }
 
     function getExchangeRateFormRoot() {
@@ -534,6 +557,7 @@ $(document).ready(function(){
         } else {
             $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0, paymentType));
         }
+        applyIdrTaxMaskForRow($tr);
     }
 
     function recalculateAllDetailIdrRates($scope) {
@@ -617,7 +641,9 @@ $(document).ready(function(){
     });
 
     $(document).on('change', '#rt-travel-item-pane select[name="payment_type[]"]', function () {
-        recalculateDetailIdrRate($(this).closest('tr'));
+        var $tr = $(this).closest('tr');
+        applyIdrTaxMaskForRow($tr);
+        recalculateDetailIdrRate($tr);
         total_nominal();
     });
 
@@ -633,6 +659,7 @@ $(document).ready(function(){
         } else {
             $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0, paymentType));
         }
+        applyIdrTaxMaskForRow($tr);
     });
     
     //$("#trip_type_id").change(function(){
@@ -961,32 +988,37 @@ $(document).ready(function(){
         var rtSkipVueTravelPane = function (event) {
             return $(event.target).closest('#rt-travel-item-pane').length > 0;
         };
-        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
-        $('.idr-rate-input').on('change', (event) => {
+        var $vueMaskOutsidePane = function (selector) {
+            return $(selector).filter(function () {
+                return $(this).closest('#rt-travel-item-pane').length === 0;
+            });
+        };
+        $vueMaskOutsidePane(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $vueMaskOutsidePane('.idr-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
-        $('.usd-rate-input').on('change', (event) => {
+        $vueMaskOutsidePane(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $vueMaskOutsidePane('.usd-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.usd_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
-        $('.jpy-rate-input').on('change', (event) => {
+        $vueMaskOutsidePane(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
+        $vueMaskOutsidePane('.jpy-rate-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             const index = $(event.target).closest('tr').index();
             self.jpy_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
-            $('.amount-input').on('change', (event) => {
+        $vueMaskOutsidePane(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $vueMaskOutsidePane('.amount-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
             self.changeAmount(0);
