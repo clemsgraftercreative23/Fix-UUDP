@@ -129,5 +129,84 @@ class RepairTravelAttachments extends Command
                 ));
             }
         }
+
+        $this->line('  Prediksi relink (jika dijalankan tanpa --dry-run):');
+        $predicted = $this->predictRepairs($reimbursementId);
+        if ($predicted === []) {
+            $this->warn('    (tidak ada yang bisa dicocokkan otomatis)');
+        } else {
+            foreach ($predicted as $row) {
+                $this->line(sprintf(
+                    '    detail #%d %s ← attachment #%d (%s)',
+                    (int) $row['detail_id'],
+                    (string) $row['destination'],
+                    (int) $row['attachment_id'],
+                    (string) $row['file_name']
+                ));
+            }
+        }
+    }
+
+    /**
+     * @return array<int, array{detail_id:int, destination:string, attachment_id:int, file_name:string}>
+     */
+    private function predictRepairs(int $reimbursementId): array
+    {
+        $details = ReimbursementTravelDetail::query()
+            ->where('reimbursement_id', $reimbursementId)
+            ->where('status', '1')
+            ->orderBy('id')
+            ->get();
+
+        $allAttachments = ReimbursementAttachment::query()
+            ->where('reimbursement_id', $reimbursementId)
+            ->where('detail_type', 'reimbursement_travel_details')
+            ->orderBy('id')
+            ->get();
+
+        $activeIds = $details->pluck('id')->map(function ($v) {
+            return (int) $v;
+        })->all();
+
+        $usedAttachmentIds = [];
+        $predicted = [];
+
+        foreach ($details as $detail) {
+            $detailId = (int) $detail->id;
+            if ($allAttachments->where('detail_id', $detailId)->count() > 0) {
+                continue;
+            }
+            if (trim((string) ($detail->evidence ?? '')) !== '') {
+                continue;
+            }
+
+            $availablePool = $allAttachments->reject(function ($att) use ($usedAttachmentIds) {
+                return in_array((int) $att->id, $usedAttachmentIds, true);
+            });
+
+            $candidate = \App\Support\TravelAttachmentResolver::predictOrphanMatch(
+                $reimbursementId,
+                (string) ($detail->destination ?? ''),
+                (int) ($detail->cost_type_id ?? 0),
+                $activeIds,
+                $availablePool,
+                $detailId,
+                (int) ($detail->reimbursement_travel_id ?? 0)
+            );
+
+            if (!$candidate) {
+                continue;
+            }
+
+            $usedAttachmentIds[] = (int) $candidate->id;
+            $predicted[] = [
+                'detail_id' => $detailId,
+                'destination' => (string) ($detail->destination ?? '-'),
+                'attachment_id' => (int) $candidate->id,
+                'file_name' => (string) $candidate->file_name,
+            ];
+        }
+
+        return $predicted;
     }
 }

@@ -59,7 +59,9 @@ class TravelAttachmentResolver
             $reimbursementId,
             $destination,
             $costTypeId,
-            self::activeDetailIds($reimbursementId)
+            self::activeDetailIds($reimbursementId),
+            null,
+            $detailId
         );
 
         if ($candidate) {
@@ -144,7 +146,9 @@ class TravelAttachmentResolver
                 (string) ($detail->destination ?? ''),
                 (int) ($detail->cost_type_id ?? 0),
                 $activeIds,
-                $availablePool
+                $availablePool,
+                $detailId,
+                (int) ($detail->reimbursement_travel_id ?? 0)
             );
 
             if (!$candidate) {
@@ -164,6 +168,30 @@ class TravelAttachmentResolver
         }
 
         return $repaired;
+    }
+
+    /**
+     * @param array<int, int>|null $activeIds
+     * @param \Illuminate\Support\Collection<int, ReimbursementAttachment>|null $pool
+     */
+    public static function predictOrphanMatch(
+        int $reimbursementId,
+        string $destination,
+        int $costTypeId,
+        $activeIds,
+        $pool,
+        int $activeDetailId = 0,
+        int $reimbursementTravelId = 0
+    ): ?ReimbursementAttachment {
+        return self::bestOrphanMatch(
+            $reimbursementId,
+            $destination,
+            $costTypeId,
+            collect($activeIds),
+            $pool,
+            $activeDetailId,
+            $reimbursementTravelId
+        );
     }
 
     private static function ensureAttachmentRow(int $reimbursementId, int $detailId, string $fileName): void
@@ -200,7 +228,9 @@ class TravelAttachmentResolver
         string $destination,
         int $costTypeId,
         $activeIds = null,
-        $pool = null
+        $pool = null,
+        int $activeDetailId = 0,
+        int $reimbursementTravelId = 0
     ): ?ReimbursementAttachment {
         $activeIds = $activeIds ?? self::activeDetailIds($reimbursementId);
 
@@ -235,20 +265,28 @@ class TravelAttachmentResolver
         $bestScore = 0;
 
         foreach ($orphans as $att) {
-            $score = self::scoreAttachmentMatch($att, $destination, $costTypeId);
+            $score = self::scoreAttachmentMatch(
+                $att,
+                $destination,
+                $costTypeId,
+                $activeDetailId,
+                $reimbursementTravelId
+            );
             if ($score > $bestScore) {
                 $bestScore = $score;
                 $best = $att;
             }
         }
 
-        return $bestScore >= 40 ? $best : null;
+        return $bestScore >= 35 ? $best : null;
     }
 
     private static function scoreAttachmentMatch(
         ReimbursementAttachment $att,
         string $destination,
-        int $costTypeId
+        int $costTypeId,
+        int $activeDetailId = 0,
+        int $reimbursementTravelId = 0
     ): int {
         $haystack = strtolower(
             (string) ($att->original_name ?? '') . ' ' . (string) ($att->file_name ?? '')
@@ -274,10 +312,12 @@ class TravelAttachmentResolver
             }
         }
 
-        if (preg_match('/\bGA\s*\d+/i', $destination, $flightMatch)) {
-            $flightToken = strtolower(str_replace(' ', '', $flightMatch[0]));
-            $haystackCompact = preg_replace('/\s+/', '', $haystack) ?: $haystack;
-            if (strpos($haystackCompact, $flightToken) !== false) {
+        if (preg_match('/\bGA\s*(\d+)/i', $destination, $destFlight)) {
+            $destNum = (string) $destFlight[1];
+            if (preg_match('/\bGA\s*(\d+)/i', $haystack, $fileFlight)) {
+                if ((string) $fileFlight[1] !== $destNum) {
+                    return 0;
+                }
                 $score += 60;
             }
         }
@@ -287,6 +327,34 @@ class TravelAttachmentResolver
         }
         if ($costTypeId === 1 && (strpos($haystack, 'hotel') !== false || strpos($haystack, 'ramada') !== false)) {
             $score += 15;
+        }
+
+        $ext = strtolower(pathinfo((string) $att->file_name, PATHINFO_EXTENSION));
+        if ($costTypeId === 4 && in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+            $score += 45;
+        }
+        if ($costTypeId === 1 && $ext === 'pdf') {
+            $score += 45;
+        }
+        if ($costTypeId === 1 && in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            $score += 20;
+        }
+
+        $orphanDetailId = (int) $att->detail_id;
+        if ($activeDetailId > 0 && $orphanDetailId > 0) {
+            $diff = abs($activeDetailId - $orphanDetailId);
+            if ($diff <= 5) {
+                $score += max(0, 85 - ($diff * 15));
+            }
+        }
+
+        if ($reimbursementTravelId > 0 && $orphanDetailId > 0) {
+            $orphanTravelId = (int) ReimbursementTravelDetail::query()
+                ->where('id', $orphanDetailId)
+                ->value('reimbursement_travel_id');
+            if ($orphanTravelId > 0 && $orphanTravelId === $reimbursementTravelId) {
+                $score += 30;
+            }
         }
 
         if (!self::fileExistsOnDisk((string) $att->file_name)) {
