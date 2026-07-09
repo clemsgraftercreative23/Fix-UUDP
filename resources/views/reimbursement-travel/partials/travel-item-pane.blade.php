@@ -28,37 +28,15 @@ if (!function_exists('rt_travel_pane_attachment_cache_bust')) {
     }
 }
 if (!function_exists('rt_travel_detail_attachments')) {
-    function rt_travel_detail_attachments($detailId, $legacyEvidence = '')
+    function rt_travel_detail_attachments($detailId, $legacyEvidence = '', $reimbursementId = 0, $destination = '', $costTypeId = 0)
     {
-        $rows = [];
-        $detailId = (int) $detailId;
-        if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
-            $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
-                ->where('detail_id', $detailId)
-                ->orderBy('id')
-                ->get(['id', 'file_name', 'original_name'])
-                ->toArray();
-        }
-
-        $legacyEvidence = trim((string) $legacyEvidence);
-        if ($legacyEvidence !== '') {
-            $exists = false;
-            foreach ($rows as $r) {
-                if (($r['file_name'] ?? '') === $legacyEvidence) {
-                    $exists = true;
-                    break;
-                }
-            }
-            if (!$exists) {
-                $rows[] = [
-                    'id' => 0,
-                    'file_name' => $legacyEvidence,
-                    'original_name' => $legacyEvidence,
-                ];
-            }
-        }
-
-        return $rows;
+        return \App\Support\TravelAttachmentResolver::rowsForDetail(
+            (int) $reimbursementId,
+            (int) $detailId,
+            (string) $legacyEvidence,
+            (string) $destination,
+            (int) $costTypeId
+        );
     }
 }
 if (!function_exists('rt_travel_pane_render_attachments')) {
@@ -300,7 +278,13 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                     </td>
                     <td>
                         @php
-                            $attachments = rt_travel_detail_attachments($rtRow0->id ?? 0, $rtRow0->evidence ?? '');
+                            $attachments = rt_travel_detail_attachments(
+                                $rtRow0->id ?? 0,
+                                $rtRow0->evidence ?? '',
+                                $data[0]->id ?? 0,
+                                $rtRow0->destination ?? '',
+                                $rtRow0->cost_type_id ?? 0
+                            );
                             rt_travel_pane_render_attachments($attachments, 0, $canEditAttachments, 'preview_1');
                         @endphp
                     </td>
@@ -362,7 +346,13 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                     </td>
                     <td>
                         @php
-                            $attachments = rt_travel_detail_attachments($row->id ?? 0, $row->evidence ?? '');
+                            $attachments = rt_travel_detail_attachments(
+                                $row->id ?? 0,
+                                $row->evidence ?? '',
+                                $data[0]->id ?? 0,
+                                $row->destination ?? '',
+                                $row->cost_type_id ?? 0
+                            );
                             rt_travel_pane_render_attachments($attachments, (int) $key, $canEditAttachments, 'preview_' . $n);
                         @endphp
                     </td>

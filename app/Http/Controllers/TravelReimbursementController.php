@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Redirect;
 use App\Support\ActivityLogger;
+use App\Support\TravelAttachmentResolver;
 use App\Support\ExchangeRateParser;
 use App\Support\FonnteMessenger;
 use App\Support\ReimbursementInquiryNoFilter;
@@ -641,49 +642,7 @@ class TravelReimbursementController extends Controller
     /** Pulihkan lampiran yang masih ada di DB/disk tapi terhubung ke detail_id lama. */
     private function repairOrphanedTravelAttachmentsForReimbursement(int $reimbursementId): void
     {
-        if (!$this->attachmentTableReady() || $reimbursementId <= 0) {
-            return;
-        }
-
-        $detailType = 'reimbursement_travel_details';
-        $activeDetails = ReimbursementTravelDetail::query()
-            ->where('reimbursement_id', $reimbursementId)
-            ->where('status', '1')
-            ->orderBy('id')
-            ->get(['id', 'evidence']);
-
-        foreach ($activeDetails as $detail) {
-            $detailId = (int) ($detail->id ?? 0);
-            if ($detailId <= 0) {
-                continue;
-            }
-
-            $legacyEvidence = trim((string) ($detail->evidence ?? ''));
-            $this->ensureLegacyAttachmentMigrated($reimbursementId, 'travel', $detailType, $detailId, $legacyEvidence);
-
-            $attachedOnDetail = ReimbursementAttachment::where('detail_type', $detailType)
-                ->where('detail_id', $detailId)
-                ->count();
-            if ($attachedOnDetail > 0) {
-                continue;
-            }
-
-            if ($legacyEvidence === '') {
-                continue;
-            }
-
-            $orphan = ReimbursementAttachment::where('reimbursement_id', $reimbursementId)
-                ->where('detail_type', $detailType)
-                ->where('file_name', $legacyEvidence)
-                ->where('detail_id', '!=', $detailId)
-                ->orderByDesc('id')
-                ->first();
-
-            if ($orphan) {
-                $orphan->detail_id = $detailId;
-                $orphan->save();
-            }
-        }
+        TravelAttachmentResolver::repairForReimbursement($reimbursementId);
     }
 
     private function syncAttachmentsFromPreviousDetail(Request $request, int $rowIndex, int $reimbursementId, string $module, string $detailType, int $oldDetailId, int $newDetailId, string $legacyEvidence = ''): array

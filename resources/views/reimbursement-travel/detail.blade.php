@@ -26,32 +26,14 @@ if (!function_exists('travel_detail_round')) {
 
 @php
 if (!function_exists('travel_attachment_rows')) {
-    function travel_attachment_rows($detailId, $legacy = '') {
-        $rows = [];
-        $detailId = (int) $detailId;
-        if ($detailId > 0 && \Illuminate\Support\Facades\Schema::hasTable('reimbursement_attachments')) {
-            $rows = \App\ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
-                ->where('detail_id', $detailId)
-                ->orderBy('id')
-                ->get(['id', 'file_name', 'original_name'])
-                ->toArray();
-        }
-
-        $legacy = trim((string) $legacy);
-        if ($legacy !== '') {
-            $exists = false;
-            foreach ($rows as $r) {
-                if (($r['file_name'] ?? '') === $legacy) {
-                    $exists = true;
-                    break;
-                }
-            }
-            if (!$exists) {
-                $rows[] = ['id' => 0, 'file_name' => $legacy, 'original_name' => $legacy];
-            }
-        }
-
-        return $rows;
+    function travel_attachment_rows($reimbursementId, $detailId, $legacy = '', $destination = '', $costTypeId = 0) {
+        return \App\Support\TravelAttachmentResolver::rowsForDetail(
+            (int) $reimbursementId,
+            (int) $detailId,
+            (string) $legacy,
+            (string) $destination,
+            (int) $costTypeId
+        );
     }
 }
 if (!function_exists('travel_attachment_cache_bust')) {
@@ -334,7 +316,7 @@ if (!function_exists('travel_attachment_cache_bust')) {
                     
                     <td>{{$dt->payment_type}}</td>
                     <td>
-                        @foreach(travel_attachment_rows($dt->id ?? 0, $dt->evidence ?? '') as $att)
+                        @foreach(travel_attachment_rows($data->id, $dt->id ?? 0, $dt->evidence ?? '', $dt->destination ?? '', $dt->cost_type_id ?? 0) as $att)
                             @php
                                 $fileName = $att['file_name'] ?? '';
                                 $display = $att['original_name'] ?? $fileName;
