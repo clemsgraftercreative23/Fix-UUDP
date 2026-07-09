@@ -10,7 +10,8 @@ class ReimbursementTravel extends Model
     protected $guarded = [];
 
     function details() {
-        return $this->hasMany('App\ReimbursementTravelDetail','reimbursement_travel_id');
+        return $this->hasMany('App\ReimbursementTravelDetail','reimbursement_travel_id')
+            ->where('status', '1');
     }
 
     function tripType() {

@@ -12,6 +12,21 @@ if (!function_exists('rt_travel_pane_amount_int')) {
         return (string) (int) floor((float) $angka);
     }
 }
+if (!function_exists('rt_travel_pane_attachment_cache_bust')) {
+    function rt_travel_pane_attachment_cache_bust($fileName)
+    {
+        $fileName = trim((string) $fileName);
+        if ($fileName === '') {
+            return '';
+        }
+        $path = public_path('images/file_bukti/' . $fileName);
+        if (is_file($path)) {
+            return '?v=' . (int) filemtime($path);
+        }
+
+        return '?v=' . time();
+    }
+}
 if (!function_exists('rt_travel_detail_attachments')) {
     function rt_travel_detail_attachments($detailId, $legacyEvidence = '')
     {
@@ -66,10 +81,10 @@ if (!function_exists('rt_travel_pane_render_attachments')) {
             echo '<div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">';
             echo '<div style="display:flex; gap:6px; align-items:center;">';
             if ($file !== '' && in_array($ext, $imageExt, true)) {
-                $imgUrl = url('images/file_bukti/' . $file);
+                $imgUrl = url('images/file_bukti/' . $file) . rt_travel_pane_attachment_cache_bust($file);
                 echo '<img src="' . e($imgUrl) . '" class="preview-thumbnail" data-preview-src="' . e($imgUrl) . '" style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">';
             } else {
-                $fileUrl = url('images/file_bukti/' . $file);
+                $fileUrl = url('images/file_bukti/' . $file) . rt_travel_pane_attachment_cache_bust($file);
                 echo '<a href="' . e($fileUrl) . '" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;"></a>';
             }
             echo '<a href="' . e(url('images/file_bukti/' . $file)) . '" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">' . e($name) . '</a>';
@@ -236,7 +251,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                 </tr>
             </thead>
             <tbody>
-                <tr class="fieldGroupDetail">
+                <tr class="fieldGroupDetail" data-row-index="0">
                     <td>
                         <input type="hidden" name="id_detail[]" value="{{ $rtRow0->id }}">
                         <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
@@ -298,7 +313,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                 @foreach ($travel_detail as $key => $row)
                 @if($key > 0)
                 <?php $n = $key + 1;?>
-                <tr class="fieldGroupDetail">
+                <tr class="fieldGroupDetail" data-row-index="{{ (int) $key }}">
                     <td>
                         <input type="hidden" name="id_detail[]" value="{{$row->id}}">
                         <select class="form-control cost_type_id{{$key}} cost-type-select" name="cost_type_id[]">
@@ -363,7 +378,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
 </div>
 
 <script type="text/template" id="rt-detail-row-template">
-<tr class="fieldGroupDetail">
+<tr class="fieldGroupDetail" data-row-index="__IDX__">
     <td>
         <input type="hidden" name="id_detail[]" value="">
         <select class="form-control cost_type_id__IDX__ cost-type-select" name="cost_type_id[]">

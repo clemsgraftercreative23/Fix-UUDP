@@ -188,7 +188,7 @@
 
   function applyRow($tr, r) {
     if (!$tr.length || !r) return;
-    $tr.find('input[name="id_detail[]"]').val(r.id_detail || '');
+    // id_detail dari server — jangan timpa dengan draft (hindari lampiran hilang saat save).
     $tr.find('select[name="cost_type_id[]"]').val(r.cost_type_id || '');
     var $dest = $tr.find('input[name="destination[]"]');
     if (!$dest.is(':focus')) {
@@ -256,6 +256,12 @@
 
     const $preview = $tr.find('[id^="preview_"]').first();
     if ($preview.length) {
+      // Jangan tampilkan preview draft jika sudah ada lampiran server/pending.
+      if ($preview.find('.existing-attachment-item, .pending-attachment-item').length) {
+        $tr.removeAttr('data-rt-temp-file');
+        $preview.find('.rt-temp-file-preview').remove();
+        return;
+      }
       // Jangan hapus lampiran server / upload pending — hanya ganti preview draft sementara.
       $preview.find('.rt-temp-file-preview').remove();
       const previewMime = (tf.file_type || '').trim() || inferImageMimeFromFileName(tf.file_name);
@@ -1056,6 +1062,9 @@
         if ($form.length) {
           updateFormTravelAction($form, newTravelId);
         }
+        if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
+          window.TravelUpload.syncDetailRowIndices($pane);
+        }
         pruneDeletedTravelTabState($pane, mainId);
         refreshTravelTabLabelsFromV2Drafts($pane, mainId);
         renderTravelTabsFromState($pane, mainId, newTravelId);
@@ -1238,6 +1247,9 @@
     }
     rtSyncTripTypeNoneFields($pane);
     rtTravelSyncFileUploadWarning($pane);
+    if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
+      window.TravelUpload.syncDetailRowIndices($pane);
+    }
   }
 
   $(function () {
@@ -1470,6 +1482,9 @@
     $('form').on('submit', function () {
       const $p = $('#rt-travel-item-pane');
       if (!$p.length) return;
+      if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
+        window.TravelUpload.syncDetailRowIndices($p);
+      }
       clearStorageForPane($p);
       const mid = readMainIdAttr($p);
       if (mid) {

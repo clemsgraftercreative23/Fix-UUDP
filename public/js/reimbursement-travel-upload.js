@@ -126,6 +126,22 @@ window.TravelUpload = (function () {
     return $tbody.find('tr.fieldGroupDetail').index($row);
   }
 
+  /** Samakan indeks baris form untuk lampiran pending & keep_attachment_ids. */
+  function syncDetailRowIndices($root) {
+    $root = ($root && $root.length) ? $root : $(PANE);
+    if (!$root.length) {
+      return;
+    }
+    $root.find('tbody tr.fieldGroupDetail').each(function (idx) {
+      var $row = $(this);
+      $row.attr('data-row-index', String(idx));
+      var $preview = $row.find('[id^="preview_"]').first();
+      $preview.find('input.keep-attachment-present-marker').attr('name', 'keep_attachment_ids_present[' + idx + ']');
+      $preview.find('input.keep-attachment-input').attr('name', 'keep_attachment_ids[' + idx + '][]');
+      $row.find('.pending-attachment-input').attr('name', 'attachments[' + idx + '][]');
+    });
+  }
+
   function getPreviewDivFromRow(row) {
     return $(row).find('[id^="preview_"]').first();
   }
@@ -371,6 +387,7 @@ window.TravelUpload = (function () {
     captureFromVideo: captureFromVideo,
     getCameraConstraints: getCameraConstraints,
     getRowIndex: getRowIndex,
+    syncDetailRowIndices: syncDetailRowIndices,
     getPreviewDivFromRow: getPreviewDivFromRow,
     appendAttachmentInput: appendAttachmentInput,
     renderFilePreview: renderFilePreview,

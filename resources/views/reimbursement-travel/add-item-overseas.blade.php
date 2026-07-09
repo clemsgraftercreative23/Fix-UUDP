@@ -348,7 +348,7 @@ function rate_input($angka){
 
 
 @push('scripts')
-<script src="{{ asset('js/reimbursement-travel-upload.js') }}"></script>
+<script src="{{ asset('js/reimbursement-travel-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-upload.js')) }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
@@ -899,6 +899,9 @@ $(document).ready(function(){
         if (typeof window.rtInitDestinationInputs === 'function') {
             window.rtInitDestinationInputs($('#rt-travel-item-pane'));
         }
+        if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
+            window.TravelUpload.syncDetailRowIndices($root);
+        }
         return true;
     };
 
@@ -927,6 +930,10 @@ $(document).ready(function(){
              $row.find('[id^="preview_"]').empty();
          } else {
              $row.remove();
+         }
+
+         if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
+             window.TravelUpload.syncDetailRowIndices($tbody.closest('#rt-travel-item-pane'));
          }
 
          total_nominal();

@@ -54,6 +54,21 @@ if (!function_exists('travel_attachment_rows')) {
         return $rows;
     }
 }
+if (!function_exists('travel_attachment_cache_bust')) {
+    function travel_attachment_cache_bust($fileName)
+    {
+        $fileName = trim((string) $fileName);
+        if ($fileName === '') {
+            return '';
+        }
+        $path = public_path('images/file_bukti/' . $fileName);
+        if (is_file($path)) {
+            return '?v=' . (int) filemtime($path);
+        }
+
+        return '?v=' . time();
+    }
+}
 @endphp
 
 <style>
@@ -326,7 +341,7 @@ if (!function_exists('travel_attachment_rows')) {
                             @endphp
                             @if($fileName !== '')
                                 <div>
-                                    <a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}" target="_blank" title="{{ $display }}">
+                                    <a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}{{ travel_attachment_cache_bust($fileName) }}" target="_blank" title="{{ $display }}">
                                         <i class="fa fa-file"></i> {{ $display }}
                                     </a>
                                 </div>

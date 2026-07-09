@@ -638,6 +638,54 @@ class TravelReimbursementController extends Controller
         );
     }
 
+    /** Pulihkan lampiran yang masih ada di DB/disk tapi terhubung ke detail_id lama. */
+    private function repairOrphanedTravelAttachmentsForReimbursement(int $reimbursementId): void
+    {
+        if (!$this->attachmentTableReady() || $reimbursementId <= 0) {
+            return;
+        }
+
+        $detailType = 'reimbursement_travel_details';
+        $activeDetails = ReimbursementTravelDetail::query()
+            ->where('reimbursement_id', $reimbursementId)
+            ->where('status', '1')
+            ->orderBy('id')
+            ->get(['id', 'evidence']);
+
+        foreach ($activeDetails as $detail) {
+            $detailId = (int) ($detail->id ?? 0);
+            if ($detailId <= 0) {
+                continue;
+            }
+
+            $legacyEvidence = trim((string) ($detail->evidence ?? ''));
+            $this->ensureLegacyAttachmentMigrated($reimbursementId, 'travel', $detailType, $detailId, $legacyEvidence);
+
+            $attachedOnDetail = ReimbursementAttachment::where('detail_type', $detailType)
+                ->where('detail_id', $detailId)
+                ->count();
+            if ($attachedOnDetail > 0) {
+                continue;
+            }
+
+            if ($legacyEvidence === '') {
+                continue;
+            }
+
+            $orphan = ReimbursementAttachment::where('reimbursement_id', $reimbursementId)
+                ->where('detail_type', $detailType)
+                ->where('file_name', $legacyEvidence)
+                ->where('detail_id', '!=', $detailId)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($orphan) {
+                $orphan->detail_id = $detailId;
+                $orphan->save();
+            }
+        }
+    }
+
     private function syncAttachmentsFromPreviousDetail(Request $request, int $rowIndex, int $reimbursementId, string $module, string $detailType, int $oldDetailId, int $newDetailId, string $legacyEvidence = ''): array
     {
         if (!$this->attachmentTableReady()) {
@@ -652,28 +700,39 @@ class TravelReimbursementController extends Controller
 
         $keptFileNames = [];
 
+        $hasKeepField = $request->has('keep_attachment_ids_present.' . $rowIndex)
+            || $request->has('keep_attachment_ids.' . $rowIndex);
+        $keepIds = $hasKeepField
+            ? collect((array) data_get($request->input('keep_attachment_ids', []), $rowIndex, []))
+                ->map(function ($v) { return (int) $v; })
+                ->filter(function ($v) { return $v > 0; })
+                ->values()
+            : null;
+
         if ($oldDetailId > 0) {
             $this->ensureLegacyAttachmentMigrated($reimbursementId, $module, $detailType, $oldDetailId, $legacyEvidence);
+        }
 
+        if ($keepIds !== null) {
+            // Ambil lampiran langsung dari ID yang dikirim form — tidak bergantung id_detail lama
+            // (hindari lampiran hilang saat draft/tab switch menimpa id_detail).
+            $oldAttachments = $keepIds->isEmpty()
+                ? collect()
+                : ReimbursementAttachment::where('detail_type', $detailType)
+                    ->whereIn('id', $keepIds->all())
+                    ->orderBy('id')
+                    ->get();
+        } elseif ($oldDetailId > 0) {
             $oldAttachments = ReimbursementAttachment::where('detail_type', $detailType)
                 ->where('detail_id', $oldDetailId)
                 ->orderBy('id')
                 ->get();
+        } else {
+            $oldAttachments = collect();
+        }
 
-            $hasKeepField = $request->has('keep_attachment_ids_present.' . $rowIndex)
-                || $request->has('keep_attachment_ids.' . $rowIndex);
-            $keepIds = $hasKeepField
-                ? collect((array) data_get($request->input('keep_attachment_ids', []), $rowIndex, []))
-                    ->map(function ($v) { return (int) $v; })
-                    ->filter(function ($v) { return $v > 0; })
-                    ->values()
-                : null;
-
+        if ($oldAttachments->isNotEmpty()) {
             foreach ($oldAttachments as $attachment) {
-                if ($keepIds !== null && !$keepIds->contains((int) $attachment->id)) {
-                    continue;
-                }
-
                 ReimbursementAttachment::create([
                     'reimbursement_id' => $reimbursementId,
                     'module' => $module,
@@ -1837,6 +1896,7 @@ class TravelReimbursementController extends Controller
     {
         $this->repairTripRatesFromStoredAllowances((int) $id);
         $this->recomputeAllTravelDayTotalsForReimbursement((int) $id);
+        $this->repairOrphanedTravelAttachmentsForReimbursement((int) $id);
 
         $data = Reimbursement::find($id);
         $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, allowance_cash, metode_allowance, metode_cash FROM reimbursement WHERE id = '$id'"));
@@ -1899,11 +1959,12 @@ class TravelReimbursementController extends Controller
 
         $this->repairTripRatesFromStoredAllowances((int) $id_main);
         $this->recomputeAllTravelDayTotalsForReimbursement((int) $id_main);
+        $this->repairOrphanedTravelAttachmentsForReimbursement((int) $id_main);
 
         $data_travel  = DB::select(DB::raw("SELECT * FROM reimbursement_travel WHERE id='$id_travel'"));
         $travel_trip  = DB::select(DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = $id_travel;
-        $travel_detail  = DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"));
+        $travel_detail  = DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail' AND status='1' ORDER BY id ASC"));
         if ($this->attachmentTableReady()) {
             foreach ($travel_detail as $detailRow) {
                 $this->ensureLegacyAttachmentMigrated(
@@ -1983,7 +2044,7 @@ class TravelReimbursementController extends Controller
         $travel_trip  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_main'"));
         $id_detail = !empty($data_travel) ? $data_travel[0]->id : 0;
         $travel_detail = $id_detail > 0
-            ? DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail'"))
+            ? DB::select(DB::raw("SELECT * FROM reimbursement_travel_details WHERE reimbursement_travel_id='$id_detail' AND status='1' ORDER BY id ASC"))
             : [];
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb'"));
 
