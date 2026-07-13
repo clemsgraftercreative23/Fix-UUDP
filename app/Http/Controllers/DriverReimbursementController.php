@@ -33,6 +33,22 @@ class DriverReimbursementController extends Controller
     }
 
     /**
+     * Resolve metode_cash / kasbank display name without crashing when kode is missing from listkasbank.
+     */
+    private function resolveListkasbankName($kode): string
+    {
+        if ($kode === null || $kode === '') {
+            return '';
+        }
+
+        $nama = DB::table('listkasbank')
+            ->where('kode_kasbank', (string) $kode)
+            ->value('nama_list');
+
+        return $nama !== null ? (string) $nama : (string) $kode;
+    }
+
+    /**
      * @param \Illuminate\Database\Eloquent\Builder $query
      */
     private function applyInquiryNoFilter($query, Request $request)
@@ -893,12 +909,7 @@ class DriverReimbursementController extends Controller
         $name = DB::select(DB::raw("SELECT name FROM users WHERE id='$id_pengaju'"))['0']->name;
         $detail = DB::select(DB::raw("SELECT * FROM reimbursement_driver WHERE reimbursement_id='$id'"));
 
-        $metode_cash_ = $reim['0']->metode_cash;
-        if ($metode_cash_ == null) {
-            $metode_cash = "";
-        } else {
-            $metode_cash = DB::select(DB::raw("SELECT nama_list FROM listkasbank WHERE kode_kasbank = '$metode_cash_'"))['0']->nama_list;
-        }
+        $metode_cash = $this->resolveListkasbankName($reim['0']->metode_cash ?? null);
 
         return view('reimbursement-driver.detail', [
             'data' => $data,
