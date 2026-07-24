@@ -49,6 +49,48 @@ class DriverReimbursementController extends Controller
     }
 
     /**
+     * Find driver reimbursement by id or ticket number; never assume row exists.
+     */
+    private function findDriverReimbursement(string $id): ?Reimbursement
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return null;
+        }
+
+        if (ctype_digit($id)) {
+            $found = Reimbursement::where('reimbursement_type', 1)
+                ->where('id', (int) $id)
+                ->first();
+            if ($found) {
+                return $found;
+            }
+        }
+
+        return Reimbursement::where('reimbursement_type', 1)
+            ->where('no_reimbursement', $id)
+            ->first();
+    }
+
+    /**
+     * Placeholder detail row so blade templates that read $detail[0] do not crash.
+     */
+    private function emptyDriverDetailRow(): object
+    {
+        return (object) [
+            'id' => '',
+            'toll' => 0,
+            'parking' => 0,
+            'gasoline' => 0,
+            'others' => 0,
+            'subtotal' => 0,
+            'payment_type' => '',
+            'evidence' => '',
+            'remark' => '',
+        ];
+    }
+
+    /**
      * @param \Illuminate\Database\Eloquent\Builder $query
      */
     private function applyInquiryNoFilter($query, Request $request)
@@ -439,11 +481,11 @@ class DriverReimbursementController extends Controller
             }
 
             if (isset($request->first) && $request->first != "") {
-                $data = $data->whereDate('reimbursement.created_at', '>=', $request->first);
+                $data = $data->whereDate('reimbursement.date', '>=', $request->first);
             }
 
             if (isset($request->last) && $request->last != "") {
-                $data = $data->whereDate('reimbursement.created_at', '<=', $request->last);
+                $data = $data->whereDate('reimbursement.date', '<=', $request->last);
             }
 
             if (isset($request->status) && $request->status != "" && $request->status != "ALL") {
@@ -532,7 +574,7 @@ class DriverReimbursementController extends Controller
                     return $cek;
                 })
                 ->editColumn('no_project', function ($data) {
-                    return $data->user->name;
+                    return optional($data->user)->name ?? $data->created_by ?? '-';
                 })
                 ->addColumn('nominal_pengajuan', function ($data) {
                     $button = '';
@@ -599,11 +641,11 @@ class DriverReimbursementController extends Controller
             }
 
             if (isset($request->first) && $request->first != "") {
-                $data = $data->whereDate('reimbursement.created_at', '>=', $request->first);
+                $data = $data->whereDate('reimbursement.date', '>=', $request->first);
             }
 
             if (isset($request->last) && $request->last != "") {
-                $data = $data->whereDate('reimbursement.created_at', '<=', $request->last);
+                $data = $data->whereDate('reimbursement.date', '<=', $request->last);
             }
 
             if (isset($request->status) && $request->status != "" && $request->status != "ALL") {
@@ -634,6 +676,7 @@ class DriverReimbursementController extends Controller
             return datatables()
                 ->of($data)
                 ->addColumn('action', function ($data) {
+                    $button = '';
                     if ($data->status == 0) {
                         $button = '<button" class="edit view btn btn-secondary  btn-sm">PENDING</button>';
                     } elseif ($data->status == 1) {
@@ -659,6 +702,10 @@ class DriverReimbursementController extends Controller
                             $meng = '';
                         }
                         $button = '<button  class="view btn btn-danger btn-sm">REJECTED ' . $meng . '</button>';
+                    } elseif ($data->status == 10) {
+                        $button = '<button  class="view btn btn-warning btn-sm">DRAFT</button>';
+                    } elseif ($data->status == 11) {
+                        $button = '<button  class="view btn btn-success btn-sm">APPROVED FINANCE SUPERVISOR</button>';
                     }
                     $button .= '&nbsp;&nbsp;';
 
@@ -902,14 +949,24 @@ class DriverReimbursementController extends Controller
 
     private function renderDriverDetail(string $id, bool $openEditModal): \Illuminate\Contracts\View\View
     {
-        $data = Reimbursement::find($id);
-        $meng = '';
-        $reim = DB::select(DB::raw("SELECT * FROM reimbursement WHERE id='$id'"));
-        $id_pengaju = $reim['0']->id_user;
-        $name = DB::select(DB::raw("SELECT name FROM users WHERE id='$id_pengaju'"))['0']->name;
-        $detail = DB::select(DB::raw("SELECT * FROM reimbursement_driver WHERE reimbursement_id='$id'"));
+        $data = $this->findDriverReimbursement($id);
+        if (!$data) {
+            abort(404, 'Data reimbursement driver tidak ditemukan.');
+        }
 
-        $metode_cash = $this->resolveListkasbankName($reim['0']->metode_cash ?? null);
+        $meng = '';
+        $reim = [(object) $data->getAttributes()];
+        $name = optional(User::find($data->id_user))->name
+            ?? (string) ($data->created_by ?: '-');
+        $detail = DB::table('reimbursement_driver')
+            ->where('reimbursement_id', $data->id)
+            ->get()
+            ->all();
+        if ($detail === []) {
+            $detail = [$this->emptyDriverDetailRow()];
+        }
+
+        $metode_cash = $this->resolveListkasbankName($data->metode_cash ?? null);
 
         return view('reimbursement-driver.detail', [
             'data' => $data,
@@ -929,10 +986,10 @@ class DriverReimbursementController extends Controller
 
     public function edit($id)
     {
-        $data = Reimbursement::find($id);
+        $data = $this->findDriverReimbursement((string) $id);
         $open = $data && $this->driverInquiryEditAuthorized($data);
 
-        return $this->renderDriverDetail((string) $id, $open);
+        return $this->renderDriverDetail((string) $id, (bool) $open);
     }
 
     public function update(Request $request, $id)
@@ -1548,11 +1605,11 @@ class DriverReimbursementController extends Controller
             
 
             if (isset($request->start)) {
-                $data = $data->whereDate('reimbursement.created_at', '>=', $request->start);
+                $data = $data->whereDate('reimbursement.date', '>=', $request->start);
             }
 
             if (isset($request->end)) {
-                $data = $data->whereDate('reimbursement.created_at', '<=', $request->end);
+                $data = $data->whereDate('reimbursement.date', '<=', $request->end);
             }
 
             if (isset($request->status) && $request->status != "" && $request->status != "ALL") {

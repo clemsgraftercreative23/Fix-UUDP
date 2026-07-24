@@ -46,6 +46,30 @@ class EntertaimentReimbursementController extends Controller
     }
 
     /**
+     * Find entertainment reimbursement by id or ticket number; never assume row exists.
+     */
+    private function findEntertainmentReimbursement(string $id): ?Reimbursement
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return null;
+        }
+
+        if (ctype_digit($id)) {
+            $found = Reimbursement::where('reimbursement_type', 3)
+                ->where('id', (int) $id)
+                ->first();
+            if ($found) {
+                return $found;
+            }
+        }
+
+        return Reimbursement::where('reimbursement_type', 3)
+            ->where('no_reimbursement', $id)
+            ->first();
+    }
+
+    /**
      * JS often builds URLs as "...start=null" (string) when Vue date range is unset.
      */
     private function sanitizeEntertainmentPrintQueryValue($value): ?string
@@ -270,11 +294,11 @@ class EntertaimentReimbursementController extends Controller
             
 
             if(isset($request->first) && $request->first != "") {
-                $data = $data->whereDate('reimbursement.created_at','>=',$request->first);
+                $data = $data->whereDate('reimbursement.date','>=',$request->first);
             }
 
             if(isset($request->last) && $request->last != "") {
-                $data = $data->whereDate('reimbursement.created_at','<=',$request->last);
+                $data = $data->whereDate('reimbursement.date','<=',$request->last);
             }
 
             if(isset($request->status) && $request->status != "" && $request->status != "ALL") {
@@ -315,6 +339,8 @@ class EntertaimentReimbursementController extends Controller
                         $meng = 'HR GA';
                     } else if($data->mengetahui_owner=='-') {
                         $meng = 'FINANCE';
+                    } else {
+                        $meng = '';
                     }
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED '.$meng.'</button>';
                 } elseif ($data->status == 10){
@@ -354,7 +380,7 @@ class EntertaimentReimbursementController extends Controller
             })
             ->editColumn('no_project', function ($data) {
                
-                return $data->user->name;
+                return optional($data->user)->name ?? $data->created_by ?? '-';
             })
             ->addColumn('nominal_pengajuan', function ($data) {
                 $button ='';
@@ -409,11 +435,11 @@ class EntertaimentReimbursementController extends Controller
             
 
             if(isset($request->first) && $request->first != "") {
-                $data = $data->whereDate('reimbursement.created_at','>=',$request->first);
+                $data = $data->whereDate('reimbursement.date','>=',$request->first);
             }
 
             if(isset($request->last) && $request->last != "") {
-                $data = $data->whereDate('reimbursement.created_at','<=',$request->last);
+                $data = $data->whereDate('reimbursement.date','<=',$request->last);
             }
 
             if(isset($request->status) && $request->status != "" && $request->status != "ALL") {
@@ -454,6 +480,8 @@ class EntertaimentReimbursementController extends Controller
                         $meng = 'HR GA';
                     } else if($data->mengetahui_owner=='-') {
                         $meng = 'FINANCE';
+                    } else {
+                        $meng = '';
                     }
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED '.$meng.'</button>';
                 }
@@ -469,7 +497,7 @@ class EntertaimentReimbursementController extends Controller
             })
             ->editColumn('no_project', function ($data) {
                
-                return $data->user->name;
+                return optional($data->user)->name ?? $data->created_by ?? '-';
             })
             ->addColumn('nominal_pengajuan', function ($data) {
                 $button ='';
@@ -664,13 +692,18 @@ class EntertaimentReimbursementController extends Controller
 
     private function renderEntertainmentDetail(string $id, bool $openEditModal): \Illuminate\Contracts\View\View
     {
-        $data = Reimbursement::find($id);
-        $detail = DB::select(DB::raw("SELECT * FROM reimbursement_entertaiments WHERE reimbursement_id='$id'"));
-        $cek  = DB::select(DB::raw("SELECT total_bdc,total_cash, metode_cash FROM reimbursement WHERE id = '$id'"));
+        $data = $this->findEntertainmentReimbursement($id);
+        if (!$data) {
+            abort(404, 'Data reimbursement entertainment tidak ditemukan.');
+        }
 
-        $bdc = $cek['0']->total_bdc;
-        $cash = $cek['0']->total_cash;
-        $metode_cash = $this->resolveListkasbankName($cek['0']->metode_cash ?? null);
+        $detail = DB::table('reimbursement_entertaiments')
+            ->where('reimbursement_id', $data->id)
+            ->get()
+            ->all();
+        $bdc = $data->total_bdc;
+        $cash = $data->total_cash;
+        $metode_cash = $this->resolveListkasbankName($data->metode_cash ?? null);
 
         return view('reimbursement-entertaiment.detail', [
             'data' => $data,
@@ -701,10 +734,10 @@ class EntertaimentReimbursementController extends Controller
      */
     public function edit($id)
     {
-        $data = Reimbursement::find($id);
+        $data = $this->findEntertainmentReimbursement((string) $id);
         $open = $data && $this->entertainmentInquiryEditAuthorized($data);
 
-        return $this->renderEntertainmentDetail((string) $id, $open);
+        return $this->renderEntertainmentDetail((string) $id, (bool) $open);
     }
 
     /**

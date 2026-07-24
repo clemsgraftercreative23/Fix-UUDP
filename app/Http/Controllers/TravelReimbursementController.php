@@ -975,11 +975,11 @@ class TravelReimbursementController extends Controller
             }
 
             if(isset($request->first) && $request->first != "") {
-                $data = $data->whereDate('reimbursement.created_at','>=',$request->first);
+                $data = $data->whereDate('reimbursement.date','>=',$request->first);
             }
 
             if(isset($request->last) && $request->last != "") {
-                $data = $data->whereDate('reimbursement.created_at','<=',$request->last);
+                $data = $data->whereDate('reimbursement.date','<=',$request->last);
             }
             
              if(isset($request->status) && $request->status != "" && $request->status != "ALL") {
@@ -1066,7 +1066,7 @@ class TravelReimbursementController extends Controller
             })
             ->editColumn('no_project', function ($data) {
                
-                return $data->user->name;
+                return optional($data->user)->name ?? $data->created_by ?? '-';
             })
             ->addColumn('nominal_pengajuan', function ($data) {
                 $button ='';
@@ -1119,11 +1119,11 @@ class TravelReimbursementController extends Controller
             }
             
             if(isset($request->first) && $request->first != "") {
-                $data = $data->whereDate('reimbursement.created_at','>=',$request->first);
+                $data = $data->whereDate('reimbursement.date','>=',$request->first);
             }
 
             if(isset($request->last) && $request->last != "") {
-                $data = $data->whereDate('reimbursement.created_at','<=',$request->last);
+                $data = $data->whereDate('reimbursement.date','<=',$request->last);
             }
             
              if(isset($request->status) && $request->status != "" && $request->status != "ALL") {
@@ -1183,7 +1183,7 @@ class TravelReimbursementController extends Controller
             })
             ->editColumn('no_project', function ($data) {
                
-                return $data->user->name;
+                return optional($data->user)->name ?? $data->created_by ?? '-';
             })
             ->addColumn('nominal_pengajuan', function ($data) {
                 $button ='';
