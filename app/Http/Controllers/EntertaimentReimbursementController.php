@@ -190,7 +190,13 @@ class EntertaimentReimbursementController extends Controller
      */
     private function ensureEntertainmentTotalsSynced(Reimbursement $data): void
     {
+        $detailRowCount = EntertainmentTotal::detailRowCount((int) $data->id);
         $computed = $this->computeEntertainmentTotals((int) $data->id);
+
+        if (!EntertainmentTotal::shouldSyncStoredTotals((int) $data->nominal_pengajuan, $computed, $detailRowCount)) {
+            return;
+        }
+
         if (
             (int) $data->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
             || (int) ($data->total_bdc ?? 0) !== (int) $computed['total_bdc']

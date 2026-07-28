@@ -30,7 +30,13 @@ class RepairEntertainmentTotals extends Command
         $repaired = 0;
         $query->chunkById(200, function ($rows) use ($dryRun, &$repaired) {
             foreach ($rows as $row) {
+                $detailRowCount = EntertainmentTotal::detailRowCount((int) $row->id);
                 $computed = EntertainmentTotal::computeForReimbursement((int) $row->id);
+
+                if (!EntertainmentTotal::shouldSyncStoredTotals((int) $row->nominal_pengajuan, $computed, $detailRowCount)) {
+                    continue;
+                }
+
                 $needsUpdate = (int) $row->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
                     || (int) ($row->total_bdc ?? 0) !== (int) $computed['total_bdc']
                     || (int) ($row->total_cash ?? 0) !== (int) $computed['total_cash'];

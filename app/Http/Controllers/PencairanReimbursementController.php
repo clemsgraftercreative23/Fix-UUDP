@@ -238,11 +238,15 @@ class PencairanReimbursementController extends Controller
 
             ]);    
         } else if($data->reimbursement_type==3) {
+            $detailRowCount = EntertainmentTotal::detailRowCount((int) $id);
             $computed = EntertainmentTotal::computeForReimbursement((int) $id);
             if (
-                (int) $data->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
-                || (int) ($data->total_bdc ?? 0) !== (int) $computed['total_bdc']
-                || (int) ($data->total_cash ?? 0) !== (int) $computed['total_cash']
+                EntertainmentTotal::shouldSyncStoredTotals((int) $data->nominal_pengajuan, $computed, $detailRowCount)
+                && (
+                    (int) $data->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
+                    || (int) ($data->total_bdc ?? 0) !== (int) $computed['total_bdc']
+                    || (int) ($data->total_cash ?? 0) !== (int) $computed['total_cash']
+                )
             ) {
                 Reimbursement::whereId($id)->update($computed);
                 $data->fill($computed);
@@ -250,8 +254,8 @@ class PencairanReimbursementController extends Controller
 
             $detail  = DB::select( DB::raw("SELECT * FROM reimbursement_entertaiments WHERE reimbursement_id = '$id'"));
 
-            $bdc = $computed['total_bdc'];
-            $cash = $computed['total_cash'];
+            $bdc = (int) ($data->total_bdc ?? $computed['total_bdc']);
+            $cash = (int) ($data->total_cash ?? $computed['total_cash']);
             $metode_cash_ = $data->metode_cash ?? null;
             if ($metode_cash_ == null) {
                 $metode_cash = "";

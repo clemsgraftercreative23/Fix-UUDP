@@ -7,7 +7,7 @@ use App\ReimbursementEntertaiment;
 class EntertainmentTotal
 {
     /**
-     * Sum active entertainment line items into parent reimbursement totals.
+     * Sum entertainment line items into parent reimbursement totals.
      * BOC is treated as BDC (legacy company-card label).
      */
     public static function computeFromRows(iterable $rows): array
@@ -34,12 +34,36 @@ class EntertainmentTotal
         ];
     }
 
+    public static function detailRowCount(int $reimbursementId): int
+    {
+        return ReimbursementEntertaiment::where('reimbursement_id', $reimbursementId)->count();
+    }
+
     public static function computeForReimbursement(int $reimbursementId): array
     {
         $rows = ReimbursementEntertaiment::where('reimbursement_id', $reimbursementId)
-            ->where('status', 1)
             ->get(['amount', 'payment_type']);
 
         return self::computeFromRows($rows);
+    }
+
+    /**
+     * Guard against overwriting a valid parent total when detail rows are missing
+     * or cannot be summed (common on legacy imports).
+     */
+    public static function shouldSyncStoredTotals(int $storedNominal, array $computed, int $detailRowCount): bool
+    {
+        $storedNominal = (int) $storedNominal;
+        $computedNominal = (int) $computed['nominal_pengajuan'];
+
+        if ($detailRowCount === 0) {
+            return false;
+        }
+
+        if ($computedNominal === 0 && $storedNominal > 0) {
+            return false;
+        }
+
+        return true;
     }
 }
