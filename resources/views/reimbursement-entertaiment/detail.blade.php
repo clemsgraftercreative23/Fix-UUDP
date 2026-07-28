@@ -546,39 +546,39 @@ if (!function_exists('ent_attachment_rows')) {
                       <tbody>
                         <tr class="fieldGroup">
                               <td>
-                                <input type="hidden" name="id_detail[]" value="{{$detail['0']->id}}">
-                                <input type="text" class="form-control" name="empty_zone[]" required value="{{$detail['0']->empty_zone}}">
+                                <input type="hidden" name="id_detail[]" value="{{ $detail[0]->id ?? '' }}">
+                                <input type="text" class="form-control" name="empty_zone[]" required value="{{ $detail[0]->empty_zone ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="attendance[]" required value="{{$detail['0']->attendance}}">
+                                <input type="text" class="form-control" name="attendance[]" required value="{{ $detail[0]->attendance ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="position[]" required value="{{$detail['0']->position}}">
+                                <input type="text" class="form-control" name="position[]" required value="{{ $detail[0]->position ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="place[]" required value="{{$detail['0']->place}}">
+                                <input type="text" class="form-control" name="place[]" required value="{{ $detail[0]->place ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="guest[]" required value="{{$detail['0']->guest}}">
+                                <input type="text" class="form-control" name="guest[]" required value="{{ $detail[0]->guest ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="guest_position[]" required value="{{$detail['0']->guest_position}}">
+                                <input type="text" class="form-control" name="guest_position[]" required value="{{ $detail[0]->guest_position ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="company[]" required value="{{$detail['0']->company}}">
+                                <input type="text" class="form-control" name="company[]" required value="{{ $detail[0]->company ?? '' }}">
                               </td>
                               <td>
-                                <input type="text" class="form-control" name="type[]" required value="{{$detail['0']->type}}">
+                                <input type="text" class="form-control" name="type[]" required value="{{ $detail[0]->type ?? '' }}">
                               </td>
                                <td>
                                     <select class="form-control" name="payment_type[]" style="width:100%">
                                         <option value="">Select...</option>
-                                        <option value="BDC" @if($detail['0']->payment_type=='BDC') selected @endif>BDC</option>
-                                        <option value="Cash" @if($detail['0']->payment_type=='Cash') selected @endif>Cash</option>
+                                        <option value="BDC" @if(($detail[0]->payment_type ?? '') == 'BDC') selected @endif>BDC</option>
+                                        <option value="Cash" @if(($detail[0]->payment_type ?? '') == 'Cash') selected @endif>Cash</option>
                                     </select>
                                 </td>
                                 <td>
-                                <input type="text" class="form-control amount-input amount1 currency change-amount" name="amount[]" placeholder="Amount" required value="{{rupiah($detail['0']->amount)}}">
+                                <input type="text" class="form-control amount-input amount1 currency change-amount" name="amount[]" placeholder="Amount" required value="{{ rupiah($detail[0]->amount ?? 0) }}">
                                 </td>
                                 <td class="file-proof">
                                     <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
@@ -592,7 +592,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 </td>
                                 <td>
                                     <div id="preview_1">
-                                        @foreach(ent_attachment_rows($detail['0']->id ?? 0, $detail['0']->evidence ?? '') as $att)
+                                        @foreach(ent_attachment_rows($detail[0]->id ?? 0, $detail[0]->evidence ?? '') as $att)
                                         @php
                                             $attId = (int) ($att['id'] ?? 0);
                                             $fileName = $att['file_name'] ?? '';
@@ -617,7 +617,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 </td>
                               
                               <td>
-                                <input type="text" class="form-control" name="remark[]" placeholder="Remark"  value="{{$detail['0']->remark}}">
+                                <input type="text" class="form-control" name="remark[]" placeholder="Remark"  value="{{ $detail[0]->remark ?? '' }}">
                               </td>
                               <td>
                                 <button type="button" name="add" id="add" class="btn btn-success full-width addMore">+</button>

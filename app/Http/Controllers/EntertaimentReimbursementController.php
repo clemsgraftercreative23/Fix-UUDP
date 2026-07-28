@@ -732,6 +732,29 @@ class EntertaimentReimbursementController extends Controller
         return false;
     }
 
+    private function normalizeEntertainmentDetailRows(array $detail): array
+    {
+        if ($detail !== []) {
+            return $detail;
+        }
+
+        return [(object) [
+            'id' => null,
+            'empty_zone' => '',
+            'attendance' => '',
+            'position' => '',
+            'place' => '',
+            'guest' => '',
+            'guest_position' => '',
+            'company' => '',
+            'type' => '',
+            'payment_type' => '',
+            'amount' => 0,
+            'evidence' => '',
+            'remark' => '',
+        ]];
+    }
+
     private function renderEntertainmentDetail(string $id, bool $openEditModal): \Illuminate\Contracts\View\View
     {
         $data = $this->findEntertainmentReimbursement($id);
@@ -745,6 +768,7 @@ class EntertaimentReimbursementController extends Controller
             ->where('reimbursement_id', $data->id)
             ->get()
             ->all();
+        $detail = $this->normalizeEntertainmentDetailRows($detail);
         $bdc = $data->total_bdc;
         $cash = $data->total_cash;
         $metode_cash = $this->resolveListkasbankName($data->metode_cash ?? null);
