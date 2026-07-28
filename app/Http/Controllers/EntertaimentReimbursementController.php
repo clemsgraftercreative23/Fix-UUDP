@@ -15,6 +15,7 @@ use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use App\Support\ActivityLogger;
+use App\Support\EntertainmentTotal;
 use App\Support\FonnteMessenger;
 use App\Support\ReimbursementInquiryNoFilter;
 class EntertaimentReimbursementController extends Controller
@@ -165,6 +166,39 @@ class EntertaimentReimbursementController extends Controller
             'original_name' => $legacyEvidence,
             'created_by' => auth()->id(),
         ]);
+    }
+
+    /**
+     * Sum active entertainment line items into parent reimbursement totals.
+     * BOC is treated as BDC (legacy company-card label).
+     */
+    public function computeEntertainmentTotals(int $reimbursementId): array
+    {
+        return EntertainmentTotal::computeForReimbursement($reimbursementId);
+    }
+
+    private function syncEntertainmentParentTotals(int $reimbursementId): array
+    {
+        $totals = $this->computeEntertainmentTotals($reimbursementId);
+        Reimbursement::whereId($reimbursementId)->update($totals);
+
+        return $totals;
+    }
+
+    /**
+     * Repair parent totals when detail rows exist but nominal_pengajuan is stale (e.g. after import or approver edit).
+     */
+    private function ensureEntertainmentTotalsSynced(Reimbursement $data): void
+    {
+        $computed = $this->computeEntertainmentTotals((int) $data->id);
+        if (
+            (int) $data->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
+            || (int) ($data->total_bdc ?? 0) !== (int) $computed['total_bdc']
+            || (int) ($data->total_cash ?? 0) !== (int) $computed['total_cash']
+        ) {
+            Reimbursement::whereId($data->id)->update($computed);
+            $data->fill($computed);
+        }
     }
 
     private function syncEntertainmentAttachments(Request $request, int $rowIndex, int $reimbursementId, int $newDetailId, int $oldDetailId = 0, string $legacyEvidence = ''): array
@@ -383,9 +417,14 @@ class EntertaimentReimbursementController extends Controller
                 return optional($data->user)->name ?? $data->created_by ?? '-';
             })
             ->addColumn('nominal_pengajuan', function ($data) {
-                $button ='';
-                $button .= number_format($data->nominal_pengajuan,0, ',' , '.');
-                return $button;
+                if ((int) $data->nominal_pengajuan === 0) {
+                    $computed = $this->computeEntertainmentTotals((int) $data->id);
+                    if ((int) $computed['nominal_pengajuan'] > 0) {
+                        Reimbursement::whereId($data->id)->update($computed);
+                        $data->nominal_pengajuan = $computed['nominal_pengajuan'];
+                    }
+                }
+                return number_format($data->nominal_pengajuan, 0, ',', '.');
             })
             ->editColumn('no_reimbursement', function ($data) {
                 return $data->no_reimbursement;
@@ -500,9 +539,14 @@ class EntertaimentReimbursementController extends Controller
                 return optional($data->user)->name ?? $data->created_by ?? '-';
             })
             ->addColumn('nominal_pengajuan', function ($data) {
-                $button ='';
-                $button .= number_format($data->nominal_pengajuan,0, ',' , '.');
-                return $button;
+                if ((int) $data->nominal_pengajuan === 0) {
+                    $computed = $this->computeEntertainmentTotals((int) $data->id);
+                    if ((int) $computed['nominal_pengajuan'] > 0) {
+                        Reimbursement::whereId($data->id)->update($computed);
+                        $data->nominal_pengajuan = $computed['nominal_pengajuan'];
+                    }
+                }
+                return number_format($data->nominal_pengajuan, 0, ',', '.');
             })
             ->editColumn('no_reimbursement', function ($data) {
                 return "<a href='".route('reimbursement-entertaiment.show',$data->id)."'>".$data->no_reimbursement."</a>";
@@ -585,16 +629,8 @@ class EntertaimentReimbursementController extends Controller
                 $new->save();
             }
 
-            $id_main = DB::select( DB::raw("SELECT max(id) as id_main FROM reimbursement"))['0']->id_main;
-            $total_bdc  = DB::select( DB::raw("SELECT sum(amount) AS total FROM reimbursement_entertaiments WHERE reimbursement_id='$id_main' AND payment_type='BDC'"))['0']->total;
-            $total_cash  = DB::select( DB::raw("SELECT sum(amount) AS total FROM reimbursement_entertaiments WHERE reimbursement_id='$id_main' AND payment_type='Cash'"))['0']->total;
-
-            $form_data = array(
-                'total_bdc'        =>  $total_bdc ?? 0,
-                'total_cash'        =>  $total_cash ?? 0,
-            ); 
-        
-            Reimbursement::whereId($id_main)->update($form_data);
+            $syncedTotals = $this->syncEntertainmentParentTotals((int) $id_reim);
+            $data->nominal_pengajuan = $syncedTotals['nominal_pengajuan'];
 
             $user = \App\User::where('id', $data->id_user)->first();
             if ($status != 10) {
@@ -696,6 +732,8 @@ class EntertaimentReimbursementController extends Controller
         if (!$data) {
             abort(404, 'Data reimbursement entertainment tidak ditemukan.');
         }
+
+        $this->ensureEntertainmentTotalsSynced($data);
 
         $detail = DB::table('reimbursement_entertaiments')
             ->where('reimbursement_id', $data->id)
@@ -831,6 +869,8 @@ class EntertaimentReimbursementController extends Controller
             }
             
             $delete = DB::select(DB::raw("DELETE FROM reimbursement_entertaiments WHERE reimbursement_id = '$id' AND status=0"));
+            
+            $this->syncEntertainmentParentTotals((int) $id);
             
             DB::commit();
 
@@ -978,6 +1018,8 @@ class EntertaimentReimbursementController extends Controller
                 
                 $delete = DB::select(DB::raw("DELETE FROM reimbursement_entertaiments WHERE reimbursement_id = '$id' AND status=0"));
                 
+                $this->syncEntertainmentParentTotals((int) $id);
+                
                 DB::commit();
 
                 return redirect()->back()->with(['success' => $notif]);
@@ -1063,6 +1105,8 @@ class EntertaimentReimbursementController extends Controller
                 }
                 
                 $delete = DB::select(DB::raw("DELETE FROM reimbursement_entertaiments WHERE reimbursement_id = '$id' AND status=0"));
+                
+                $this->syncEntertainmentParentTotals((int) $id);
                 
                 DB::commit();
 

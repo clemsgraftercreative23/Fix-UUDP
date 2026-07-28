@@ -11,6 +11,7 @@ use App\Master_daftar_rencana;
 use App\Kasbank;
 use App\User;
 use App\Support\FonnteMessenger;
+use App\Support\EntertainmentTotal;
 use App\Services\Accurate\AccurateApiTokenClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -237,14 +238,21 @@ class PencairanReimbursementController extends Controller
 
             ]);    
         } else if($data->reimbursement_type==3) {
+            $computed = EntertainmentTotal::computeForReimbursement((int) $id);
+            if (
+                (int) $data->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
+                || (int) ($data->total_bdc ?? 0) !== (int) $computed['total_bdc']
+                || (int) ($data->total_cash ?? 0) !== (int) $computed['total_cash']
+            ) {
+                Reimbursement::whereId($id)->update($computed);
+                $data->fill($computed);
+            }
+
             $detail  = DB::select( DB::raw("SELECT * FROM reimbursement_entertaiments WHERE reimbursement_id = '$id'"));
 
-            $cek  = DB::select( DB::raw("SELECT total_bdc,total_cash, metode_cash FROM reimbursement WHERE id = '$id'"));
-
-            $cekRow = $cek[0] ?? null;
-            $bdc = $cekRow->total_bdc ?? 0;
-            $cash = $cekRow->total_cash ?? 0;
-            $metode_cash_ = $cekRow->metode_cash ?? null;
+            $bdc = $computed['total_bdc'];
+            $cash = $computed['total_cash'];
+            $metode_cash_ = $data->metode_cash ?? null;
             if ($metode_cash_ == null) {
                 $metode_cash = "";
             } else {
