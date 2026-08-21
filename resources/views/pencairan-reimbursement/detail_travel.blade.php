@@ -162,29 +162,9 @@
                         <th>Hotel At</th>
                         <td class="bg-secondary">{{ optional($item->hotelCondition)->name ?? 'Not Stay' }}</td>
                         <th>Allowance</th>
-                        <td class="bg-secondary">{{ optional($item->tripType)->currency ?? 'IDR' }} {{number_format($item->allowance,0,',','.')}}</td>
+                        <td class="bg-secondary">IDR {{number_format($item->allowance,0,',','.')}}</td>
                         <th>Allowance (IDR)</th>
-                        <td class="bg-secondary">
-                            @php
-                                $tripCurrency = optional($item->tripType)->currency ?? 'IDR';
-                                $currency = App\TravelTripRate::where('reimbursement_id',$data->id)->where('currency',$tripCurrency)->first();
-                                if ($currency) {
-                                    $currency = $currency->rate;
-                                }
-
-                                if (!$currency && $tripCurrency == "IDR") {
-                                    $currency = 1;
-                                }
-
-                                if (!$currency && $tripCurrency == "USD") {
-                                    $currency = 16400;
-                                }
-
-                                
-
-                                echo number_format($item->allowance * $currency,0,',','.');
-                            @endphp
-                        </td>
+                        <td class="bg-secondary">{{number_format($item->allowance,0,',','.')}}</td>
                     </tr>
                     <tr>
                         <th>Purpose</th>
