@@ -155,6 +155,35 @@
   </div>
   </div>
 
+<!-- Modal -->
+<div class="modal fade" id="modalSyncAccurate" tabindex="-1" role="dialog" aria-labelledby="modalSyncAccurateLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form id="formSyncAccurate" method="POST">
+                @csrf
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalSyncAccurateLabel">Sync ke Accurate</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <i class="material-icons">close</i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="modal_tanggal_jurnal">Tanggal Jurnal</label>
+                        <input type="date" name="tanggal_jurnal" id="modal_tanggal_jurnal" class="form-control" required>
+                        <small class="form-text text-muted">Tanggal jurnal yang akan dikirim ke Accurate. Tidak boleh melebihi hari ini.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-warning js-sync-accurate-btn">
+                        <span class="js-btn-label">Sync Accurate</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <!-- End Modal -->
 
 @push('scripts')
@@ -164,6 +193,22 @@ $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
         $('#modalPassword').modal('show');
     @endif
+
+    var todayStr = moment().format('YYYY-MM-DD');
+
+    $(document).on('click', '.js-open-sync-accurate', function () {
+        var syncUrl = $(this).data('sync-url');
+        $('#formSyncAccurate').attr('action', syncUrl);
+        $('#modal_tanggal_jurnal').attr('max', todayStr).val(todayStr);
+        $('#modalSyncAccurate').modal('show');
+    });
+
+    $('#formSyncAccurate').on('submit', function () {
+        var $btn = $(this).find('.js-sync-accurate-btn');
+        $btn.prop('disabled', true);
+        $btn.find('.js-btn-label').text('Menyinkronkan...');
+        $btn.prepend('<span class="spinner-border spinner-border-sm mr-1" role="status" aria-hidden="true"></span>');
+    });
 
     var start = moment().startOf('month');
     var end = moment().endOf('month');

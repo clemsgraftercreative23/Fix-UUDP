@@ -417,7 +417,7 @@
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if ($data->status == 5 && auth()->user()->jabatan == 'Owner')
+                        @if ($data->status == 5 && \App\Support\JabatanClassifier::canSyncAccurate(auth()->user()->jabatan))
                             @php
                                 $accuratePayloadPreview = json_decode($data->accurate_payload_json ?? '', true);
                                 $previewLines = [];
@@ -460,14 +460,20 @@
                                     Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
                                 </button>
                             @else
-                                <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" style="display:inline;">
+                                <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" class="js-sync-accurate-form" style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">
                                     @csrf
-                                    <button type="submit" class="btn btn-warning">Sync Accurate</button>
+                                    <label for="tanggal_jurnal_{{ $data->id }}" class="mb-0">Tanggal Jurnal</label>
+                                    <input type="date" name="tanggal_jurnal" id="tanggal_jurnal_{{ $data->id }}" class="form-control form-control-sm" style="width:auto;" value="{{ date('Y-m-d') }}" max="{{ date('Y-m-d') }}" required>
+                                    <button type="submit" class="btn btn-warning js-sync-accurate-btn">
+                                        <span class="js-btn-label">Sync Accurate</span>
+                                    </button>
                                 </form>
-                                <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
-                                    @csrf
-                                    <button type="submit" class="btn btn-info">Reset Settlement</button>
-                                </form>
+                                @if (auth()->user()->jabatan == 'Owner')
+                                    <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-info">Reset Settlement</button>
+                                    </form>
+                                @endif
                             @endif
                         @endif
                     </center>
@@ -1006,8 +1012,15 @@
   
 
   // function this.initSelectForm() {
-     
+
   // }
+
+  $(document).on('submit', '.js-sync-accurate-form', function () {
+      var $btn = $(this).find('.js-sync-accurate-btn');
+      $btn.prop('disabled', true);
+      $btn.find('.js-btn-label').text('Menyinkronkan...');
+      $btn.prepend('<span class="spinner-border spinner-border-sm mr-1" role="status" aria-hidden="true"></span>');
+  });
 
 </script>
 @endpush

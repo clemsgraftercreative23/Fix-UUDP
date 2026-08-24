@@ -12,6 +12,8 @@ use App\Kasbank;
 use App\User;
 use App\Support\FonnteMessenger;
 use App\Support\EntertainmentTotal;
+use App\Support\AccurateJournalDate;
+use App\Support\JabatanClassifier;
 use App\Services\Accurate\AccurateApiTokenClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -92,15 +94,12 @@ class PencairanReimbursementController extends Controller
                     $button = '<button  class="view btn btn-success btn-sm">SETTLE</button>';
                 }
 
-                if ((int) $data->status === 5 && auth()->user()->jabatan === 'Owner') {
+                if ((int) $data->status === 5 && JabatanClassifier::canSyncAccurate(auth()->user()->jabatan)) {
                     $button .= '<div style="margin-top:6px;">';
                     if (!empty($data->accurate_synced_at)) {
                         $button .= '<button type="button" class="btn btn-success btn-sm" disabled>Accurate Synced</button>';
                     } else {
-                        $button .= '<form action="' . route('pencairan-reimbursement.sync-accurate', $data->id) . '" method="POST" style="display:inline;">';
-                        $button .= csrf_field();
-                        $button .= '<button type="submit" class="btn btn-warning btn-sm">Sync Accurate</button>';
-                        $button .= '</form>';
+                        $button .= '<button type="button" class="btn btn-warning btn-sm js-open-sync-accurate" data-sync-url="' . route('pencairan-reimbursement.sync-accurate', $data->id) . '">Sync Accurate</button>';
                     }
                     $button .= '</div>';
                 }
@@ -393,7 +392,7 @@ class PencairanReimbursementController extends Controller
 
     }
 
-    public function syncAccurate($id)
+    public function syncAccurate(Request $request, $id)
     {
         // #region agent log
         Log::error('DBG566b62 syncAccurate entry', [
@@ -409,8 +408,8 @@ class PencairanReimbursementController extends Controller
         // #endregion
         $data = Reimbursement::findOrFail($id);
 
-        if (auth()->user()->jabatan !== 'Owner') {
-            return redirect()->back()->withErrors(['Hanya Owner yang dapat melakukan sync Accurate.']);
+        if (!JabatanClassifier::canSyncAccurate(auth()->user()->jabatan)) {
+            return redirect()->back()->withErrors(['Hanya Owner atau Finance yang dapat melakukan sync Accurate.']);
         }
 
         if ((int) $data->status !== 5) {
@@ -419,6 +418,17 @@ class PencairanReimbursementController extends Controller
 
         if (!empty($data->accurate_synced_at)) {
             return redirect()->back()->withErrors(['Data ini sudah tersinkron ke Accurate.']);
+        }
+
+        $today = now()->startOfDay();
+        try {
+            $journalDate = AccurateJournalDate::resolve($request->input('tanggal_jurnal'), $today);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors([$e->getMessage()]);
+        }
+
+        if (AccurateJournalDate::exceedsSyncDate($journalDate, $today)) {
+            return redirect()->back()->withErrors(['Tanggal jurnal tidak boleh melebihi tanggal sync (hari ini).']);
         }
 
         $payload = json_decode($data->accurate_payload_json ?? '', true);
@@ -440,6 +450,9 @@ class PencairanReimbursementController extends Controller
             return redirect()->back()->withErrors([$message]);
         }
 
+        // Finance dapat memilih tanggal jurnal; override nilai transDate bawaan (waktu settlement) dengan pilihan tersebut.
+        $payload['transDate'] = AccurateJournalDate::formatForAccurate($journalDate);
+
         try {
             $syncResult = $this->postAccurateJournal($payload);
             // #region agent log
@@ -459,6 +472,7 @@ class PencairanReimbursementController extends Controller
             }
 
             $data->update([
+                'accurate_payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES),
                 'accurate_synced_at' => date('Y-m-d H:i:s'),
                 'accurate_sync_status' => 'synced',
                 'accurate_sync_message' => null,
