@@ -66,4 +66,20 @@ class AccurateJournalDateTest extends TestCase
 
         $this->assertSame('05/01/2026', AccurateJournalDate::formatForAccurate($date));
     }
+
+    public function test_display_from_payload_reads_trans_date_back_out(): void
+    {
+        $payloadJson = json_encode(['transDate' => '23/08/2026', 'bankNo' => '1-1111']);
+
+        $this->assertSame('23 Aug 2026', AccurateJournalDate::displayFromPayload($payloadJson));
+    }
+
+    public function test_display_from_payload_returns_null_when_payload_missing_or_invalid(): void
+    {
+        $this->assertNull(AccurateJournalDate::displayFromPayload(null));
+        $this->assertNull(AccurateJournalDate::displayFromPayload(''));
+        $this->assertNull(AccurateJournalDate::displayFromPayload('not json'));
+        $this->assertNull(AccurateJournalDate::displayFromPayload(json_encode(['bankNo' => '1-1111'])));
+        $this->assertNull(AccurateJournalDate::displayFromPayload(json_encode(['transDate' => '2026-08-23'])));
+    }
 }

@@ -46,4 +46,32 @@ class AccurateJournalDate
     {
         return $journalDate->format(self::ACCURATE_FORMAT);
     }
+
+    /**
+     * Read back the journal date that was actually sent to Accurate, from the
+     * stored accurate_payload_json. Used to show it next to "Accurate Synced"
+     * in the UI, since that timestamp is when Sync was clicked, not the
+     * (possibly backdated) journal date Finance chose.
+     */
+    public static function displayFromPayload(?string $payloadJson): ?string
+    {
+        $payload = json_decode((string) $payloadJson, true);
+        $transDate = $payload['transDate'] ?? null;
+
+        if (!is_string($transDate) || $transDate === '') {
+            return null;
+        }
+
+        try {
+            $parsed = Carbon::createFromFormat(self::ACCURATE_FORMAT, $transDate);
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        if ($parsed->format(self::ACCURATE_FORMAT) !== $transDate) {
+            return null;
+        }
+
+        return $parsed->format('d M Y');
+    }
 }

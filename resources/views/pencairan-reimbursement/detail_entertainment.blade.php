@@ -459,6 +459,10 @@
                                 <button type="button" class="btn btn-success" disabled>
                                     Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
                                 </button>
+                                @php $journalDateDisplay = \App\Support\AccurateJournalDate::displayFromPayload($data->accurate_payload_json); @endphp
+                                @if ($journalDateDisplay)
+                                    <div><small class="text-muted">Tanggal Jurnal: {{ $journalDateDisplay }}</small></div>
+                                @endif
                             @else
                                 <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" class="js-sync-accurate-form" style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">
                                     @csrf
