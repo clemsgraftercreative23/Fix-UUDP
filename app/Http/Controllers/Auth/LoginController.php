@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class LoginController extends Controller
 {
@@ -46,5 +48,36 @@ class LoginController extends Controller
       // $this->middleware('auth:web', ['except' => ['/']]);
 
         $this->middleware('guest')->except('logout');
+    }
+
+    /**
+     * Wrong username/password: show a friendly Indonesian message instead of
+     * the raw "auth.failed" translation key (which is missing for the "id"
+     * locale configured in config/app.php).
+     */
+    protected function sendFailedLoginResponse(Request $request)
+    {
+        throw ValidationException::withMessages([
+            'login' => ['Username atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.'],
+        ]);
+    }
+
+    /**
+     * Too many failed attempts: same friendly-message reasoning as
+     * sendFailedLoginResponse() above, applied to the "auth.throttle" key.
+     */
+    protected function sendLockoutResponse(Request $request)
+    {
+        $seconds = $this->limiter()->availableIn(
+            $this->throttleKey($request)
+        );
+
+        $wait = $seconds >= 60
+            ? ceil($seconds / 60) . ' menit'
+            : $seconds . ' detik';
+
+        throw ValidationException::withMessages([
+            'login' => ["Terlalu banyak percobaan login yang gagal. Silakan coba lagi dalam {$wait}."],
+        ])->status(429);
     }
 }

@@ -121,6 +121,19 @@
 			line-height: 1.33;
 			border-radius: 25px;
 		}
+		.login-alert {
+			border: 1px solid #f5c6cb;
+			background: #fdecea;
+			color: #a12622;
+			border-radius: 0.75rem;
+			padding: 0.9rem 1rem;
+			animation-duration: 0.5s;
+		}
+		.login-alert-icon {
+			font-size: 1.1rem;
+			line-height: 1.4;
+			color: #d9534f;
+		}
 		.btn-circle {
 			width: 30px;
 			height: 30px;
@@ -166,6 +179,15 @@
 								@csrf
 								<h4 class="mb-1 font-weight-bold" style="color: var(--uudp-navy);">Welcome back</h4>
 								<p class="text-muted small mb-4">Log in to access our features</p>
+								@error('login')
+									<div class="alert login-alert animated shake d-flex align-items-start mb-4" role="alert">
+										<i class="fa fa-exclamation-circle login-alert-icon mr-2" aria-hidden="true"></i>
+										<div>
+											<strong class="d-block">Login gagal</strong>
+											<span>{{ $message }}</span>
+										</div>
+									</div>
+								@enderror
 								<div class="row">
 									<div class="col-md-12">
 										<label for="username">Username / NIP</label>
@@ -175,7 +197,7 @@
 													id="username"
 													type="text"
 													name="username"
-													class="form-control @error('username') is-invalid @enderror"
+													class="form-control @error('username') is-invalid @enderror @error('login') is-invalid @enderror"
 													value="{{ old('username') }}"
 													autocomplete="username"
 													required
@@ -196,7 +218,7 @@
 												id="passwordfield"
 												type="password"
 												name="password"
-												class="form-control @error('password') is-invalid @enderror"
+												class="form-control @error('password') is-invalid @enderror @error('login') is-invalid @enderror"
 												autocomplete="current-password"
 												required
 												placeholder="Enter your password"
@@ -304,5 +326,13 @@ $(".password .password-toggle").on("click", function(e){
 	$(this).attr("aria-label", show ? "Sembunyikan password" : "Tampilkan password");
 });
 </script>
+@error('login')
+<script>
+$(document).ready(function () {
+	var $password = $("#passwordfield");
+	$password.val("").trigger("focus");
+});
+</script>
+@enderror
 </body>
 </html>
