@@ -149,6 +149,7 @@ Route::post('pencairan-reimbursement/{id}/reset-settlement', 'PencairanReimburse
   Route::get('debug/accurate/signature', 'AccurateDebugController@signatureTest');
   Route::post('reimbursement/approve/{id}', 'ReimbursementController@approve');
   Route::post('reimbursement/reject/{id}', 'ReimbursementController@reject');
+  Route::post('reimbursement/check-duplicate-date', 'ReimbursementController@checkDuplicateDate');
 
   Route::get('reimbursement-user','ReimbursementController@listUser');
   Route::get('settlement-user','ReimbursementController@listSettlement');

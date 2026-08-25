@@ -90,7 +90,7 @@
 
 <div class="page-content" id="app">
     <div class="">
-        <form action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="syncRatesFromExchangeInputs">
+        <form id="travel_reimbursement_form" action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="syncRatesFromExchangeInputs">
             @csrf
             <div class="row">
                 <div class="col-xl">
@@ -365,6 +365,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-date-check.js') }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
@@ -967,9 +968,26 @@ $(document).ready(function(){
         }
       },
       watch: {
-       
+
       },
   });
+
+  if (typeof window.bindReimbursementDuplicateDateCheck === 'function') {
+      window.bindReimbursementDuplicateDateCheck({
+          formSelector: '#travel_reimbursement_form',
+          reimbursementType: 2,
+          checkUrl: '{{ url('/reimbursement/check-duplicate-date') }}',
+          getDates: function () {
+              var dates = [];
+              $('#travel_reimbursement_form input[type="date"]').each(function () {
+                  if (this.value) {
+                      dates.push(this.value);
+                  }
+              });
+              return dates;
+          }
+      });
+  }
 
 </script>
 

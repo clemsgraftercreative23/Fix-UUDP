@@ -40,6 +40,46 @@ class ReimbursementController extends Controller
         $this->middleware('auth');
     }
 
+    public function checkDuplicateDate(Request $request)
+    {
+        $type = (int) $request->input('reimbursement_type');
+        $dates = $request->input('dates');
+        if (!is_array($dates)) {
+            $dates = array_filter([$request->input('date')]);
+        }
+        $dates = array_values(array_unique(array_filter($dates)));
+
+        if (!$type || empty($dates)) {
+            return response()->json([
+                'duplicate' => false,
+                'code' => 'INVALID_REQUEST',
+                'message' => 'Jenis reimbursement dan tanggal pengajuan wajib diisi.',
+            ], 422);
+        }
+
+        $duplicateDates = Reimbursement::where('id_user', auth()->id())
+            ->where('reimbursement_type', $type)
+            ->whereIn('date', $dates)
+            ->pluck('date')
+            ->map(function ($date) {
+                return \Carbon\Carbon::parse($date)->format('Y-m-d');
+            })
+            ->unique()
+            ->values();
+
+        $isDuplicate = $duplicateDates->isNotEmpty();
+
+        return response()->json([
+            'duplicate' => $isDuplicate,
+            'code' => $isDuplicate ? 'DUPLICATE_REIMBURSEMENT_DATE' : 'OK',
+            'message' => $isDuplicate
+                ? 'Anda sudah pernah mengajukan reimbursement untuk tanggal '
+                    . $duplicateDates->implode(', ') . '. Pastikan pengajuan ini bukan duplikat sebelum melanjutkan.'
+                : 'Tanggal pengajuan belum pernah diajukan sebelumnya.',
+            'duplicate_dates' => $duplicateDates,
+        ]);
+    }
+
     private function attachmentTableReady(): bool
     {
         return Schema::hasTable('reimbursement_attachments');

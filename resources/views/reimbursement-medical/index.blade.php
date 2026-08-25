@@ -350,11 +350,20 @@
 
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
+<script src="{{ asset('js/reimbursement-duplicate-date-check.js') }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
         $('#modalPassword').modal('show');
     @endif
+
+    if (typeof window.bindReimbursementDuplicateDateCheck === 'function') {
+        window.bindReimbursementDuplicateDateCheck({
+            formSelector: '#sample_form',
+            reimbursementType: 4,
+            checkUrl: '{{ url('/reimbursement/check-duplicate-date') }}'
+        });
+    }
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     // $('#sum').maskMoney({ thousands:'.', decimal:',', precision:0});

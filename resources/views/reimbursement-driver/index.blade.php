@@ -383,11 +383,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-date-check.js') }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
         $('#modalPassword').modal('show');
     @endif
+
+    if (typeof window.bindReimbursementDuplicateDateCheck === 'function') {
+        window.bindReimbursementDuplicateDateCheck({
+            formSelector: '#sample_form',
+            reimbursementType: 1,
+            checkUrl: '{{ url('/reimbursement/check-duplicate-date') }}'
+        });
+    }
 
     function numberWithCommas(x) {
         return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
