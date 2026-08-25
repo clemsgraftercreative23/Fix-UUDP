@@ -151,6 +151,12 @@
                       </select>
                     </div>
                   </div>
+                  <div class="col-md-4">
+                    <div class="form-group">
+   <label for="no_invoice_medical">No. Invoice / Receipt</label>
+   <input type="text" class="form-control" name="no_invoice" id="no_invoice_medical" style="border-radius: 10px;" placeholder="Nomor invoice/struk" required>
+ </div>
+                  </div>
 
                   <div class="col-md-4">
                     <div class="form-group">
@@ -350,18 +356,32 @@
 
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
-<script src="{{ asset('js/reimbursement-duplicate-date-check.js') }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
         $('#modalPassword').modal('show');
     @endif
 
-    if (typeof window.bindReimbursementDuplicateDateCheck === 'function') {
-        window.bindReimbursementDuplicateDateCheck({
+    if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+        window.bindReimbursementDuplicateChecks({
             formSelector: '#sample_form',
-            reimbursementType: 4,
-            checkUrl: '{{ url('/reimbursement/check-duplicate-date') }}'
+            checks: [
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    params: function ($form) {
+                        var date = $form.find('input[name="date"]').val();
+                        return date ? { reimbursement_type: 4, dates: [date] } : null;
+                    }
+                },
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
+                    params: function ($form) {
+                        var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
+                        return number ? { no_invoice: number } : null;
+                    }
+                }
+            ]
         });
     }
 

@@ -65,6 +65,23 @@ class ReimbursementController extends Controller
         return response()->json(\App\Support\DuplicateDateChecker::buildResponse($dates, $existingDates));
     }
 
+    public function checkDuplicateInvoice(Request $request)
+    {
+        $number = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->input('no_invoice'));
+
+        if ($number === '') {
+            return response()->json([
+                'duplicate' => false,
+                'code' => 'INVALID_REQUEST',
+                'message' => 'Nomor invoice/receipt wajib diisi.',
+            ], 422);
+        }
+
+        $alreadyUsed = Reimbursement::where('no_invoice', $number)->exists();
+
+        return response()->json(\App\Support\DuplicateInvoiceChecker::buildResponse($number, $alreadyUsed));
+    }
+
     private function attachmentTableReady(): bool
     {
         return Schema::hasTable('reimbursement_attachments');

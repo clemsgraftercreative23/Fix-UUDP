@@ -825,6 +825,7 @@ class DriverReimbursementController extends Controller
             $data = [
                 "id_user" => auth()->user()->id,
                 "no_reimbursement" => "PENDING",
+                "no_invoice" => $request->no_invoice,
                 "date" => $request->date,
                 "reimbursement_department_id" => $request->reimbursement_department_id,
                 "mengetahui_op" => "-",

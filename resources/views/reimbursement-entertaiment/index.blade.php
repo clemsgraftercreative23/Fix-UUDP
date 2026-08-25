@@ -209,7 +209,13 @@
                        <input type="date" class="form-control date-picker" name="date" id="exampleFormControlInput1" style="border-radius: 10px;" required>
                      </div>
                   </div>
-                  
+                  <div class="col-md-3">
+                    <div class="form-group">
+                       <label for="no_invoice_entertaiment">No. Invoice / Receipt</label>
+                       <input type="text" class="form-control" name="no_invoice" id="no_invoice_entertaiment" style="border-radius: 10px;" placeholder="Nomor invoice/struk" required>
+                     </div>
+                  </div>
+
                   <div class="col-md-6">
                     <div class="form-group">
                       <label for="exampleFormControlInput1">Department</label>
@@ -386,7 +392,7 @@
 
 @push('scripts')
 <script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
-<script src="{{ asset('js/reimbursement-duplicate-date-check.js') }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script type="text/javascript">
@@ -396,11 +402,25 @@ $(document).ready(function(){
         $('#modalPassword').modal('show');
     @endif
 
-    if (typeof window.bindReimbursementDuplicateDateCheck === 'function') {
-        window.bindReimbursementDuplicateDateCheck({
+    if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+        window.bindReimbursementDuplicateChecks({
             formSelector: '#sample_form',
-            reimbursementType: 3,
-            checkUrl: '{{ url('/reimbursement/check-duplicate-date') }}'
+            checks: [
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    params: function ($form) {
+                        var date = $form.find('input[name="date"]').val();
+                        return date ? { reimbursement_type: 3, dates: [date] } : null;
+                    }
+                },
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
+                    params: function ($form) {
+                        var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
+                        return number ? { no_invoice: number } : null;
+                    }
+                }
+            ]
         });
     }
 
