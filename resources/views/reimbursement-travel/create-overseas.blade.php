@@ -90,6 +90,13 @@
 </style>
 
 <div class="page-content" id="app">
+    @if ($errors->any())
+        @foreach ($errors->all() as $error)
+            <div class="alert alert-danger">
+                {{ $error }}
+            </div>
+        @endforeach
+    @endif
     <div class="">
         <form action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="syncRatesFromExchangeInputs">
             @csrf

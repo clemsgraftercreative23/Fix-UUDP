@@ -942,6 +942,25 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Validasi form travel utama (create/store). Final submit ("save") wajib
+     * mengisi setiap baris rincian biaya secara lengkap — termasuk Payment
+     * Type — sebelum data disimpan. Draft ("save_draft"/"save_item") boleh
+     * belum lengkap.
+     */
+    private function validateTravelSubmissionRequest(Request $request, bool $isFinalSubmit): void
+    {
+        if (!$isFinalSubmit) {
+            return;
+        }
+
+        $errors = \App\Support\TravelSubmissionValidator::findErrors((array) $request->input('reimburse', []));
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages(['reimburse' => $errors]);
+        }
+    }
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -1250,6 +1269,8 @@ class TravelReimbursementController extends Controller
     
     public function store(Request $request)
     {
+        $this->validateTravelSubmissionRequest($request, isset($_POST['save']) && !isset($_POST['save_draft']));
+
         DB::beginTransaction();
         if (isset($_POST['save'])) {
             $status = 0;
