@@ -285,12 +285,10 @@ class DriverReimbursementController extends Controller
             @mkdir($targetDir, 0755, true);
         }
 
-        $ext = strtolower((string) $file->getClientOriginalExtension());
-        if ($ext === '') {
-            $ext = 'jpg';
-        }
-
-        $filename = uniqid('bukti_', true) . '.' . $ext;
+        $filename = \App\Support\EvidenceFileNaming::generateFilename(
+            (string) $file->getMimeType(),
+            (string) $file->getClientOriginalExtension()
+        );
         $file->move($targetDir, $filename);
 
         return $filename;

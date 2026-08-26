@@ -59,8 +59,11 @@ resources_v.1.1/
 app_v.1.0/
 app_v.1.1/
 
-# Bukti
-public/images/file_bukti/
+# Bukti (uploaded evidence files aren't versioned, but the serving config that
+# makes them preview instead of download in the browser is)
+public/images/file_bukti/*
+!public/images/file_bukti/.htaccess
+!public/images/file_bukti/web.config
 
 # Cache
 /.cache/

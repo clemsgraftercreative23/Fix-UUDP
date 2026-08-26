@@ -1,0 +1,25 @@
+# Evidence/bukti files here are served directly by the web server (no
+# Laravel controller in front of them). Without this, the browser's
+# preview-vs-download decision depends entirely on the server's default
+# MIME table for the file's extension -- and extensions like .jfif, .svg,
+# .ico (all real files that ended up here from client-supplied filenames)
+# are frequently missing from that default table, so the browser downloads
+# them instead of previewing them, inconsistently with the .jpg/.png/.pdf
+# files that *are* in the default table. Force a browser-safe Content-Type
+# for every extension actually found in this folder, and explicitly ask for
+# inline display, so every evidence file previews the same way regardless
+# of the web server's own defaults.
+
+<IfModule mod_mime.c>
+    AddType image/jpeg .jpg .jpeg .jfif
+    AddType image/png .png
+    AddType image/gif .gif
+    AddType image/webp .webp
+    AddType image/x-icon .ico
+    AddType image/svg+xml .svg
+    AddType application/pdf .pdf
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set Content-Disposition "inline"
+</IfModule>
