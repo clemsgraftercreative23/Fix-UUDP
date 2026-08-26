@@ -356,7 +356,7 @@
 
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
-<script src="{{ asset('js/reimbursement-duplicate-check.js') }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)

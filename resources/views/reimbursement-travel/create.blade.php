@@ -376,7 +376,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
-<script src="{{ asset('js/reimbursement-duplicate-check.js') }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
