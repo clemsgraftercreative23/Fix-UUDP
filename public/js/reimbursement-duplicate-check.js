@@ -41,6 +41,26 @@
 
     var checks = Array.isArray(options.checks) ? options.checks : [];
     var confirmed = false;
+    var lastClickedSubmitter = null;
+
+    // A form.submit() triggered from JS (used below to let the request through
+    // after the duplicate check) has no "submitter" at all, so the clicked
+    // button's name/value (e.g. name="save" vs name="save_draft") would
+    // otherwise be silently dropped from the request. Track it here and
+    // re-add it as a hidden field before re-submitting.
+    $form.on('click', 'button[type="submit"], input[type="submit"]', function () {
+      lastClickedSubmitter = this;
+    });
+
+    function ensureSubmitterField(submitter) {
+      $form.find('input.js-duplicate-check-submitter').remove();
+      if (submitter && submitter.name) {
+        $('<input type="hidden" class="js-duplicate-check-submitter">')
+          .attr('name', submitter.name)
+          .val(submitter.value || '1')
+          .appendTo($form);
+      }
+    }
 
     $form.on('submit', function (e) {
       if (confirmed) {
@@ -52,7 +72,15 @@
         return;
       }
 
+      var submitter = (e.originalEvent && e.originalEvent.submitter) || lastClickedSubmitter;
+
       e.preventDefault();
+
+      function proceed() {
+        confirmed = true;
+        ensureSubmitterField(submitter);
+        $form.trigger('submit');
+      }
 
       Promise.all(checks.map(function (check) { return runCheck(check, $form); }))
         .then(function (results) {
@@ -61,15 +89,13 @@
             .map(function (res) { return res.message; });
 
           if (!messages.length) {
-            confirmed = true;
-            $form.trigger('submit');
+            proceed();
             return;
           }
 
           showDuplicateWarning(messages.join('\n\n')).then(function (result) {
             if (result) {
-              confirmed = true;
-              $form.trigger('submit');
+              proceed();
             }
           });
         });

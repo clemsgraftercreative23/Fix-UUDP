@@ -1271,7 +1271,6 @@ class TravelReimbursementController extends Controller
     {
         $this->validateTravelSubmissionRequest($request, isset($_POST['save']) && !isset($_POST['save_draft']));
 
-        DB::beginTransaction();
         if (isset($_POST['save'])) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
@@ -1281,7 +1280,11 @@ class TravelReimbursementController extends Controller
         } else if (isset($_POST['save_item'])) {
             $status = 10;
             $notif = 'redirect';
+        } else {
+            return redirect()->back()->withInput()->withErrors(['Tindakan tidak dikenali. Gunakan tombol SUBMIT atau DRAFT.']);
         }
+
+        DB::beginTransaction();
         try {
             $total = 0;
             foreach ($request->reimburse as $key => $value) {
