@@ -28,6 +28,19 @@ class DuplicateDateCheckerTest extends TestCase
         $this->assertSame(['2026-08-20'], $dates);
     }
 
+    public function test_normalize_dates_filters_out_non_string_values(): void
+    {
+        $dates = DuplicateDateChecker::normalizeDates(['2026-08-20', 12345, true, ['nested']], null);
+
+        $this->assertSame(['2026-08-20'], $dates);
+    }
+
+    public function test_normalize_dates_returns_empty_array_when_nothing_usable_is_given(): void
+    {
+        $this->assertSame([], DuplicateDateChecker::normalizeDates(null, null));
+        $this->assertSame([], DuplicateDateChecker::normalizeDates([], ''));
+    }
+
     public function test_build_response_flags_duplicate_when_dates_overlap(): void
     {
         $response = DuplicateDateChecker::buildResponse(['2026-08-20', '2026-08-21'], ['2026-08-20']);

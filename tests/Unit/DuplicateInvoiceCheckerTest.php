@@ -17,6 +17,22 @@ class DuplicateInvoiceCheckerTest extends TestCase
         $this->assertSame('', DuplicateInvoiceChecker::normalizeNumber(null));
     }
 
+    public function test_normalize_number_reduces_whitespace_only_input_to_empty_string(): void
+    {
+        $this->assertSame('', DuplicateInvoiceChecker::normalizeNumber('   '));
+    }
+
+    public function test_normalize_number_is_idempotent_so_check_and_store_stay_consistent(): void
+    {
+        // The check endpoint and the reimbursement "store" methods must both
+        // run raw input through this same normalization, otherwise " INV-001 "
+        // could be saved with the padding while a later check for "INV-001"
+        // (already trimmed) never finds it. Normalizing twice must be a no-op.
+        $normalized = DuplicateInvoiceChecker::normalizeNumber(' INV-001 ');
+
+        $this->assertSame($normalized, DuplicateInvoiceChecker::normalizeNumber($normalized));
+    }
+
     public function test_build_response_flags_duplicate_when_already_used(): void
     {
         $response = DuplicateInvoiceChecker::buildResponse('INV-001', true);

@@ -247,7 +247,7 @@ class MedicalReimbursementController extends Controller
             $data = [
                 "id_user" => auth()->user()->id,
                 "no_reimbursement" => "UUPD-REIMBURSE-E-00".(Reimbursement::where('no_reimbursement','like',"%-E-%")->count()+1),
-                "no_invoice" => $request->no_invoice,
+                "no_invoice" => \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
                 "date" => $request->date,
                 "reimbursement_department_id" => $request->reimbursement_department_id,
                 "mengetahui_op" => "-",

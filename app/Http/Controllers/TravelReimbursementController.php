@@ -1292,7 +1292,7 @@ class TravelReimbursementController extends Controller
             $data = [
                 "id_user" => auth()->user()->id,
                 "no_reimbursement" => "PENDING",
-                "no_invoice" => $request->no_invoice,
+                "no_invoice" => \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
                 "date" => $request->reimburse['0']['date'],
                 "mengetahui_op" => "-",
                 "mengetahui_finance" => "-",
