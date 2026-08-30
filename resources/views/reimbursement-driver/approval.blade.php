@@ -345,7 +345,7 @@
           show = (status == '11');
         @elseif(Auth::user()->jabatan=='Owner')
           show = (status == '2' || status == '11' || status == '3');
-        @elseif(Auth::user()->jabatan=='superadmin')
+        @elseif(in_array(Auth::user()->jabatan, ['superadmin', 'admin']))
           show = (status == '0' || status == '1' || status == '2' || status == '11' || status == '3');
         @endif
         if (show) { $('.btn-approve').show(); } else { $('.btn-approve').hide(); }

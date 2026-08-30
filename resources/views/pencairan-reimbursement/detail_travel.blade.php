@@ -349,7 +349,7 @@
                     @endif 
 
 
-                    @if ($data->status == 3 && auth()->user()->jabatan == 'Owner')
+                    @if ($data->status == 3 && in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']))
                     @php
                         $coaOptions = [
                             '6-1051' => '6-1051 (Transportation)',
@@ -529,101 +529,103 @@
                     @endif
                     <br>
                     <center>
-                                                        
-                            @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional' && (int) auth()->id() !== (int) $data->id_user)                                
-                                <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                </form>
+                        @php
+                            $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin']);
+                        @endphp
+                        @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
+                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
+                                @csrf
+                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
+                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
+                            </form>
+                        @endif
+                        
+                        @if ($data->status == 1 && (in_array(auth()->user()->jabatan, ['Finance', 'HR GA']) || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
+                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
+                                @csrf
+                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
+                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
+                            </form>
+                        @endif
+                        
+                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
+                            <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
+                                @csrf
+                                <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
+                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
+                            </form>
+                        @endif
+                        
+                        @if ($data->status == 9 && (auth()->user()->id == $data->id_user || $isSuperadmin))                                
+                            @if($data->travel_type=='Domestic')
+                                <a href="{!!url('edit-travel-inquiry')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
+                            @else
+                                <a href="{!!url('edit-travel-overseas')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
                             @endif
-                            
-                            @if ($data->status == 1 && auth()->user()->jabatan == 'Finance' && (int) auth()->id() !== (int) $data->id_user)                                
-                                <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                </form>
-                            @endif
-                            
-                            @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) auth()->id() !== (int) $data->id_user)                                
-                                <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                </form>
-                            @endif
-                            
-                            @if ($data->status == 9 && auth()->user()->id == $data->id_user)                                
-                                @if($data->travel_type=='Domestic')
-                                    <a href="{!!url('edit-travel-inquiry')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
-                                @else
-                                    <a href="{!!url('edit-travel-overseas')!!}/{{$data->id}}"  class="btn btn-primary">Edit</a>
-                                @endif
-                            @endif
-                            @if ($data->status == 5 && \App\Support\JabatanClassifier::canSyncAccurate(auth()->user()->jabatan))
-                                @php
-                                    $accuratePayloadPreview = json_decode($data->accurate_payload_json ?? '', true);
-                                    $previewLines = [];
-                                    if (is_array($accuratePayloadPreview)) {
-                                        if (!empty($accuratePayloadPreview['detailAccount']) && is_array($accuratePayloadPreview['detailAccount'])) {
-                                            $previewLines = $accuratePayloadPreview['detailAccount'];
-                                        } elseif (!empty($accuratePayloadPreview['detailJournalVoucher']) && is_array($accuratePayloadPreview['detailJournalVoucher'])) {
-                                            $previewLines = $accuratePayloadPreview['detailJournalVoucher'];
-                                        }
+                        @endif
+                        @if ($data->status == 5 && \App\Support\JabatanClassifier::canSyncAccurate(auth()->user()->jabatan))
+                            @php
+                                $accuratePayloadPreview = json_decode($data->accurate_payload_json ?? '', true);
+                                $previewLines = [];
+                                if (is_array($accuratePayloadPreview)) {
+                                    if (!empty($accuratePayloadPreview['detailAccount']) && is_array($accuratePayloadPreview['detailAccount'])) {
+                                        $previewLines = $accuratePayloadPreview['detailAccount'];
+                                    } elseif (!empty($accuratePayloadPreview['detailJournalVoucher']) && is_array($accuratePayloadPreview['detailJournalVoucher'])) {
+                                        $previewLines = $accuratePayloadPreview['detailJournalVoucher'];
                                     }
-                                @endphp
-                                @if (!empty($previewLines))
-                                    <div class="alert alert-secondary text-left" style="max-width:900px;margin:0 auto 12px auto;">
-                                        <strong>Preview akun perkiraan untuk Sync Accurate</strong><br>
-                                        <small>Bank No: {{ $accuratePayloadPreview['bankNo'] ?? '-' }}</small>
-                                        <div class="table-responsive" style="margin-top:8px;">
-                                            <table class="table table-sm table-bordered mb-0">
-                                                <thead>
+                                }
+                            @endphp
+                            @if (!empty($previewLines))
+                                <div class="alert alert-secondary text-left" style="max-width:900px;margin:0 auto 12px auto;">
+                                    <strong>Preview akun perkiraan untuk Sync Accurate</strong><br>
+                                    <small>Bank No: {{ $accuratePayloadPreview['bankNo'] ?? '-' }}</small>
+                                    <div class="table-responsive" style="margin-top:8px;">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Akun Perkiraan</th>
+                                                    <th>Amount</th>
+                                                    <th>Department</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach ($previewLines as $line)
                                                     <tr>
-                                                        <th>Akun Perkiraan</th>
-                                                        <th>Amount</th>
-                                                        <th>Department</th>
+                                                        <td>{{ $line['accountNo'] ?? '-' }}</td>
+                                                        <td>{{ isset($line['amount']) ? number_format((float) $line['amount'], 0, ',', '.') : '-' }}</td>
+                                                        <td>{{ $line['departmentName'] ?? '-' }}</td>
                                                     </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach ($previewLines as $line)
-                                                        <tr>
-                                                            <td>{{ $line['accountNo'] ?? '-' }}</td>
-                                                            <td>{{ isset($line['amount']) ? number_format((float) $line['amount'], 0, ',', '.') : '-' }}</td>
-                                                            <td>{{ $line['departmentName'] ?? '-' }}</td>
-                                                        </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
                                     </div>
+                                </div>
+                            @endif
+                            @if (!empty($data->accurate_synced_at))
+                                <button type="button" class="btn btn-success" disabled>
+                                    Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
+                                </button>
+                                @php $journalDateDisplay = \App\Support\AccurateJournalDate::displayFromPayload($data->accurate_payload_json); @endphp
+                                @if ($journalDateDisplay)
+                                    <div><small class="text-muted">Tanggal Jurnal: {{ $journalDateDisplay }}</small></div>
                                 @endif
-                                @if (!empty($data->accurate_synced_at))
-                                    <button type="button" class="btn btn-success" disabled>
-                                        Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
+                            @else
+                                <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" class="js-sync-accurate-form" style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">
+                                    @csrf
+                                    <label for="tanggal_jurnal_{{ $data->id }}" class="mb-0">Tanggal Jurnal</label>
+                                    <input type="date" name="tanggal_jurnal" id="tanggal_jurnal_{{ $data->id }}" class="form-control form-control-sm" style="width:auto;" value="{{ date('Y-m-d') }}" max="{{ date('Y-m-d') }}" required>
+                                    <button type="submit" class="btn btn-warning js-sync-accurate-btn">
+                                        <span class="js-btn-label">Sync Accurate</span>
                                     </button>
-                                    @php $journalDateDisplay = \App\Support\AccurateJournalDate::displayFromPayload($data->accurate_payload_json); @endphp
-                                    @if ($journalDateDisplay)
-                                        <div><small class="text-muted">Tanggal Jurnal: {{ $journalDateDisplay }}</small></div>
-                                    @endif
-                                @else
-                                    <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" class="js-sync-accurate-form" style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">
+                                </form>
+                                @if (in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']))
+                                    <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
                                         @csrf
-                                        <label for="tanggal_jurnal_{{ $data->id }}" class="mb-0">Tanggal Jurnal</label>
-                                        <input type="date" name="tanggal_jurnal" id="tanggal_jurnal_{{ $data->id }}" class="form-control form-control-sm" style="width:auto;" value="{{ date('Y-m-d') }}" max="{{ date('Y-m-d') }}" required>
-                                        <button type="submit" class="btn btn-warning js-sync-accurate-btn">
-                                            <span class="js-btn-label">Sync Accurate</span>
-                                        </button>
+                                        <button type="submit" class="btn btn-info">Reset Settlement</button>
                                     </form>
-                                    @if (auth()->user()->jabatan == 'Owner')
-                                        <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
-                                            @csrf
-                                            <button type="submit" class="btn btn-info">Reset Settlement</button>
-                                        </form>
-                                    @endif
                                 @endif
                             @endif
+                        @endif
                         </center>
                     <br><br><br>
             </div>

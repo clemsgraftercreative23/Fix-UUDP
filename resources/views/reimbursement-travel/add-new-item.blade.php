@@ -257,18 +257,18 @@ function rate_input($angka){
             $canManageTabs = false;
             if ($statusInt === 10) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+            } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin', 'admin'], true)) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin'], true)) {
+            } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin', 'admin'], true)) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+            } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin', 'admin'], true)) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
+            } elseif ($statusInt === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true)) {
                 $canManageTabs = true;
-            } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
+            } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true)) {
                 $canManageTabs = true;
             } elseif ($statusInt === 9) {
-                $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
+                $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id() || in_array($jabatan, ['superadmin', 'admin'], true);
             }
         @endphp
         <div class="row" v-for="(data,i) in reimburses">
@@ -469,14 +469,14 @@ function rate_input($angka){
                             @endif
                             
                             @if(
-                                ((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && in_array((int) $data['0']->status, [1, 2], true))
-                                || (auth()->user()->jabatan == 'Finance Supervisor' && (int) $data['0']->status === 2)
+                                ((in_array(auth()->user()->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin', 'admin'])) && in_array((int) $data['0']->status, [1, 2], true))
+                                || (in_array(auth()->user()->jabatan, ['Finance Supervisor', 'superadmin', 'admin']) && (int) $data['0']->status === 2)
                             )
                                 <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
                             @endif
 
-                            @if((auth()->user()->jabatan == 'Owner' && in_array((int) $data['0']->status, [2, 11], true))
-                                || (auth()->user()->jabatan == 'Finance Manager' && (int) $data['0']->status === 11))
+                            @if((in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']) && in_array((int) $data['0']->status, [2, 11], true))
+                                || (in_array(auth()->user()->jabatan, ['Finance Manager', 'superadmin', 'admin']) && (int) $data['0']->status === 11))
                                 <button class="btn btn-warning" type="submit" id="edit_owner" name="edit_owner">Update</button>&nbsp;
                             @endif
                             

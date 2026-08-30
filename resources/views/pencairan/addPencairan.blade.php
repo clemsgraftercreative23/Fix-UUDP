@@ -70,7 +70,7 @@
                                   <th scope="col">Nominal</th>
                                   <th scope="col">Tgl Jatuh Tempo</th>
                                   <th scope="col">
-                                    @if(Auth::user()->jabatan=='Finance')
+                                    @if(in_array(Auth::user()->jabatan, ['Finance', 'superadmin', 'admin']))
                                       Aksi
                                     @else
                                       Status
@@ -86,7 +86,7 @@
                               <td>{{$pengajuan['0']->nominal_pengajuan}}</td>
                               <td>{{ $firstPencairan->date ? date('d-m-Y', strtotime($firstPencairan->date)) : '—' }}</td>
                               <td>
-                                @if(Auth::user()->jabatan=='Finance')
+                                @if(in_array(Auth::user()->jabatan, ['Finance', 'superadmin', 'admin']))
                                   <button type="button" name="edit" data-toggle="modal" data-target="#formModal" id="{{$firstPencairan->id}}" class="edit btn btn-warning btn-xs"><i class="fas fa-upload"></i></button>
                                 @else
                                   Belum ditransfer
@@ -106,10 +106,8 @@
                                   <th scope="col">Presentase</th>
                                   <th scope="col">Nominal</th>
                                   <th scope="col">
-                                    @if(Auth::user()->jabatan=='Finance')
+                                    @if(in_array(Auth::user()->jabatan, ['Finance', 'superadmin', 'admin']))
                                       Aksi
-                                    @elseif(Auth::user()->jabatan=='superadmin')
-                                    Aksi
                                     @else
                                       Status
                                     @endif
@@ -128,18 +126,12 @@
                                   <td>{{$row->nominal}} %</td>
                                   <td>{{ number_format(((float) $row->nominal / 100) * (float) $pengajuan['0']->nominal_pengajuan, 0, ',', '.') }}</td>
                                   <td>
-                                    @if(Auth::user()->jabatan=='Finance')
+                                    @if(in_array(Auth::user()->jabatan, ['Finance', 'superadmin', 'admin']))
                                       @if($row->status==0)
                                         <button type="button" name="edit" data-toggle="modal" data-target="#formModal" id="{{$row->id}}" class="edit btn btn-warning btn-xs" title="Upload Bukti Settlement"><i class="fas fa-upload"></i></button>
                                         @if($row->jumlah_notif>0)
                                         <button type="button" name="detail-push"  id="{{$row->id}}" class="detail-push btn btn-default btn-xs" title="Jumlah Push Settlement" data-target="#formModalFinance" data-toggle="modal" data-backdrop="static" data-keyboard="false"><i class="fa fa-info-circle" style="color:red"></i><sup style="color :red">{{$row->jumlah_notif}}</sup></button>
                                         @endif
-                                      @else
-                                        <button type="button" name="detail" data-toggle="modal" data-target="#formModalDetail" id="{{$row->id}}" class="detail btn btn-success btn-xs"><i class="fas fa-check-square"></i></button>
-                                      @endif
-                                    @elseif(Auth::user()->jabatan=='superadmin')
-                                      @if($row->status==0)
-                                        <button type="button" name="edit" data-toggle="modal" data-target="#formModal" id="{{$row->id}}" class="edit btn btn-warning btn-xs"><i class="fas fa-upload"></i></button>
                                       @else
                                         <button type="button" name="detail" data-toggle="modal" data-target="#formModalDetail" id="{{$row->id}}" class="detail btn btn-success btn-xs"><i class="fas fa-check-square"></i></button>
                                       @endif
@@ -152,7 +144,7 @@
                                               PUSH <span class="badge badge-light" style="background-color: #f2cea5">{{$row->jumlah_notif}}</span>
                                             </button>
                                           @endif
-                                          @if(Auth::user()->jabatan=='superadmin' || Auth::user()->jabatan=='Owner')
+                                          @if(in_array(Auth::user()->jabatan, ['superadmin', 'admin', 'Owner']))
                                             @if($row->jumlah_notif_owner>0)
                                             <button type="button" name="detail-push"  id="{{$row->id}}" class="detail-push btn btn-default btn-xs" title="Jumlah Push Settlement" data-target="#formModalFinance" data-toggle="modal" data-backdrop="static" data-keyboard="false"><i class="fa fa-info-circle" style="color:red"></i><sup style="color :red">{{$row->jumlah_notif_owner}}</sup></button>
                                             @endif
@@ -530,7 +522,7 @@
                               <a href="javascript:history.go(0)" class="btn btn-secondary">Kembali</a>
                               <button type="" class="btn btn-primary" name="action_finance" id="action_finance">Push</button>
                           </div>
-                        @elseif(Auth::user()->jabatan=='Owner' || Auth::user()->jabatan=='superadmin')
+                        @elseif(in_array(Auth::user()->jabatan, ['Owner', 'superadmin', 'admin']))
                           <div class="modal-footer">
                               <a href="javascript:history.go(0)" class="btn btn-success">OK</a>
                           </div>

@@ -146,7 +146,7 @@ if (!function_exists('ent_attachment_rows')) {
                         @php
                           $isOwnSubmission = (int) auth()->id() === (int) $data->id_user;
                           $isAssignedHeadDept = auth()->user()->isHeadDeptApproverForSubmitter((int) $data->id_user);
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'], true);
                         @endphp
                         @if($isApproverRole && !$isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -395,7 +395,10 @@ if (!function_exists('ent_attachment_rows')) {
                     @endif 
                     <br>
                     <center>
-                        @if ($data->status == 0 && ((auth()->user()->jabatan == 'Direktur Operasional' && $isAssignedHeadDept) || auth()->user()->jabatan == 'superadmin') && !$isOwnSubmission)                                
+                        @php
+                            $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true);
+                        @endphp
+                        @if ($data->status == 0 && (((auth()->user()->jabatan == 'Direktur Operasional' && $isAssignedHeadDept) || $isSuperadmin)) && ($isSuperadmin || !$isOwnSubmission))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -404,15 +407,15 @@ if (!function_exists('ent_attachment_rows')) {
                             </form>
                         @endif
                         
-                        @if ($data->status == 9 && auth()->user()->id == $data->id_user) 
+                        @if ($data->status == 9 && (auth()->user()->id == $data->id_user || $isSuperadmin)) 
                             <button type="button" class="btn btn-primary"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
                         @endif
 
-                        @if ($data->status == 10 && auth()->user()->id == $data->id_user) 
+                        @if ($data->status == 10 && (auth()->user()->id == $data->id_user || $isSuperadmin)) 
                             <button type="button" class="btn btn-primary"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
                         @endif
                         
-                        @if ($data->status == 1 && in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin'], true) && !$isOwnSubmission)                                
+                        @if ($data->status == 1 && (in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin', 'admin'], true)) && ($isSuperadmin || !$isOwnSubmission))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -429,7 +432,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') && !$isOwnSubmission)
+                        @if ($data->status == 2 && (in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin'], true)) && ($isSuperadmin || !$isOwnSubmission))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
@@ -437,7 +440,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if ($data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true) && !$isOwnSubmission)
+                        @if ($data->status == 11 && (in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin', 'admin'], true)) && ($isSuperadmin || !$isOwnSubmission))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>

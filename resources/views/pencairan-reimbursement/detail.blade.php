@@ -248,7 +248,7 @@
                     </div>
                     @endif 
 
-                    @if ($data->status == 3 && auth()->user()->jabatan == 'Owner')                                
+                    @if ($data->status == 3 && in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']))                                
                     <form action="{{url('/').'/pencairan-reimbursement/'.$data->id}}" method="POST">
                         <input type="hidden" name="employeeNo" value="{{$empNo}}">
                       	@if($cash!=0)
@@ -385,36 +385,31 @@
                   
                     <br>
                     <center>
-                        @if (auth()->user()->jabatan == 'Direktur Operasional') 
+                        @php
+                            $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin']);
+                        @endphp
+                        @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user)) 
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
-                                    @if($data->status == 0)
-                                        @if($data->id_user != auth()->user()->id)
-                                        <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
-                                        <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                        @endif
-                                    @endif
+                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
+                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
-                            
                         @endif
 
-                        @if ($data->status == 9 && auth()->user()->id == $data->id_user) 
+                        @if ($data->status == 9 && (auth()->user()->id == $data->id_user || $isSuperadmin)) 
                             <!--<button type="button" class="btn btn-primary click-edit"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>-->
                             <button type="button" class="btn btn-primary click-edit"  data-toggle="modal" id="{{Request::segment(2)}}">Edit</button>
-                            
                         @endif
                         
-                        @if (auth()->user()->jabatan == 'Finance' && (int) auth()->id() !== (int) $data->id_user)                                
+                        @if ($data->status == 1 && (in_array(auth()->user()->jabatan, ['Finance', 'HR GA']) || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
-                                @if($data->status == 1)
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
-                                @endif
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) auth()->id() !== (int) $data->id_user)                                
+                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>
@@ -476,7 +471,7 @@
                                         <span class="js-btn-label">Sync Accurate</span>
                                     </button>
                                 </form>
-                                @if (auth()->user()->jabatan == 'Owner')
+                                @if (in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']))
                                     <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
                                         @csrf
                                         <button type="submit" class="btn btn-info">Reset Settlement</button>

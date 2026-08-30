@@ -493,8 +493,8 @@ class PencairanReimbursementController extends Controller
     {
         $data = Reimbursement::findOrFail($id);
 
-        if (auth()->user()->jabatan !== 'Owner') {
-            return redirect()->back()->withErrors(['Hanya Owner yang dapat mereset settlement.']);
+        if (!in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin'], true)) {
+            return redirect()->back()->withErrors(['Hanya Finance (Owner) atau Superadmin yang dapat mereset settlement.']);
         }
 
         if ((int) $data->status !== 5) {

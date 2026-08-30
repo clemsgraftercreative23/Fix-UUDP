@@ -44,7 +44,7 @@
                                 <td>{{$row->username}}</td>
                                 <td>{{$row->name}}</td>
                                 <td>
-                                    @if($row->jabatan=='superadmin')
+                                    @if($row->jabatan=='superadmin' || $row->jabatan=='admin')
                                         Admin
                                     @elseif($row->jabatan=='Direktur Operasional')
                                         Head Department

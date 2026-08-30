@@ -276,32 +276,32 @@
                   
                         <hr><br>
                         <center>
-                            @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional' && (int) auth()->id() !== (int) $data->id_user)                                
+                            @php
+                                $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true);
+                            @endphp
+                            @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <a href="{!!url('reimbursement')!!}" class="btn btn-secondary">Kembali</a>&nbsp;&nbsp;
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Setujui</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                     <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
                             @endif
                             
-                            @if ($data->status == 1 && auth()->user()->jabatan == 'Finance' && (int) auth()->id() !== (int) $data->id_user)                                
+                            @if ($data->status == 1 && (in_array(auth()->user()->jabatan, ['Finance', 'HR GA']) || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <a href="{!!url('reimbursement')!!}" class="btn btn-secondary">Kembali</a>&nbsp;&nbsp;
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Setujui</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                     <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
                             @endif
                             
-                            @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) auth()->id() !== (int) $data->id_user)                                
+                            @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     <a href="{!!url('reimbursement')!!}" class="btn btn-secondary">Kembali</a>&nbsp;&nbsp;
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Setujui</button>
-                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                     <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                                 </form>
                             @endif

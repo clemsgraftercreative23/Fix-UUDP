@@ -21,6 +21,6 @@ class JabatanClassifier
      */
     public static function canSyncAccurate(?string $jabatan): bool
     {
-        return in_array($jabatan, ['Owner', 'Finance'], true);
+        return in_array($jabatan, ['Owner', 'Finance', 'superadmin', 'admin'], true);
     }
 }

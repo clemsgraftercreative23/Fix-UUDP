@@ -16,7 +16,7 @@ class ActivityLogController extends Controller
     private function ensureAuthorized()
     {
         $role = Auth::user()->jabatan;
-        if (!in_array($role, ['superadmin', 'Owner'], true)) {
+        if (!in_array($role, ['superadmin', 'admin', 'Owner'], true)) {
             abort(403, 'Unauthorized');
         }
     }

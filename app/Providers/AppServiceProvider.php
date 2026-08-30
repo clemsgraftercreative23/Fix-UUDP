@@ -26,16 +26,25 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        $accurateClient = new AccurateApiTokenClient();
-        $curl = $accurateClient->request('GET', '/accurate/api/department/list.do');
-        if (!($curl['ok'] ?? false)) {
+        // Console commands (artisan, queue workers, tests) must not block on a
+        // live Accurate API call during boot — it previously hung every CLI
+        // invocation and made the test suite unrunnable.
+        if ($this->app->runningInConsole() || $this->app->environment('testing')) {
             View::share('accurate', [
                 'status' => false
             ]);
         } else {
-            View::share('accurate', [
-                'status' => true
-            ]);
+            $accurateClient = new AccurateApiTokenClient();
+            $curl = $accurateClient->request('GET', '/accurate/api/department/list.do');
+            if (!($curl['ok'] ?? false)) {
+                View::share('accurate', [
+                    'status' => false
+                ]);
+            } else {
+                View::share('accurate', [
+                    'status' => true
+                ]);
+            }
         }
 
       if(config('app.env') === 'production') {

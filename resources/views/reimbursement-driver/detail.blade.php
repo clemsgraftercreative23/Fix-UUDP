@@ -135,7 +135,7 @@ if (!function_exists('driver_attachment_rows')) {
                         @php
                           $isOwnSubmission = (int) auth()->id() === (int) $data->id_user;
                           $isAssignedHeadDept = auth()->user()->isHeadDeptApproverForSubmitter((int) $data->id_user);
-                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'], true);
+                          $isApproverRole = in_array(auth()->user()->jabatan, ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'], true);
                         @endphp
                         @if($isApproverRole && !$isOwnSubmission && in_array((int) $data->status, [0, 1, 2, 11], true))
                         <div class="alert alert-info mb-0 mt-2" role="alert">
@@ -338,7 +338,10 @@ if (!function_exists('driver_attachment_rows')) {
                   
                     <br>
                     <center>
-                        @if (!$isOwnSubmission && ((auth()->user()->jabatan == 'Direktur Operasional' && $isAssignedHeadDept) || auth()->user()->jabatan == 'superadmin')) 
+                        @php
+                            $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true);
+                        @endphp
+                        @if ((!$isOwnSubmission || $isSuperadmin) && ((auth()->user()->jabatan == 'Direktur Operasional' && $isAssignedHeadDept) || $isSuperadmin)) 
                                 <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                     @csrf
                                     @if($data->status == 0)
@@ -350,15 +353,15 @@ if (!function_exists('driver_attachment_rows')) {
                             
                         @endif
 
-                        @if ($data->status == 9 && auth()->user()->id == $data->id_user) 
+                        @if ($data->status == 9 && (auth()->user()->id == $data->id_user || $isSuperadmin)) 
                             <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                         @endif
 
-                        @if ($data->status == 10 && auth()->user()->id == $data->id_user) 
+                        @if ($data->status == 10 && (auth()->user()->id == $data->id_user || $isSuperadmin)) 
                             <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
                         @endif
                         
-                        @if (!$isOwnSubmission && in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin'], true))
+                        @if ((!$isOwnSubmission || $isSuperadmin) && in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'superadmin', 'admin'], true))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 @if($data->status == 1)
@@ -369,7 +372,7 @@ if (!function_exists('driver_attachment_rows')) {
                             </form>
                         @endif
                         
-                        @if (!$isOwnSubmission && $data->status == 2 && auth()->user()->jabatan == 'Finance Supervisor')
+                        @if ((!$isOwnSubmission || $isSuperadmin) && $data->status == 2 && auth()->user()->jabatan == 'Finance Supervisor')
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
@@ -377,7 +380,7 @@ if (!function_exists('driver_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if (!$isOwnSubmission && $data->status == 2 && (auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin'))
+                        @if ((!$isOwnSubmission || $isSuperadmin) && $data->status == 2 && in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin'], true))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
@@ -385,7 +388,7 @@ if (!function_exists('driver_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
-                        @if (!$isOwnSubmission && $data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true))
+                        @if ((!$isOwnSubmission || $isSuperadmin) && $data->status == 11 && in_array(auth()->user()->jabatan, ['Finance Manager', 'Owner', 'superadmin', 'admin'], true))
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#formModaEdit" id="{{Request::segment(2)}}">Edit</button>
@@ -680,10 +683,11 @@ if (!function_exists('driver_attachment_rows')) {
                       <div class="modal-footer">
                           <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
                           @php
-                            $approverJForModal = ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'];
+                            $approverJForModal = ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'];
                             $conflictVerifierModal = $isOwnSubmission
                               && in_array(auth()->user()->jabatan, $approverJForModal, true)
-                              && in_array((int) $data->status, [0, 1, 2, 11], true);
+                              && in_array((int) $data->status, [0, 1, 2, 11], true)
+                              && !in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true);
                             $driverEditCanDraft = ((int) auth()->id() === (int) $data->id_user)
                               || in_array(auth()->user()->jabatan, $approverJForModal, true);
                           @endphp

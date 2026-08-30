@@ -266,7 +266,7 @@ class PengajuanController extends Controller
                   ->rawColumns(['action','total'])
                   ->make(true);
                 }
-                elseif ($jabatan == 'superadmin') {
+                elseif (in_array($jabatan, ['superadmin', 'admin'], true)) {
 
                   $data = DB::table('pengajuan')
                   ->join('master_project','pengajuan.id_project','master_project.id')

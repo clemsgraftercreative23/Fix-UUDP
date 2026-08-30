@@ -24,7 +24,7 @@ function rupiah($angka) {
 </style>
 
 <div class="page-content">
-    @if(Auth::user()->jabatan!='karyawan')
+    @if(!\App\Support\JabatanClassifier::isEmployeeLike(Auth::user()->jabatan))
     <div class="clearfix">
          <a href="{!!url('home')!!}" class="btn btn-success float-left" style="width: 48%;">My Inquiry</a>
          <a href="{!!url('home-all')!!}" class="btn btn-info float-right" style="width: 48%;">All Inquiry</a>

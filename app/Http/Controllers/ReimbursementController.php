@@ -436,22 +436,23 @@ class ReimbursementController extends Controller
         }
 
         $approver = auth()->user();
-        if ((int) $approver->id === (int) $data->id_user) {
+        $isSuperadmin = in_array($approver->jabatan, ['superadmin', 'admin'], true);
+        if ((int) $approver->id === (int) $data->id_user && !$isSuperadmin) {
             return redirect()
                 ->back()
                 ->withErrors(['Anda tidak dapat menyetujui atau menolak pengajuan reimbursement yang Anda buat sendiri.']);
         }
         $nama_approval = ucfirst($approver->name);
         $applicantName = $data->applicantDisplayName();
-        if ($approver->jabatan == 'Direktur Operasional' || ($approver->jabatan == 'superadmin' && (int) $data->status === 0)) {
+        if ($approver->jabatan == 'Direktur Operasional' || ($isSuperadmin && (int) $data->status === 0)) {
             $level = 'Head Department';
-        } else if (($approver->jabatan == 'Finance' || $approver->jabatan == 'HR' || $approver->jabatan == 'HR GA' || $approver->jabatan == 'superadmin') && (int) $data->status === 1) {
+        } else if (($approver->jabatan == 'Finance' || $approver->jabatan == 'HR' || $approver->jabatan == 'HR GA' || $isSuperadmin) && (int) $data->status === 1) {
             $level = 'HR GA';
         } else if ($approver->jabatan === 'Finance Supervisor' && (int) $data->status === 2) {
             $level = 'Finance Supervisor';
-        } else if (in_array($approver->jabatan, ['Owner', 'Finance Manager', 'superadmin'], true) && (int) $data->status === 11) {
+        } else if (in_array($approver->jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true) && (int) $data->status === 11) {
             $level = 'Finance Manager';
-        } else if (($approver->jabatan == 'Owner' || $approver->jabatan == 'Finance Supervisor' || $approver->jabatan == 'superadmin') && (int) $data->status === 2) {
+        } else if (($approver->jabatan == 'Owner' || $approver->jabatan == 'Finance Supervisor' || $isSuperadmin) && (int) $data->status === 2) {
             $level = 'Finance';
         } else {
             $level = 'Finance';
@@ -460,7 +461,7 @@ class ReimbursementController extends Controller
         $processed = false;
         if ($data->status == 0 && (
             ($approver->jabatan == 'Direktur Operasional' && $approver->isHeadDeptApproverForSubmitter((int) $data->id_user))
-            || $approver->jabatan == 'superadmin'
+            || $isSuperadmin
         )) {
             $processed = true;
             $data->update([
@@ -514,7 +515,7 @@ class ReimbursementController extends Controller
             }
 
             
-        } elseif ($data->status == 1 && ($approver->jabatan == 'Finance' || $approver->jabatan == 'HR' || $approver->jabatan == 'HR GA' || $approver->jabatan == 'superadmin')) {
+        } elseif ($data->status == 1 && in_array($approver->jabatan, ['Finance', 'HR', 'HR GA', 'superadmin', 'admin'], true)) {
             $processed = true;
             $data->update([
                 'status' => 2,
@@ -629,7 +630,7 @@ class ReimbursementController extends Controller
                     ])
                     ->post();
             }
-        } elseif ((int) $data->status === 2 && in_array((int) $cek_type, [1, 2, 3], true) && ($approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
+        } elseif ((int) $data->status === 2 && in_array((int) $cek_type, [1, 2, 3], true) && in_array($approver->jabatan, ['Owner', 'superadmin', 'admin'], true)) {
             $processed = true;
             $data->update([
                 'status' => 3,
@@ -682,7 +683,7 @@ class ReimbursementController extends Controller
                     ])
                     ->post();
             }
-        } elseif ((int) $data->status === 11 && in_array((int) $cek_type, [1, 2, 3], true) && ($approver->jabatan == 'Finance Manager' || $approver->jabatan == 'Owner' || $approver->jabatan == 'superadmin')) {
+        } elseif ((int) $data->status === 11 && in_array((int) $cek_type, [1, 2, 3], true) && in_array($approver->jabatan, ['Finance Manager', 'Owner', 'superadmin', 'admin'], true)) {
             $processed = true;
             $data->update([
                 'status' => 3,
@@ -776,7 +777,7 @@ class ReimbursementController extends Controller
                 ->withErrors(['Reimbursement tidak ditemukan']);
         }
 
-        if ((int) auth()->id() === (int) $data->id_user) {
+        if ((int) auth()->id() === (int) $data->id_user && !in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true)) {
             return redirect()
                 ->back()
                 ->withErrors(['Anda tidak dapat menolak pengajuan reimbursement yang Anda buat sendiri melalui alur verifikator.']);

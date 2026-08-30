@@ -258,7 +258,7 @@
                     @endif 
 
 
-                    @if ($data->status == 3 && auth()->user()->jabatan == 'Owner')
+                    @if ($data->status == 3 && in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']))
                     <form action="{{url('/').'/pencairan-reimbursement/'.$data->id}}" method="POST">
                         <input type="hidden" name="employeeNo" value="{{$empNo}}">
                         <h6>BDC</h6><br>
@@ -390,7 +390,10 @@
                     @endif
                     <br>
                     <center>
-                        @if ($data->status == 0 && auth()->user()->jabatan == 'Direktur Operasional' && (int) auth()->id() !== (int) $data->id_user)                                
+                        @php
+                            $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin']);
+                        @endphp
+                        @if ($data->status == 0 && (auth()->user()->jabatan == 'Direktur Operasional' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>&nbsp;&nbsp;
@@ -398,11 +401,11 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 9 && auth()->user()->id == $data->id_user) 
+                        @if ($data->status == 9 && (auth()->user()->id == $data->id_user || $isSuperadmin)) 
                             <button type="button" class="btn btn-primary"  data-toggle="modal" data-target=".bd-example-modal-lg">Edit</button>
                         @endif
                         
-                        @if ($data->status == 1 && auth()->user()->jabatan == 'Finance' && (int) auth()->id() !== (int) $data->id_user)                                
+                        @if ($data->status == 1 && (in_array(auth()->user()->jabatan, ['Finance', 'HR GA']) || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>&nbsp;&nbsp;
@@ -410,7 +413,7 @@
                             </form>
                         @endif
                         
-                        @if ($data->status == 2 && auth()->user()->jabatan == 'Owner' && (int) auth()->id() !== (int) $data->id_user)                                
+                        @if ($data->status == 2 && (auth()->user()->jabatan == 'Owner' || $isSuperadmin) && ($isSuperadmin || (int) auth()->id() !== (int) $data->id_user))                                
                             <form action="{{url('/').'/reimbursement/approve/'.$data->id}}" method="POST">
                                 @csrf
                                 <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Approve</button>&nbsp;&nbsp;
@@ -472,7 +475,7 @@
                                         <span class="js-btn-label">Sync Accurate</span>
                                     </button>
                                 </form>
-                                @if (auth()->user()->jabatan == 'Owner')
+                                @if (in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin']))
                                     <form action="{{ route('pencairan-reimbursement.reset-settlement', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereset settlement ini? Anda akan diminta untuk melakukan settlement ulang.');">
                                         @csrf
                                         <button type="submit" class="btn btn-info">Reset Settlement</button>

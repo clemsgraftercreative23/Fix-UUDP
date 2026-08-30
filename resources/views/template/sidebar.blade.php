@@ -18,7 +18,7 @@
                                 Finance Supervisor
                             @elseif(Auth::user()->jabatan=='Direktur Operasional')
                                 Head Department
-                            @elseif(Auth::user()->jabatan=='karyawan')
+                            @elseif(\App\Support\JabatanClassifier::isEmployeeLike(Auth::user()->jabatan))
                                 Employee
                             @else 
                                 Admin
@@ -33,7 +33,7 @@
                 </div>
                 <?php  $segment1 =  Request::segment(1);?>
                 <div class="page-sidebar-inner slimscroll" style="margin-top: -50px">
-                     @if(Auth::user()->jabatan=='superadmin')
+                     @if(in_array(Auth::user()->jabatan, ['superadmin', 'admin'], true))
                     <ul class="accordion-menu">
                         <li class="sidebar-title">
                             Menu
@@ -185,7 +185,7 @@
                       </form>
                         </li>
                     </ul>
-                    @elseif(Auth::user()->jabatan=='karyawan')
+                    @elseif(\App\Support\JabatanClassifier::isEmployeeLike(Auth::user()->jabatan))
                    <ul class="accordion-menu">
                        <li class="sidebar-title">
                            Menu

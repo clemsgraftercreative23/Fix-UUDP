@@ -421,29 +421,28 @@ class MedicalReimbursementController extends Controller
         if(!$data)
             return redirect()->back()->withErrors(['Reimbursement tidak ditemukan']);
 
-        if ((int) auth()->id() === (int) $data->id_user) {
+        $user = auth()->user();
+        $isSuperadmin = in_array($user->jabatan, ['superadmin', 'admin'], true);
+
+        if ((int) auth()->id() === (int) $data->id_user && !$isSuperadmin) {
             return redirect()->back()->withErrors(['Anda tidak dapat menyetujui pengajuan reimbursement yang Anda buat sendiri.']);
         }
 
-        $user = auth()->user();
-        if($data->status == 0 && $user->jabatan == "Direktur Operasional") {
+        if($data->status == 0 && ($user->jabatan == "Direktur Operasional" || $isSuperadmin)) {
             $data->update([
                 'status' => 1,
                 'mengetahui_op' => $user->name
             ]);
-        }
-        if($data->status == 1 && $user->jabatan == "Finance") {
+        } elseif($data->status == 1 && in_array($user->jabatan, ["Finance", "HR GA", "superadmin", "admin"], true)) {
             $data->update([
                 'status' => 2,
                 'mengetahui_finance' => $user->name
             ]);
-        }
-        if($data->status == 2 && $user->jabatan == "Owner") {
+        } elseif($data->status == 2 && in_array($user->jabatan, ["Owner", "superadmin", "admin"], true)) {
             $data->update([
                 'status' => 3,
                 'mengetahui_owner' => $user->name
             ]);
-
         }
         ActivityLogger::log(
             'reimbursement-medical',

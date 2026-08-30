@@ -64,9 +64,10 @@ class UseraplikasiController extends Controller
 
     public function remove_jabatan(Request $request)
     {
-
+        // Restore employee role. Setting jabatan to '-' leaves the user with no sidebar
+        // menu and the UI incorrectly labels them as "Admin".
         $form_data = array(
-            'jabatan'        =>  '-',
+            'jabatan'        =>  'karyawan',
         );
 
         User::whereId($request->hidden_id)->update($form_data);

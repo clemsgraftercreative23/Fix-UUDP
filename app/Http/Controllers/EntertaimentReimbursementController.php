@@ -310,7 +310,7 @@ class EntertaimentReimbursementController extends Controller
         if(request()->ajax())
         {
 
-            if(auth()->user()->jabatan=='superadmin') {
+            if(in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true)) {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',3);
@@ -398,18 +398,15 @@ class EntertaimentReimbursementController extends Controller
 
                 // Delete button (only for status 0 or 10)
                 if (in_array((int) $data->status, [0, 10], true)) {
-                    $buttons .= '<form method="POST" action="' . route('reimbursement-entertaiment.destroy', $data->id) . '" style="display:inline-block; margin:0;" onsubmit="return confirm(\'Yakin ingin menghapus pengajuan ini?\')">'
-                        . csrf_field()
-                        . method_field('DELETE')
-                        . '<button type="submit" class="btn btn-danger btn-sm" title="Delete" aria-label="Delete"><i class="fa fa-trash"></i></button></form>';
-                } else {
-                    $buttons .= '<span>-</span>';
+                    $buttons .= '<form action="' . route('reimbursement-entertaiment.destroy', $data->id) . '" method="POST" style="display:inline;" onsubmit="return confirm(\'Apakah Anda yakin ingin menghapus data ini?\');">';
+                    $buttons .= csrf_field();
+                    $buttons .= method_field('DELETE');
+                    $buttons .= '<button type="submit" class="btn btn-danger btn-sm" title="Delete" aria-label="Delete"><i class="fa fa-trash"></i></button>';
+                    $buttons .= '</form>';
                 }
 
                 $buttons .= '</div>';
-
                 return $buttons;
-
             })
             ->addColumn('checkbox', function ($data) {
                     
@@ -417,26 +414,24 @@ class EntertaimentReimbursementController extends Controller
                     return $cek;
             })
             ->editColumn('no_project', function ($data) {
-               
-                return optional($data->user)->name ?? $data->created_by ?? '-';
+                if($data->id_project == null) {
+                    return $data->remark;
+                }
+                return $data->no_project;
             })
             ->addColumn('nominal_pengajuan', function ($data) {
-                if ((int) $data->nominal_pengajuan === 0) {
-                    $computed = $this->computeEntertainmentTotals((int) $data->id);
-                    if ((int) $computed['nominal_pengajuan'] > 0) {
-                        Reimbursement::whereId($data->id)->update($computed);
-                        $data->nominal_pengajuan = $computed['nominal_pengajuan'];
-                    }
-                }
-                return number_format($data->nominal_pengajuan, 0, ',', '.');
+                $button ='';
+                $button .= number_format($data->nominal_pengajuan,0, ',' , '.');
+                return $button;
             })
             ->editColumn('no_reimbursement', function ($data) {
-                return $data->no_reimbursement;
+                return "<a href='".route('reimbursement-entertaiment.show',$data->id)."'>".$data->no_reimbursement."</a>";
             })
-            ->rawColumns(['status_label', 'action', 'checkbox', 'nominal_pengajuan'])
+            ->rawColumns(['action','nominal_pengajuan','no_reimbursement', 'status_label', 'checkbox'])
             ->make(true);
         }
         
+        $id_user = auth()->user()->id;
         $check_approval  = DB::select( DB::raw("SELECT count(id) AS id FROM users WHERE id_approval = '$id_user'"))['0']->id;
 
         return view('reimbursement-entertaiment.index',[
@@ -456,7 +451,7 @@ class EntertaimentReimbursementController extends Controller
         if(request()->ajax())
         {
 
-            if(auth()->user()->jabatan=='Finance' || auth()->user()->jabatan=='HR GA' || auth()->user()->jabatan=='Finance Supervisor' || auth()->user()->jabatan=='Finance Manager' || auth()->user()->jabatan=='Owner' || auth()->user()->jabatan=='superadmin') {
+            if(in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'], true)) {
                 $data = Reimbursement::leftJoin('master_project','reimbursement.id_project','master_project.id')
                         ->select('reimbursement.*','master_project.nama','master_project.no_project','master_project.keterangan')
                         ->where('reimbursement.reimbursement_type',3)->where('reimbursement.status', '!=',10);
@@ -706,7 +701,7 @@ class EntertaimentReimbursementController extends Controller
         $status = (int) $data->status;
         $isSubmitter = (int) $user->id === (int) $data->id_user;
 
-        if ($jabatan === 'superadmin' && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
+        if (in_array($jabatan, ['superadmin', 'admin'], true) && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
             return true;
         }
         if ($jabatan === 'Direktur Operasional' && $status === 0) {
@@ -1180,7 +1175,7 @@ class EntertaimentReimbursementController extends Controller
         }
 
         $isOwner = (int) $data->id_user === (int) auth()->id();
-        $isSuperadmin = auth()->user()->jabatan === 'superadmin';
+        $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true);
         if (!$isOwner && !$isSuperadmin) {
             return redirect()->back()->withErrors(['Anda tidak memiliki akses untuk menghapus data ini']);
         }
@@ -1216,20 +1211,22 @@ class EntertaimentReimbursementController extends Controller
         if(!$data)
             return redirect()->back()->withErrors(['Reimbursement tidak ditemukan']);
 
-        if ((int) auth()->id() === (int) $data->id_user) {
+        $user = auth()->user();
+        $isSuperadmin = in_array($user->jabatan, ['superadmin', 'admin'], true);
+
+        if ((int) auth()->id() === (int) $data->id_user && !$isSuperadmin) {
             return redirect()->back()->withErrors(['Anda tidak dapat menyetujui pengajuan reimbursement yang Anda buat sendiri.']);
         }
 
-        $user = auth()->user();
-        if($data->status == 0 && $user->jabatan == "Direktur Operasional") {
-            if (!$user->isHeadDeptApproverForSubmitter((int) $data->id_user)) {
+        if($data->status == 0 && ($user->jabatan == "Direktur Operasional" || $isSuperadmin)) {
+            if ($user->jabatan == "Direktur Operasional" && !$user->isHeadDeptApproverForSubmitter((int) $data->id_user)) {
                 return redirect()->back()->withErrors(['Anda bukan Head Department yang ditunjuk untuk pengajuan ini.']);
             }
             $data->update([
                 'status' => 1,
                 'mengetahui_op' => $user->name
             ]);
-        } elseif($data->status == 1 && ($user->jabatan == "Finance" || $user->jabatan == "HR GA" || $user->jabatan == "superadmin")) {
+        } elseif($data->status == 1 && in_array($user->jabatan, ["Finance", "HR GA", "superadmin", "admin"], true)) {
             $data->update([
                 'status' => 2,
                 'mengetahui_finance' => $user->name
@@ -1239,12 +1236,12 @@ class EntertaimentReimbursementController extends Controller
                 'status' => 11,
                 'menyetujui_finance_supervisor' => $user->name
             ]);
-        } elseif($data->status == 2 && ($user->jabatan == "Owner" || $user->jabatan == "superadmin")) {
+        } elseif($data->status == 2 && in_array($user->jabatan, ["Owner", "superadmin", "admin"], true)) {
             $data->update([
                 'status' => 3,
                 'mengetahui_owner' => $user->name
             ]);
-        } elseif($data->status == 11 && in_array($user->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true)) {
+        } elseif($data->status == 11 && in_array($user->jabatan, ['Finance Manager', 'Owner', 'superadmin', 'admin'], true)) {
             $data->update([
                 'status' => 3,
                 'mengetahui_owner' => $user->name
@@ -1402,16 +1399,18 @@ class EntertaimentReimbursementController extends Controller
         $bulkStatus = (int) $rows->first()->status;
         $status = $bulkStatus;
 
-        $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
-            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
-            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
-            || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'));
+        $isSuperadmin = in_array($jab, ['superadmin', 'admin'], true);
+
+        $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $isSuperadmin))
+            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $isSuperadmin))
+            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $isSuperadmin))
+            || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $isSuperadmin));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
         }
 
         $ownClaimIds = $rows->where('id_user', (int) $user->id)->pluck('id')->values()->all();
-        if ($ownClaimIds !== []) {
+        if ($ownClaimIds !== [] && !$isSuperadmin) {
             return response()->json([
                 'message' => 'Tidak dapat approve bulk untuk pengajuan Anda sendiri. Hapus dari pilihan: ' . implode(', ', $ownClaimIds),
             ], 422);
@@ -1432,10 +1431,10 @@ class EntertaimentReimbursementController extends Controller
             }
         }
 
-      	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
+      	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $isSuperadmin)) {
             $status = 1;
             Reimbursement::whereIn('id', $idsArray)->where('status', 0)->update(['status' => $status, 'mengetahui_op' => $user->name]);
-        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $isSuperadmin)) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
         } else if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
@@ -1444,10 +1443,10 @@ class EntertaimentReimbursementController extends Controller
                 'status' => $status,
                 'menyetujui_finance_supervisor' => $user->name,
             ]);
-        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $isSuperadmin)) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
-        } else if ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $isSuperadmin)) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 11)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }

@@ -103,25 +103,27 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
     $canManageTabs = false;
     if ($statusInt === 10) {
         $canManageTabs = true;
-    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin', 'admin'], true)) {
         $canManageTabs = true;
-    } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin'], true)) {
+    } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin', 'admin'], true)) {
         $canManageTabs = true;
-    } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin'], true)) {
+    } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin', 'admin'], true)) {
         $canManageTabs = true;
-    } elseif ($statusInt === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
+    } elseif ($statusInt === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true)) {
         $canManageTabs = true;
-    } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin'], true)) {
+    } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true)) {
         $canManageTabs = true;
     } elseif ($statusInt === 9) {
-        $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
+        $canManageTabs = (int) ($data[0]->id_user ?? 0) === (int) auth()->id() || in_array($jabatan, ['superadmin', 'admin'], true);
     }
     $canEditAttachments = false;
-    if ($statusInt === 10 || $statusInt === 9) {
-        $canEditAttachments = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
-    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin'], true)) {
+    if (in_array($jabatan, ['superadmin', 'admin'], true)) {
         $canEditAttachments = true;
-    } elseif (in_array($jabatan, ['Finance', 'HR', 'HR GA', 'superadmin'], true) && in_array($statusInt, [1, 2], true)) {
+    } elseif ($statusInt === 10 || $statusInt === 9) {
+        $canEditAttachments = (int) ($data[0]->id_user ?? 0) === (int) auth()->id();
+    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin', 'admin'], true)) {
+        $canEditAttachments = true;
+    } elseif (in_array($jabatan, ['Finance', 'HR', 'HR GA', 'superadmin', 'admin'], true) && in_array($statusInt, [1, 2], true)) {
         $canEditAttachments = true;
     } elseif ($jabatan === 'Finance Supervisor' && in_array($statusInt, [1, 2], true)) {
         $canEditAttachments = true;

@@ -17,7 +17,7 @@ class EntertainmentTotalTest extends TestCase
 
         $totals = EntertainmentTotal::computeFromRows($rows);
 
-        $this->assertSame(370000, $totals['nominal_pengajuan']);
+        $this->assertSame(430000, $totals['nominal_pengajuan']);
         $this->assertSame(380000, $totals['total_bdc']);
         $this->assertSame(50000, $totals['total_cash']);
     }

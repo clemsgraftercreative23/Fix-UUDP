@@ -38,7 +38,7 @@ class PencairanController extends Controller
           {
 
             $jabatan = Auth::user()->jabatan;
-            if($jabatan == 'superadmin' or $jabatan == 'Owner'){
+            if(in_array($jabatan, ['superadmin', 'admin', 'Owner'], true)){
             $data = DB::table('pengajuan')
             ->join('master_project','pengajuan.id_project','master_project.id')
             ->select('pengajuan.*','master_project.nama','master_project.no_project','master_project.keterangan')

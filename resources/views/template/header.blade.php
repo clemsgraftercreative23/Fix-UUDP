@@ -66,7 +66,7 @@
     <br><br>
 
     <?php $segment1 = Request::segment(1); ?>
-    @if(Auth::user()->jabatan == 'superadmin' || Auth::user()->jabatan == 'karyawan' || Auth::user()->jabatan == 'Direktur Operasional' || Auth::user()->jabatan == 'Finance' || Auth::user()->jabatan == 'Finance Supervisor' || Auth::user()->jabatan == 'Owner')
+    @if(in_array(Auth::user()->jabatan, ['superadmin', 'admin', 'karyawan', 'Direktur Operasional', 'Finance', 'Finance Supervisor', 'Finance Manager', 'Owner', 'HR GA', 'HR']))
         <div class="nav-foot d-sm-none">
             <a href="{{ url('home') }}" class="nf-link">
                 <span class="material-icons">home</span>

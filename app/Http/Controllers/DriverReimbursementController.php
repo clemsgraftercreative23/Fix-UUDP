@@ -616,7 +616,7 @@ class DriverReimbursementController extends Controller
         if (request()->ajax()) {
             $id_user = auth()->user()->id;
 
-            if (auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'HR GA' || auth()->user()->jabatan == 'Finance Supervisor' || auth()->user()->jabatan == 'Finance Manager' || auth()->user()->jabatan == 'Owner' || auth()->user()->jabatan == 'superadmin') {
+            if (in_array(auth()->user()->jabatan, ['Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'], true)) {
                 $data = Reimbursement::leftJoin('master_project', 'reimbursement.id_project', 'master_project.id')
                     ->select('reimbursement.*', 'master_project.nama', 'master_project.no_project', 'master_project.keterangan')
                     ->where('reimbursement.reimbursement_type', 1)->where('reimbursement.status', '!=',10);
@@ -764,7 +764,7 @@ class DriverReimbursementController extends Controller
         }
 
         $isOwner = (int) $data->id_user === (int) auth()->id();
-        $isSuperadmin = auth()->user()->jabatan === 'superadmin';
+        $isSuperadmin = in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true);
         if (!$isOwner && !$isSuperadmin) {
             return redirect()->back()->withErrors(['Anda tidak memiliki akses untuk menghapus data ini']);
         }
@@ -1306,15 +1306,17 @@ class DriverReimbursementController extends Controller
                 ->withErrors(['Reimbursement tidak ditemukan']);
         }
 
-        if ((int) auth()->id() === (int) $data->id_user) {
+        $user = auth()->user();
+        $isSuperadmin = in_array($user->jabatan, ['superadmin', 'admin'], true);
+
+        if ((int) auth()->id() === (int) $data->id_user && !$isSuperadmin) {
             return redirect()
                 ->back()
                 ->withErrors(['Anda tidak dapat menyetujui pengajuan reimbursement yang Anda buat sendiri.']);
         }
 
-        $user = auth()->user();
-        if ($data->status == 0 && $user->jabatan == "Direktur Operasional") {
-            if (!$user->isHeadDeptApproverForSubmitter((int) $data->id_user)) {
+        if ($data->status == 0 && ($user->jabatan == "Direktur Operasional" || $isSuperadmin)) {
+            if ($user->jabatan == "Direktur Operasional" && !$user->isHeadDeptApproverForSubmitter((int) $data->id_user)) {
                 return redirect()
                     ->back()
                     ->withErrors(['Anda bukan Head Department yang ditunjuk untuk pengajuan ini.']);
@@ -1323,7 +1325,7 @@ class DriverReimbursementController extends Controller
                 'status' => 1,
                 'mengetahui_op' => $user->name,
             ]);
-        } elseif ($data->status == 1 && ($user->jabatan == "Finance" || $user->jabatan == "HR GA")) {
+        } elseif ($data->status == 1 && in_array($user->jabatan, ['Finance', 'HR GA', 'superadmin', 'admin'], true)) {
             $data->update([
                 'status' => 2,
                 'mengetahui_finance' => $user->name,
@@ -1334,12 +1336,12 @@ class DriverReimbursementController extends Controller
                 'menyetujui_finance_supervisor' => $user->name,
             ]);
             $this->notifyDriverFinanceSupervisorApproved($data->fresh());
-        } elseif ($data->status == 2 && ($user->jabatan == "Owner" || $user->jabatan == "superadmin")) {
+        } elseif ($data->status == 2 && in_array($user->jabatan, ['Owner', 'superadmin', 'admin'], true)) {
             $data->update([
                 'status' => 3,
                 'mengetahui_owner' => $user->name,
             ]);
-        } elseif ($data->status == 11 && in_array($user->jabatan, ['Finance Manager', 'Owner', 'superadmin'], true)) {
+        } elseif ($data->status == 11 && in_array($user->jabatan, ['Finance Manager', 'Owner', 'superadmin', 'admin'], true)) {
             $data->update([
                 'status' => 3,
                 'mengetahui_owner' => $user->name,
@@ -1364,6 +1366,7 @@ class DriverReimbursementController extends Controller
         $idsArray = array_map('intval', explode(',', $id));
       	$user = auth()->user();
         $jab = $user->jabatan;
+        $isSuperadmin = in_array($jab, ['superadmin', 'admin'], true);
 
         $rows = Reimbursement::whereIn('id', $idsArray)->get();
         if ($rows->isEmpty()) {
@@ -1375,17 +1378,17 @@ class DriverReimbursementController extends Controller
         $bulkStatus = (int) $rows->first()->status;
         $status = $bulkStatus;
 
-        $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin'))
-            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
-            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $jab === 'superadmin'))
-            || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'))
-            || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'));
+        $canBulk = ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $isSuperadmin))
+            || ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $isSuperadmin))
+            || ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'Finance Supervisor' || $isSuperadmin))
+            || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $isSuperadmin))
+            || ($bulkStatus === 3 && ($jab === 'Owner' || $isSuperadmin));
         if (!$canBulk) {
             return response()->json(['message' => 'Tidak dapat approve bulk untuk peran atau status ini.'], 422);
         }
 
         $ownClaimIds = $rows->where('id_user', (int) $user->id)->pluck('id')->values()->all();
-        if ($ownClaimIds !== []) {
+        if ($ownClaimIds !== [] && !$isSuperadmin) {
             return response()->json([
                 'message' => 'Tidak dapat approve bulk untuk pengajuan Anda sendiri. Hapus dari pilihan: ' . implode(', ', $ownClaimIds),
             ], 422);
@@ -1406,10 +1409,10 @@ class DriverReimbursementController extends Controller
             }
         }
 
-      	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
+      	if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $isSuperadmin)) {
             $status = 1;
             Reimbursement::whereIn('id', $idsArray)->where('status', 0)->update(['status' => $status, 'mengetahui_op' => $user->name]);
-        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $isSuperadmin)) {
             $status = 2;
             Reimbursement::whereIn('id', $idsArray)->where('status', 1)->update(['status' => $status, 'mengetahui_finance' => $user->name]);
         } else if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
@@ -1418,13 +1421,13 @@ class DriverReimbursementController extends Controller
                 'status' => $status,
                 'menyetujui_finance_supervisor' => $user->name,
             ]);
-        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 2 && ($jab === 'Owner' || $isSuperadmin)) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 2)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
-        } else if ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $isSuperadmin)) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 11)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
-        } else if ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin')) {
+        } else if ($bulkStatus === 3 && ($jab === 'Owner' || $isSuperadmin)) {
             $status = 3;
             Reimbursement::whereIn('id', $idsArray)->where('status', 3)->update(['status' => $status, 'mengetahui_owner' => $user->name]);
         }

@@ -455,31 +455,31 @@ class PertanggungjawabanController extends Controller
 
     function approve(Request $request, $id) {
         $data = Pengajuan::where('id',$id)->first();
+        if (!$data) {
+            return redirect()->back()->withErrors(['Data pengajuan tidak ditemukan.']);
+        }
 
-        if(auth()->user()->jabatan == "Direktur Operasional") {
+        $jabatan = auth()->user()->jabatan;
+        $isSuperadmin = in_array($jabatan, ['superadmin', 'admin'], true);
+
+        if ($data->pj_status == 0 && ($jabatan == "Direktur Operasional" || $isSuperadmin)) {
             $data->update([
                 'pj_status' => 1,
                 'pj_operasional' => auth()->user()->name
             ]);
-        }
-
-        
-        if(auth()->user()->jabatan == "Finance") {
+        } elseif ($data->pj_status == 1 && ($jabatan == "Finance" || $isSuperadmin)) {
             $data->update([
                 'pj_status' => 2,
                 'pj_finance' => auth()->user()->name
             ]);
-        }
-        
-                
-        if(auth()->user()->jabatan == "Owner") {
+        } elseif ($data->pj_status == 2 && ($jabatan == "Owner" || $isSuperadmin)) {
             $data->update([
                 'pj_status' => 3,
                 'pj_owner' => auth()->user()->name
             ]);
         }
         
-        return redirect()->back();
+        return redirect()->back()->with(['success' => 'Pertanggungjawaban berhasil disetujui']);
     }
 
 

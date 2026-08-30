@@ -167,28 +167,26 @@
                         </table>
                         <hr><br>
                         <center>
-                            @if ($data->pj_status == 0 && auth()->user()->jabatan == 'Direktur Operasional')                                
+                            @php
+                                $canApprovePj = false;
+                                if (in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true) && $data->pj_status < 3) {
+                                    $canApprovePj = true;
+                                } elseif ($data->pj_status == 0 && auth()->user()->jabatan == 'Direktur Operasional') {
+                                    $canApprovePj = true;
+                                } elseif ($data->pj_status == 1 && auth()->user()->jabatan == 'Finance') {
+                                    $canApprovePj = true;
+                                } elseif ($data->pj_status == 2 && auth()->user()->jabatan == 'Owner') {
+                                    $canApprovePj = true;
+                                }
+                            @endphp
+                            @if ($canApprovePj)                                
                                 <form action="{{url('/').'/pertanggungjawaban/approve/'.$id_pengajuan}}" method="POST">
                                     @csrf
                                     <a href="{!!url('pertanggungjawaban')!!}" class="btn btn-secondary">Kembali</a>&nbsp;&nbsp;
                                     <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Setujui</button>
                                 </form>
-                            @endif
-                            
-                            @if ($data->pj_status == 1 && auth()->user()->jabatan == 'Finance')                                
-                                <form action="{{url('/').'/pertanggungjawaban/approve/'.$id_pengajuan}}" method="POST">
-                                    @csrf
-                                    <a href="{!!url('pertanggungjawaban')!!}" class="btn btn-secondary">Kembali</a>&nbsp;&nbsp;
-                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Setujui</button>
-                                </form>
-                            @endif
-                            
-                            @if ($data->pj_status == 2 && auth()->user()->jabatan == 'Owner')                                
-                                <form action="{{url('/').'/pertanggungjawaban/approve/'.$id_pengajuan}}" method="POST">
-                                    @csrf
-                                    <a href="{!!url('pertanggungjawaban')!!}" class="btn btn-secondary">Kembali</a>&nbsp;&nbsp;
-                                    <button type="submit" class="btn btn-primary" name="finish_button" id="finish_button">Setujui</button>
-                                </form>
+                            @else
+                                <a href="{!!url('pertanggungjawaban')!!}" class="btn btn-secondary">Kembali</a>
                             @endif
                         </center>
 

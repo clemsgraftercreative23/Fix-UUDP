@@ -33,6 +33,8 @@ class JabatanClassifierTest extends TestCase
         $this->assertFalse(JabatanClassifier::isEmployeeLike('Finance'));
         $this->assertFalse(JabatanClassifier::isEmployeeLike('Finance Supervisor'));
         $this->assertFalse(JabatanClassifier::isEmployeeLike('Direktur Operasional'));
+        $this->assertFalse(JabatanClassifier::isEmployeeLike('superadmin'));
+        $this->assertFalse(JabatanClassifier::isEmployeeLike('admin'));
     }
 
     public function test_is_case_sensitive_to_match_existing_blade_comparisons(): void
@@ -40,10 +42,12 @@ class JabatanClassifierTest extends TestCase
         $this->assertFalse(JabatanClassifier::isEmployeeLike('Karyawan'));
     }
 
-    public function test_owner_and_finance_can_sync_accurate(): void
+    public function test_owner_finance_superadmin_and_admin_can_sync_accurate(): void
     {
         $this->assertTrue(JabatanClassifier::canSyncAccurate('Owner'));
         $this->assertTrue(JabatanClassifier::canSyncAccurate('Finance'));
+        $this->assertTrue(JabatanClassifier::canSyncAccurate('superadmin'));
+        $this->assertTrue(JabatanClassifier::canSyncAccurate('admin'));
     }
 
     public function test_other_roles_cannot_sync_accurate(): void
