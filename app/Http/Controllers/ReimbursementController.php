@@ -67,9 +67,12 @@ class ReimbursementController extends Controller
 
     public function checkDuplicateInvoice(Request $request)
     {
-        $number = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->input('no_invoice'));
+        $numbers = \App\Support\DuplicateInvoiceChecker::normalizeNumbers(
+            $request->input('numbers'),
+            $request->input('no_invoice')
+        );
 
-        if ($number === '') {
+        if (empty($numbers)) {
             return response()->json([
                 'duplicate' => false,
                 'code' => 'INVALID_REQUEST',
@@ -77,9 +80,15 @@ class ReimbursementController extends Controller
             ], 422);
         }
 
-        $alreadyUsed = Reimbursement::where('no_invoice', $number)->exists();
+        // Checked across every place an invoice/receipt number can be saved
+        // (the per-submission header, and Travel's per-day/item numbers) —
+        // a physical receipt shouldn't be claimed twice regardless of which
+        // reimbursement type or form it was originally used on.
+        $usedInHeader = Reimbursement::whereIn('no_invoice', $numbers)->pluck('no_invoice')->all();
+        $usedInTravelItems = \App\ReimbursementTravel::whereIn('no_invoice', $numbers)->pluck('no_invoice')->all();
+        $usedNumbers = array_values(array_unique(array_merge($usedInHeader, $usedInTravelItems)));
 
-        return response()->json(\App\Support\DuplicateInvoiceChecker::buildResponse($number, $alreadyUsed));
+        return response()->json(\App\Support\DuplicateInvoiceChecker::buildBatchResponse($numbers, $usedNumbers));
     }
 
     private function attachmentTableReady(): bool

@@ -132,10 +132,6 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
-                                    <label for="no_invoice_travel_overseas">No. Invoice / Receipt</label>
-                                    <input type="text" class="form-control" name="no_invoice" id="no_invoice_travel_overseas" placeholder="Nomor invoice/struk" required />
-                                </div>
                             </div>
                             <hr />
                             <div v-for="(dt,i) in rates" :key="'travel-rate-row-'+i" class="row">
@@ -193,6 +189,10 @@
                                 <div class="col-md-3">
                                     <label for="">Purpose</label>
                                     <input type="text" :name="'reimburse['+i+'][purpose]'" class="form-control" required value="" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="">No. Invoice / Receipt</label>
+                                    <input type="text" :name="'reimburse['+i+'][no_invoice]'" class="form-control travel-item-invoice" placeholder="Nomor invoice/struk" required value="" />
                                 </div>
                                 <div class="col-md-3">
                                     <label for="">Trip Type</label>
@@ -1001,8 +1001,14 @@ $(document).ready(function(){
               {
                   url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
                   params: function ($form) {
-                      var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
-                      return number ? { no_invoice: number } : null;
+                      var numbers = [];
+                      $form.find('.travel-item-invoice').each(function () {
+                          var value = (this.value || '').trim();
+                          if (value) {
+                              numbers.push(value);
+                          }
+                      });
+                      return numbers.length ? { numbers: numbers } : null;
                   }
               }
           ]

@@ -1292,7 +1292,6 @@ class TravelReimbursementController extends Controller
             $data = [
                 "id_user" => auth()->user()->id,
                 "no_reimbursement" => "PENDING",
-                "no_invoice" => \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
                 "date" => $request->reimburse['0']['date'],
                 "mengetahui_op" => "-",
                 "mengetahui_finance" => "-",
@@ -1342,6 +1341,7 @@ class TravelReimbursementController extends Controller
                     'reimbursement_id' => $data->id,
                     'date' => $value['date'],
                     'purpose' => $value['purpose'],
+                    'no_invoice' => \App\Support\DuplicateInvoiceChecker::normalizeNumber($value['no_invoice'] ?? ''),
                     'trip_type_id' => $tripTypeId,
                     'hotel_condition_id' => $this->normalizeHotelConditionId($value['hotel_condition_id'] ?? null, $tripTypeId),
                     'start_time' => $this->normalizeTravelTime($value['start_time'] ?? null, $tripTypeId),
