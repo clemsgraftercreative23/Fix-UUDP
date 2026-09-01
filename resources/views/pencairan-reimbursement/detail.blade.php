@@ -454,7 +454,7 @@
                                     </div>
                                 </div>
                             @endif
-                            @if (!empty($data->accurate_synced_at))
+                            @if ($data->accurate_sync_status === 'synced')
                                 <button type="button" class="btn btn-success" disabled>
                                     Accurate Synced ({{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }})
                                 </button>
@@ -462,7 +462,21 @@
                                 @if ($journalDateDisplay)
                                     <div><small class="text-muted">Tanggal Jurnal: {{ $journalDateDisplay }}</small></div>
                                 @endif
+                                @if (\App\Support\JabatanClassifier::canReverseAccurateSync(auth()->user()->jabatan))
+                                    <div style="margin-top:6px;">
+                                        <form action="{{ route('pencairan-reimbursement.reverse-accurate', $data->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Apakah Anda yakin ingin mereverse (membatalkan) sinkronisasi Accurate ini? Entri yang sudah dibuat di Accurate akan dihapus.');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-danger btn-sm">Reverse Sync Accurate</button>
+                                        </form>
+                                    </div>
+                                @endif
                             @else
+                                @if ($data->accurate_sync_status === 'reversed')
+                                    <div class="alert alert-warning text-left" style="max-width:900px;margin:0 auto 12px auto;">
+                                        Sinkronisasi sebelumnya (pada {{ date('d M Y H:i', strtotime($data->accurate_synced_at)) }}) telah direverse pada {{ date('d M Y H:i', strtotime($data->accurate_reversed_at)) }}.
+                                        Silakan sync ulang di bawah ini jika diperlukan.
+                                    </div>
+                                @endif
                                 <form action="{{ route('pencairan-reimbursement.sync-accurate', $data->id) }}" method="POST" class="js-sync-accurate-form" style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">
                                     @csrf
                                     <label for="tanggal_jurnal_{{ $data->id }}" class="mb-0">Tanggal Jurnal</label>

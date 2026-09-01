@@ -96,7 +96,7 @@ class PencairanReimbursementController extends Controller
 
                 if ((int) $data->status === 5 && JabatanClassifier::canSyncAccurate(auth()->user()->jabatan)) {
                     $button .= '<div style="margin-top:6px;">';
-                    if (!empty($data->accurate_synced_at)) {
+                    if ($data->accurate_sync_status === 'synced') {
                         $button .= '<button type="button" class="btn btn-success btn-sm" disabled>Accurate Synced</button>';
                     } else {
                         $button .= '<button type="button" class="btn btn-warning btn-sm js-open-sync-accurate" data-sync-url="' . route('pencairan-reimbursement.sync-accurate', $data->id) . '">Sync Accurate</button>';
@@ -324,6 +324,9 @@ class PencairanReimbursementController extends Controller
                     'accurate_synced_at' => null,
                     'accurate_sync_status' => $accuratePayload ? 'pending' : null,
                     'accurate_sync_message' => null,
+                    'accurate_record_id' => null,
+                    'accurate_record_no' => null,
+                    'accurate_reversed_at' => null,
                 ]);
 
             } else {
@@ -341,6 +344,9 @@ class PencairanReimbursementController extends Controller
                     'accurate_synced_at' => null,
                     'accurate_sync_status' => $accuratePayload ? 'pending' : null,
                     'accurate_sync_message' => null,
+                    'accurate_record_id' => null,
+                    'accurate_record_no' => null,
+                    'accurate_reversed_at' => null,
                 ];
 
                 if ($cek_type == 2) {
@@ -416,7 +422,7 @@ class PencairanReimbursementController extends Controller
             return redirect()->back()->withErrors(['Reimbursement belum berstatus SETTLED.']);
         }
 
-        if (!empty($data->accurate_synced_at)) {
+        if ($data->accurate_sync_status === 'synced') {
             return redirect()->back()->withErrors(['Data ini sudah tersinkron ke Accurate.']);
         }
 
@@ -471,11 +477,16 @@ class PencairanReimbursementController extends Controller
                 return redirect()->back()->withErrors([$message]);
             }
 
+            $recordReference = \App\Support\AccurateOtherPaymentResponse::extractRecordReference($syncResult['raw'] ?? null);
+
             $data->update([
                 'accurate_payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES),
                 'accurate_synced_at' => date('Y-m-d H:i:s'),
                 'accurate_sync_status' => 'synced',
                 'accurate_sync_message' => null,
+                'accurate_record_id' => $recordReference['id'],
+                'accurate_record_no' => $recordReference['no'],
+                'accurate_reversed_at' => null,
             ]);
 
             return redirect()->back()->with(['success' => 'Sinkronisasi Accurate berhasil.']);
@@ -493,12 +504,16 @@ class PencairanReimbursementController extends Controller
     {
         $data = Reimbursement::findOrFail($id);
 
-        if (!in_array(auth()->user()->jabatan, ['Owner', 'superadmin', 'admin'], true)) {
+        if (!JabatanClassifier::canReverseAccurateSync(auth()->user()->jabatan)) {
             return redirect()->back()->withErrors(['Hanya Finance (Owner) atau Superadmin yang dapat mereset settlement.']);
         }
 
         if ((int) $data->status !== 5) {
             return redirect()->back()->withErrors(['Hanya reimbursement dengan status SETTLED yang dapat direset.']);
+        }
+
+        if ($data->accurate_sync_status === 'synced') {
+            return redirect()->back()->withErrors(['Data ini sudah tersinkron ke Accurate. Klik "Reverse Sync Accurate" terlebih dahulu sebelum mereset settlement, supaya entri di Accurate ikut dibatalkan dan tidak jadi data ganda.']);
         }
 
         try {
@@ -509,11 +524,51 @@ class PencairanReimbursementController extends Controller
                 'accurate_synced_at' => null,
                 'accurate_sync_status' => null,
                 'accurate_sync_message' => null,
+                'accurate_record_id' => null,
+                'accurate_record_no' => null,
+                'accurate_reversed_at' => null,
             ]);
 
             return redirect()->back()->with(['success' => 'Settlement telah direset. Silakan lakukan settlement ulang dengan pastikan semua nominal sudah terisi dengan benar.']);
         } catch (\Throwable $th) {
             return redirect()->back()->withErrors(['Gagal mereset settlement: ' . $th->getMessage()]);
+        }
+    }
+
+    public function reverseAccurateSync($id)
+    {
+        $data = Reimbursement::findOrFail($id);
+
+        if (!JabatanClassifier::canReverseAccurateSync(auth()->user()->jabatan)) {
+            return redirect()->back()->withErrors(['Hanya Owner/Superadmin yang dapat mereverse sinkronisasi Accurate.']);
+        }
+
+        if ($data->accurate_sync_status !== 'synced') {
+            return redirect()->back()->withErrors(['Hanya data yang berstatus Synced yang dapat direverse.']);
+        }
+
+        if (empty($data->accurate_record_id) && empty($data->accurate_record_no)) {
+            return redirect()->back()->withErrors([
+                'Data ini tersinkron sebelum fitur reverse tersedia sehingga tidak menyimpan ID Accurate-nya. '
+                . 'Silakan reverse manual langsung di Accurate, lalu hubungi tim development untuk menyesuaikan status lokal.',
+            ]);
+        }
+
+        try {
+            $reverseResult = $this->deleteAccurateOtherPayment($data->accurate_record_id, $data->accurate_record_no);
+
+            if (!($reverseResult['success'] ?? false)) {
+                return redirect()->back()->withErrors(['Gagal reverse ke Accurate: ' . ($reverseResult['message'] ?? 'Unknown error')]);
+            }
+
+            $data->update([
+                'accurate_sync_status' => 'reversed',
+                'accurate_reversed_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            return redirect()->back()->with(['success' => 'Sinkronisasi Accurate berhasil direverse.']);
+        } catch (\Throwable $th) {
+            return redirect()->back()->withErrors(['Gagal reverse ke Accurate: ' . $th->getMessage()]);
         }
     }
 
@@ -885,6 +940,54 @@ class PencairanReimbursementController extends Controller
             'message' => 'ok',
             'raw' => $result['body'] ?? '',
         ];
+    }
+
+    /**
+     * Deletes a previously-synced other-payment record from Accurate.
+     * Per Accurate's API, /other-payment/delete.do accepts either an "id"
+     * (Accurate's internal numeric id) or, as a documented alternative, a
+     * "number" (the transaction number shown in Accurate's UI) - id is
+     * preferred when we have it.
+     */
+    private function deleteAccurateOtherPayment(?string $recordId, ?string $recordNo)
+    {
+        $client = new AccurateApiTokenClient();
+
+        if (!$client->isConfigured()) {
+            return [
+                'success' => false,
+                'message' => implode(' ', $client->configurationErrorMessages()),
+            ];
+        }
+
+        $query = $recordId !== null && $recordId !== ''
+            ? 'id=' . urlencode($recordId)
+            : 'number=' . urlencode((string) $recordNo);
+
+        $result = $client->request('DELETE', '/accurate/api/other-payment/delete.do?' . $query);
+
+        if (!($result['ok'] ?? false)) {
+            $message = $result['error'] ?? 'Reverse ke Accurate gagal.';
+            $body = trim((string) ($result['body'] ?? ''));
+            if ($body !== '') {
+                $decoded = json_decode($body, true);
+                if (is_array($decoded)) {
+                    $message = $decoded['d'] ?? $decoded['message'] ?? $message;
+                    if (is_array($message)) {
+                        $message = json_encode($message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    }
+                } else {
+                    $message = $body;
+                }
+            }
+
+            return [
+                'success' => false,
+                'message' => is_string($message) ? $message : 'Reverse ke Accurate gagal.',
+            ];
+        }
+
+        return ['success' => true, 'message' => 'ok'];
     }
 
     private function removeDepartmentNameFromPayload(array $payload)

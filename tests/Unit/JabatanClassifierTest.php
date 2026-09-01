@@ -57,4 +57,19 @@ class JabatanClassifierTest extends TestCase
         $this->assertFalse(JabatanClassifier::canSyncAccurate('karyawan'));
         $this->assertFalse(JabatanClassifier::canSyncAccurate(null));
     }
+
+    public function test_owner_superadmin_and_admin_can_reverse_accurate_sync(): void
+    {
+        $this->assertTrue(JabatanClassifier::canReverseAccurateSync('Owner'));
+        $this->assertTrue(JabatanClassifier::canReverseAccurateSync('superadmin'));
+        $this->assertTrue(JabatanClassifier::canReverseAccurateSync('admin'));
+    }
+
+    public function test_finance_cannot_reverse_accurate_sync_even_though_they_can_sync(): void
+    {
+        // Deleting a record from Accurate's real books is scoped narrower
+        // than creating one -- Finance can sync but not reverse.
+        $this->assertTrue(JabatanClassifier::canSyncAccurate('Finance'));
+        $this->assertFalse(JabatanClassifier::canReverseAccurateSync('Finance'));
+    }
 }

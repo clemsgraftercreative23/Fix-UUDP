@@ -145,6 +145,7 @@
   Route::resource('pencairan-reimbursement', 'PencairanReimbursementController');
 Route::post('pencairan-reimbursement/{id}/sync-accurate', 'PencairanReimbursementController@syncAccurate')->name('pencairan-reimbursement.sync-accurate');
 Route::post('pencairan-reimbursement/{id}/reset-settlement', 'PencairanReimbursementController@resetSettlement')->name('pencairan-reimbursement.reset-settlement');
+Route::post('pencairan-reimbursement/{id}/reverse-accurate', 'PencairanReimbursementController@reverseAccurateSync')->name('pencairan-reimbursement.reverse-accurate');
   // debug route for signature testing (non-production only)
   Route::get('debug/accurate/signature', 'AccurateDebugController@signatureTest');
   Route::post('reimbursement/approve/{id}', 'ReimbursementController@approve');

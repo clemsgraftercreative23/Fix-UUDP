@@ -23,4 +23,14 @@ class JabatanClassifier
     {
         return in_array($jabatan, ['Owner', 'Finance', 'superadmin', 'admin'], true);
     }
+
+    /**
+     * Reversing a sync deletes the entry from Accurate's real books, so it's
+     * scoped narrower than "Sync ke Accurate" itself -- same roles allowed
+     * to reset a settlement (Finance is intentionally excluded here).
+     */
+    public static function canReverseAccurateSync(?string $jabatan): bool
+    {
+        return in_array($jabatan, ['Owner', 'superadmin', 'admin'], true);
+    }
 }
