@@ -98,7 +98,7 @@
         @endforeach
     @endif
     <div class="">
-        <form action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="syncRatesFromExchangeInputs">
+        <form id="travel_overseas_reimbursement_form" action="{{route('reimbursement-travel.store')}}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="syncRatesFromExchangeInputs">
             @csrf
             <div class="row">
                 <div class="col-xl">
@@ -131,6 +131,10 @@
                                             @endforeach
                                         </select>
                                     </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="no_invoice_travel_overseas">No. Invoice / Receipt</label>
+                                    <input type="text" class="form-control" name="no_invoice" id="no_invoice_travel_overseas" placeholder="Nomor invoice/struk" required />
                                 </div>
                             </div>
                             <hr />
@@ -374,6 +378,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
@@ -973,9 +978,36 @@ $(document).ready(function(){
         }
       },
       watch: {
-       
+
       },
   });
+
+  if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+      window.bindReimbursementDuplicateChecks({
+          formSelector: '#travel_overseas_reimbursement_form',
+          checks: [
+              {
+                  url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                  params: function ($form) {
+                      var dates = [];
+                      $form.find('input[type="date"]').each(function () {
+                          if (this.value) {
+                              dates.push(this.value);
+                          }
+                      });
+                      return dates.length ? { reimbursement_type: 2, dates: dates } : null;
+                  }
+              },
+              {
+                  url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
+                  params: function ($form) {
+                      var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
+                      return number ? { no_invoice: number } : null;
+                  }
+              }
+          ]
+      });
+  }
 
 </script>
 
