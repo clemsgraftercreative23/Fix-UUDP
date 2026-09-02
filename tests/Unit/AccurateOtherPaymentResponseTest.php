@@ -23,12 +23,32 @@ class AccurateOtherPaymentResponseTest extends TestCase
         $this->assertNull($reference['no']);
     }
 
-    public function test_returns_nulls_when_d_is_a_list_not_an_object(): void
+    public function test_extracts_from_the_first_element_when_d_is_a_list(): void
     {
-        // Accurate's list.do responses shape "d" as an array of records;
-        // save.do responses shape it as a single object. Guard against
-        // accidentally treating the wrong shape as a record.
-        $reference = AccurateOtherPaymentResponse::extractRecordReference('{"s":true,"d":[{"id":1}]}');
+        // Confirmed against production: other-payment/save.do wraps the
+        // created record in a list, same as list.do -- not a bare object.
+        $reference = AccurateOtherPaymentResponse::extractRecordReference('{"s":true,"d":[{"id":1,"number":"OP-1"}]}');
+
+        $this->assertSame('1', $reference['id']);
+        $this->assertSame('OP-1', $reference['no']);
+    }
+
+    public function test_regression_reimbursement_1546_save_response_shape(): void
+    {
+        // The exact shape confirmed live in Accurate for reimbursement
+        // #1546 (synced 2026-09-02) that the original object-only parser
+        // silently failed to extract anything from.
+        $reference = AccurateOtherPaymentResponse::extractRecordReference(
+            '{"s":true,"d":[{"id":76854,"number":"001/SMBC-IDR/09/2026"}]}'
+        );
+
+        $this->assertSame('76854', $reference['id']);
+        $this->assertSame('001/SMBC-IDR/09/2026', $reference['no']);
+    }
+
+    public function test_returns_nulls_when_d_is_an_empty_list(): void
+    {
+        $reference = AccurateOtherPaymentResponse::extractRecordReference('{"s":true,"d":[]}');
 
         $this->assertNull($reference['id']);
         $this->assertNull($reference['no']);
