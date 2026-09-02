@@ -470,7 +470,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
         // Set default hotel condition for first row before trip type is selected.
         if (this.reimburses.length > 0) {
             this.reimburses[0].hotel_condition = this.not_stay_hotel_condition_id;
@@ -544,17 +544,9 @@ $(document).ready(function(){
             if (isNaN(n)) return 0;
             return Math.round(n * 100) / 100;
         },
-        /** Kolom Amount: integer; bagian desimal (setelah koma) diabaikan. */
+        /** Kolom Amount: desimal (2 digit), sesuai nominal di bukti/invoice. */
         parseTravelAmountInteger(raw) {
-            let s = String(raw || '').trim();
-            if (!s) return 0;
-            const c = s.lastIndexOf(',');
-            if (c !== -1) {
-                s = s.substring(0, c);
-            }
-            s = s.replace(/\./g, '').replace(/[^\d-]/g, '');
-            const n = parseInt(s, 10);
-            return isNaN(n) ? 0 : n;
+            return this.numericRate(raw);
         },
         formatIdrForPayment(num, paymentType) {
             return formatTravelIdrMoney(roundIdrForPayment(num, paymentType), paymentType || 'Cash');
@@ -895,7 +887,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
                 self.changeAmount(0);
@@ -924,7 +916,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 const index = $(event.target).closest('tr').index();
                 this.reimburses[i].details[index].amount = ($(event.target).val());

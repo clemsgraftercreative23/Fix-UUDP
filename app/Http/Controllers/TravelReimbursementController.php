@@ -226,15 +226,15 @@ class TravelReimbursementController extends Controller
     }
 
     /**
-     * Nilai kolom amount detail travel: bilangan bulat (desimal dari input diabaikan).
+     * Nilai kolom amount detail travel: desimal (2 digit), sesuai nominal di bukti/invoice.
      */
-    private function normalizeTravelAmountInteger($value): int
+    private function normalizeTravelAmountValue($value): float
     {
-        return (int) floor($this->normalizeTravelMoneyValue($value));
+        return round($this->normalizeTravelMoneyValue($value), 2);
     }
 
     /** IDR dari amount × kurs; BDC (kartu kredit) dibulatkan 2 desimal. */
-    private function computeDetailIdrRate(int $amountValue, float $rateValue, string $currencyCode, string $paymentType): float
+    private function computeDetailIdrRate(float $amountValue, float $rateValue, string $currencyCode, string $paymentType): float
     {
         $computed = $amountValue * ($currencyCode === 'IDR' ? 1.0 : $rateValue);
 
@@ -1355,7 +1355,7 @@ class TravelReimbursementController extends Controller
                     if (isset($v['cost_type_id'])) {
 
                     $currencyCode = !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR';
-                    $amountValue = $this->normalizeTravelAmountInteger($v['amount'] ?? '');
+                    $amountValue = $this->normalizeTravelAmountValue($v['amount'] ?? '');
                     $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
                     $computedIdrRate = $this->computeDetailIdrRate(
                         $amountValue,
@@ -1686,7 +1686,7 @@ class TravelReimbursementController extends Controller
                 if ($currencyCode === '') {
                     $currencyCode = 'IDR';
                 }
-                $amountValue = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+                $amountValue = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
                 $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
                 $computedIdrRate = $this->computeDetailIdrRate(
                     $amountValue,
@@ -2283,7 +2283,7 @@ class TravelReimbursementController extends Controller
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+            $new->amount = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -2558,7 +2558,7 @@ class TravelReimbursementController extends Controller
             if ($currencyCode === '') {
                 $currencyCode = 'IDR';
             }
-            $amountValue = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+            $amountValue = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
             $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
             $computedIdrRate = $this->computeDetailIdrRate(
                 $amountValue,
@@ -2817,7 +2817,7 @@ class TravelReimbursementController extends Controller
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+            $new->amount = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -3064,7 +3064,7 @@ class TravelReimbursementController extends Controller
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelAmountInteger($request->amount[$i] ?? '');
+            $new->amount = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
             $new->evidence = '';
             $new->status = 1;
@@ -4036,7 +4036,7 @@ class TravelReimbursementController extends Controller
                         'payment_type' => $v['payment_type'],
                         'cost_type_id' => $v['cost_type_id'],
                         'currency' => !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR',
-                        'amount' => $this->normalizeTravelAmountInteger($v['amount'] ?? ''),
+                        'amount' => $this->normalizeTravelAmountValue($v['amount'] ?? ''),
                         'idr_rate' => $this->normalizeTravelMoneyValue($v['idr_rate'] ?? ''),
                         'tax' => $this->normalizeTravelMoneyValue($v['tax'] ?? '0'),
                     ];

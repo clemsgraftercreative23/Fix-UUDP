@@ -545,16 +545,9 @@ $(document).ready(function(){
         return formatTravelIdrMoney(x, 'Cash');
     }
 
+    /** Kolom Amount: desimal (2 digit), sesuai nominal di bukti/invoice. */
     function parseTravelAmountInteger(raw) {
-        var s = String(raw || '').trim();
-        if (!s) return 0;
-        var c = s.lastIndexOf(',');
-        if (c !== -1) {
-            s = s.substring(0, c);
-        }
-        s = s.replace(/\./g, '').replace(/[^\d-]/g, '');
-        var n = parseInt(s, 10);
-        return isNaN(n) ? 0 : n;
+        return Math.round(parseTravelMoney(raw) * 100) / 100;
     }
 
     /* Exchange rate helpers: public/js/exchange-rate-parser.js */
@@ -585,7 +578,7 @@ $(document).ready(function(){
             });
         } catch (e) { /* ignore */ }
         var optsRate = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
-        var optsAmount = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+        var optsAmount = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
         var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
         var $amt = $all.filter('input[name="amount[]"]');
         var $idrTax = $all.filter('input[name="idr_rate[]"], input[name="tax[]"]');
@@ -1068,7 +1061,7 @@ $(document).ready(function(){
             self.changeAmount(0);
         });
 
-        $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+        $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
             $('.amount-input').on('change', (event) => {
             if (rtSkipVueTravelPane(event)) return;
             self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
@@ -1169,7 +1162,7 @@ $(document).ready(function(){
             this.$nextTick(() => {
               self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
@@ -1194,7 +1187,7 @@ $(document).ready(function(){
             self = this
             this.$nextTick(() => {
               self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:0, allowZero: true, affixesStay: false, allowNegative: true});
+              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
               $('.amount-input').on('change', (event) => {
                 if ($(event.target).closest('#rt-travel-item-pane').length) return;
                 const index = $(event.target).closest('tr').index();
