@@ -241,6 +241,17 @@ class MedicalReimbursementController extends Controller
      */
     public function store(Request $request)
     {
+        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 4, (string) $request->date);
+        if ($dateError) {
+            return redirect()->back()->withInput()->withErrors([$dateError]);
+        }
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([
+            \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
+        ]);
+        if ($invoiceError) {
+            return redirect()->back()->withInput()->withErrors([$invoiceError]);
+        }
+
         DB::beginTransaction();
 
         try {

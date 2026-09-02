@@ -1,23 +1,23 @@
 /**
  * Validasi Tanggal Pengajuan & Validasi Invoice/Receipt: sebelum form
  * reimbursement benar-benar dikirim, cek ke server apakah tanggal dan/atau
- * nomor invoice/receipt yang diisi sudah pernah dipakai sebelumnya. Kalau
- * ada yang duplikat, tampilkan satu konfirmasi gabungan sebelum submit.
+ * nomor invoice/receipt yang diisi sudah pernah dipakai sebelumnya. Ini
+ * hard block, bukan sekadar peringatan -- kalau ada yang duplikat, submit
+ * dibatalkan dan tidak ada jalan untuk memaksa lanjut dari sisi form ini.
+ * (store() di server juga menolak submission yang sama, jadi ini tidak
+ * bisa dilewati dengan mematikan JS atau mengirim POST langsung.)
  */
 (function (window, $) {
   function csrfToken() {
     return $('meta[name="csrf-token"]').attr('content') || '';
   }
 
-  function showDuplicateWarning(message) {
+  function showDuplicateBlocked(message) {
     return window.swal({
-      title: 'Kemungkinan Duplikat',
+      title: 'Tidak Bisa Diajukan',
       text: message,
-      icon: 'warning',
-      buttons: {
-        cancel: 'Batal',
-        confirm: { text: 'Tetap Ajukan', value: true }
-      }
+      icon: 'error',
+      button: 'Mengerti'
     });
   }
 
@@ -93,11 +93,9 @@
             return;
           }
 
-          showDuplicateWarning(messages.join('\n\n')).then(function (result) {
-            if (result) {
-              proceed();
-            }
-          });
+          showDuplicateBlocked(messages.join('\n\n'));
+          // Blocked: no proceed() call here on purpose -- the form stays
+          // un-submitted until the user changes the date/invoice number.
         });
     });
   }

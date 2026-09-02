@@ -565,6 +565,17 @@ class EntertaimentReimbursementController extends Controller
     
     public function store(Request $request)
     {
+        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 3, (string) $request->date);
+        if ($dateError) {
+            return redirect()->back()->withInput()->withErrors([$dateError]);
+        }
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([
+            \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
+        ]);
+        if ($invoiceError) {
+            return redirect()->back()->withInput()->withErrors([$invoiceError]);
+        }
+
         DB::beginTransaction();
         if (isset($_POST['save'])) {
             $status = 0;

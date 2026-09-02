@@ -53,14 +53,7 @@ class ReimbursementController extends Controller
             ], 422);
         }
 
-        $existingDates = Reimbursement::where('id_user', auth()->id())
-            ->where('reimbursement_type', $type)
-            ->whereIn('date', $dates)
-            ->pluck('date')
-            ->map(function ($date) {
-                return \Carbon\Carbon::parse($date)->format('Y-m-d');
-            })
-            ->all();
+        $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), $type, $dates);
 
         return response()->json(\App\Support\DuplicateDateChecker::buildResponse($dates, $existingDates));
     }
@@ -80,13 +73,7 @@ class ReimbursementController extends Controller
             ], 422);
         }
 
-        // Checked across every place an invoice/receipt number can be saved
-        // (the per-submission header, and Travel's per-day/item numbers) —
-        // a physical receipt shouldn't be claimed twice regardless of which
-        // reimbursement type or form it was originally used on.
-        $usedInHeader = Reimbursement::whereIn('no_invoice', $numbers)->pluck('no_invoice')->all();
-        $usedInTravelItems = \App\ReimbursementTravel::whereIn('no_invoice', $numbers)->pluck('no_invoice')->all();
-        $usedNumbers = array_values(array_unique(array_merge($usedInHeader, $usedInTravelItems)));
+        $usedNumbers = \App\Support\ReimbursementDuplicateGuard::findDuplicateInvoiceNumbers($numbers);
 
         return response()->json(\App\Support\DuplicateInvoiceChecker::buildBatchResponse($numbers, $usedNumbers));
     }

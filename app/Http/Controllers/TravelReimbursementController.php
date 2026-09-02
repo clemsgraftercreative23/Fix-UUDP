@@ -959,6 +959,41 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Hard block (not just a warning) on submitting a date or invoice/
+     * receipt number already used before -- applies to every save action
+     * (draft, item, or final submit), since duplicate identity, unlike
+     * field completeness, isn't something a draft is allowed to have.
+     */
+    private function guardAgainstDuplicateSubmission(Request $request): void
+    {
+        $legs = (array) $request->input('reimburse', []);
+        $dates = [];
+        $invoiceNumbers = [];
+        foreach ($legs as $leg) {
+            if (!empty($leg['date'])) {
+                $dates[] = $leg['date'];
+            }
+            if (!empty($leg['no_invoice'])) {
+                $invoiceNumbers[] = $leg['no_invoice'];
+            }
+        }
+
+        $dates = \App\Support\DuplicateDateChecker::normalizeDates($dates, null);
+        $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), 2, $dates);
+        if (!empty($existingDates)) {
+            throw ValidationException::withMessages(['reimburse' => [
+                'Tanggal ' . implode(', ', $existingDates) . ' sudah pernah diajukan sebelumnya untuk reimbursement travel. Silakan gunakan tanggal yang berbeda.',
+            ]]);
+        }
+
+        $invoiceNumbers = \App\Support\DuplicateInvoiceChecker::normalizeNumbers($invoiceNumbers, null);
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers($invoiceNumbers);
+        if ($invoiceError) {
+            throw ValidationException::withMessages(['reimburse' => [$invoiceError]]);
+        }
+    }
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -1268,6 +1303,7 @@ class TravelReimbursementController extends Controller
     public function store(Request $request)
     {
         $this->validateTravelSubmissionRequest($request, isset($_POST['save']) && !isset($_POST['save_draft']));
+        $this->guardAgainstDuplicateSubmission($request);
 
         if (isset($_POST['save'])) {
             $status = 0;
