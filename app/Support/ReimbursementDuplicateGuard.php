@@ -14,7 +14,15 @@ use App\ReimbursementTravel;
  */
 class ReimbursementDuplicateGuard
 {
-    /** @return string[] dates (Y-m-d) already submitted by this user for this reimbursement type */
+    /**
+     * reimbursement.status value for a rejected submission (see e.g.
+     * DriverReimbursementController's status badge mapping). A rejected
+     * submission doesn't count as "already used" -- resubmitting the same
+     * date/invoice number after a rejection is the normal, expected flow.
+     */
+    private const STATUS_REJECTED = 4;
+
+    /** @return string[] dates (Y-m-d) already submitted (and not rejected) by this user for this reimbursement type */
     public static function findDuplicateDates(int $userId, int $type, array $dates): array
     {
         if (empty($dates)) {
@@ -23,6 +31,7 @@ class ReimbursementDuplicateGuard
 
         return Reimbursement::where('id_user', $userId)
             ->where('reimbursement_type', $type)
+            ->where('status', '!=', self::STATUS_REJECTED)
             ->whereIn('date', $dates)
             ->pluck('date')
             ->map(function ($date) {
@@ -37,7 +46,8 @@ class ReimbursementDuplicateGuard
      * Checked across every place an invoice/receipt number can be saved
      * (the per-submission header, and Travel's per-day/item numbers) -- a
      * physical receipt shouldn't be claimed twice regardless of which
-     * reimbursement type or form it was originally used on.
+     * reimbursement type or form it was originally used on. Rejected
+     * submissions are excluded, same reasoning as findDuplicateDates().
      *
      * @return string[] numbers already used, anywhere
      */
@@ -47,8 +57,16 @@ class ReimbursementDuplicateGuard
             return [];
         }
 
-        $usedInHeader = Reimbursement::whereIn('no_invoice', $numbers)->pluck('no_invoice')->all();
-        $usedInTravelItems = ReimbursementTravel::whereIn('no_invoice', $numbers)->pluck('no_invoice')->all();
+        $usedInHeader = Reimbursement::whereIn('no_invoice', $numbers)
+            ->where('status', '!=', self::STATUS_REJECTED)
+            ->pluck('no_invoice')
+            ->all();
+
+        $usedInTravelItems = ReimbursementTravel::whereIn('reimbursement_travel.no_invoice', $numbers)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->pluck('reimbursement_travel.no_invoice')
+            ->all();
 
         return array_values(array_unique(array_merge($usedInHeader, $usedInTravelItems)));
     }
