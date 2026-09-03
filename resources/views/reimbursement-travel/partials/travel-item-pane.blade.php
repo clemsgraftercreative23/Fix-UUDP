@@ -6,10 +6,10 @@ if (!function_exists('rt_travel_pane_rupiah')) {
     }
 }
 if (!function_exists('rt_travel_pane_amount_int')) {
-    /** Tampilan kolom Amount: bilangan bulat tanpa desimal dan tanpa pemisah ribuan. */
+    /** Tampilan kolom Amount: desimal (2 digit) dengan pemisah ribuan, sesuai nominal di bukti/invoice. */
     function rt_travel_pane_amount_int($angka)
     {
-        return (string) (int) floor((float) $angka);
+        return number_format((float) $angka, 2, ',', '.');
     }
 }
 if (!function_exists('rt_travel_pane_attachment_cache_bust')) {
