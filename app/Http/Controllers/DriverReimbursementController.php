@@ -862,6 +862,7 @@ class DriverReimbursementController extends Controller
                     'subtotal' => isset($request->total[$i]) ? str_replace(".", "", $request->total[$i]) : 0,
                     'remark' => isset($request->remark[$i]) ? str_replace(".", "", $request->remark[$i]) : null,
                     'payment_type' => isset($request->payment_type[$i]) ? str_replace(".", "", $request->payment_type[$i]) : null,
+                    'no_invoice' => isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null,
                 ];
                 $payload['evidence'] = '';
                 $dt = ReimbursementDriver::create($payload);
@@ -1049,6 +1050,7 @@ class DriverReimbursementController extends Controller
                 $new->subtotal = str_replace(".", "", $request->total[$i]);
                 $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
                 $new->remark = $request->remark[$i];
+                $new->no_invoice = isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null;
                 $new->evidence = '';
                 $new->status = 1;
                 $new->save();
@@ -1166,6 +1168,7 @@ class DriverReimbursementController extends Controller
                   $new->subtotal = str_replace(".", "", $request->total[$i]);
                   $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
                   $new->remark = $request->remark[$i];
+                  $new->no_invoice = isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null;
                   $new->evidence = '';
                   $new->status = 1;
                   $new->save();
@@ -1253,6 +1256,7 @@ class DriverReimbursementController extends Controller
                   $new->subtotal = str_replace(".", "", $request->total[$i]);
                   $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
                   $new->remark = $request->remark[$i];
+                  $new->no_invoice = isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null;
                   $new->evidence = '';
                   $new->status = 1;
                   $new->save();

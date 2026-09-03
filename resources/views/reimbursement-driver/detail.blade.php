@@ -495,8 +495,9 @@ if (!function_exists('driver_attachment_rows')) {
                                   <th align="center" width="100px">Evidence</th>
                                   <th align="center" >Preview</th>
                                   <th align="center" >Remark</th>
+                                  <th align="center" width="15%">No. Invoice / Receipt</th>
                                   <th align="center" >Action</th>
-        
+
                               </tr>
                           </thead>
                           <tbody>
@@ -570,6 +571,9 @@ if (!function_exists('driver_attachment_rows')) {
                                   
                                 <td>
                                     <input type="text" class="form-control" name="remark[]" placeholder="Remark" value="{{$detail['0']->remark}}">
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control" name="no_invoice[]" placeholder="Contoh: 60578, T787099" value="{{$detail['0']->no_invoice}}">
                                 </td>
                                 <td>
                                     <button type="button" name="add" id="add" class="btn btn-success addMore">+</button>
@@ -663,6 +667,9 @@ if (!function_exists('driver_attachment_rows')) {
                                   
                                   <td>
                                     <input type="text" class="form-control" name="remark[]" placeholder="Remark" value="{{$row->remark}}">
+                                  </td>
+                                  <td>
+                                    <input type="text" class="form-control" name="no_invoice[]" placeholder="Contoh: 60578, T787099" value="{{$row->no_invoice}}">
                                   </td>
                                   <td>
                                     <button type="button" class="btn btn-danger remove-item">-</button>
@@ -1749,7 +1756,7 @@ if (!function_exists('driver_attachment_rows')) {
                 );
                 if($('body').find('.fieldGroup').length < maxGroup){
                  
-                  var fieldHTML = '<tr class="fieldGroup"><td>'+count+'</td><td><input type="hidden" name="id_detail[]"><input type="text" class="form-control amount-toll currency toll'+count+' change-price" name="toll[]" value="0" placeholder="Toll" required></td><td><input type="text" class="form-control amount-parking currency parking'+count+' change-price" name="parking[]" value="0" placeholder="Parking" required></td><td><input type="text" class="form-control amount-gasoline currency gasoline'+count+' change-price" name="gasoline[]" value="0" placeholder="Gasoline" required></td><td><input type="text" class="form-control amount-other currency others'+count+' change-price" name="others[]" value="0" placeholder="Other" required></td><td><input type="text" class="form-control amount-total currency subtotal'+count+' change-price" name="total[]" readonly placeholder="Total"></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="Cash">Cash</option><option value="Fleet">Fleet</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" v-model="item.remark" placeholder="Remark"></td><td><button type="button" class="btn btn-danger remove-item">-</button></td></tr>';
+                  var fieldHTML = '<tr class="fieldGroup"><td>'+count+'</td><td><input type="hidden" name="id_detail[]"><input type="text" class="form-control amount-toll currency toll'+count+' change-price" name="toll[]" value="0" placeholder="Toll" required></td><td><input type="text" class="form-control amount-parking currency parking'+count+' change-price" name="parking[]" value="0" placeholder="Parking" required></td><td><input type="text" class="form-control amount-gasoline currency gasoline'+count+' change-price" name="gasoline[]" value="0" placeholder="Gasoline" required></td><td><input type="text" class="form-control amount-other currency others'+count+' change-price" name="others[]" value="0" placeholder="Other" required></td><td><input type="text" class="form-control amount-total currency subtotal'+count+' change-price" name="total[]" readonly placeholder="Total"></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="Cash">Cash</option><option value="Fleet">Fleet</option></select></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" v-model="item.remark" placeholder="Remark"></td><td><input type="text" class="form-control" name="no_invoice[]" placeholder="Contoh: 60578, T787099"></td><td><button type="button" class="btn btn-danger remove-item">-</button></td></tr>';
                   $('body').find('.fieldGroup:last').after(fieldHTML);
                   $('.currency').mask("#.##0", {
                       reverse: true
