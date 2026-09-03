@@ -292,6 +292,10 @@ if (!function_exists('travel_attachment_cache_bust')) {
                             ?>
                         </td>
                     </tr>
+                    <tr>
+                        <th>No. Invoice / Receipt</th>
+                        <td class="bg-secondary" colspan="7">{{$item->no_invoice}}</td>
+                    </tr>
                 </table>
                 <table class="table table-bordered mb-2">
                 <thead>

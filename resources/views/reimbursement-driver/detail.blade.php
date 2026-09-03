@@ -266,6 +266,7 @@ if (!function_exists('driver_attachment_rows')) {
                         <th>Total</th>
                         <th>Payment Type</th>
                         <th>Remark</th>
+                        <th>No. Invoice / Receipt</th>
                         <th>Attachment</th>
                     </tr>
                     </thead>
@@ -280,6 +281,7 @@ if (!function_exists('driver_attachment_rows')) {
                         <td width="200px"><span>{{number_format($row->subtotal,0,',','.')}}</span></td>
                         <td width="200px"><span>{{$row->payment_type}}</span></td>
                         <td width="200px"><span>{{$row->remark}}</span></td>
+                        <td width="200px"><span>{{$row->no_invoice}}</span></td>
                         <td width="260px">
                           @foreach(driver_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
                             @php $fileName = $att['file_name'] ?? ''; $display = $att['original_name'] ?? $fileName; @endphp
