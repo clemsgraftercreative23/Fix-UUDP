@@ -9,9 +9,16 @@ function rupiah($angka){
 ?>
 
 <div class="page-content" id="app">
+    @if ($errors->any())
+        @foreach ($errors->all() as $error)
+            <div class="alert alert-danger">
+                {{ $error }}
+            </div>
+        @endforeach
+    @endif
 <div class="">
-    <form action="{!!url('update-travel-inq/'.$data['0']->id.'')!!}" method="POST" enctype="multipart/form-data">
-        @csrf 
+    <form id="travel_edit_overseas_form" action="{!!url('update-travel-inq/'.$data['0']->id.'')!!}" method="POST" enctype="multipart/form-data">
+        @csrf
         <div class="row">
             <div class="col-xl">
                 <div class="card">
@@ -110,6 +117,10 @@ function rupiah($angka){
                             <div class="col-md-3">
                                 <label for="">Purpose</label>
                                 <input type="text" name="purpose" class="form-control" required value="{{$data_travel['0']->purpose}}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="">No. Invoice / Receipt</label>
+                                <input type="text" name="no_invoice" class="form-control" placeholder="Contoh: 60578, T787099" value="{{$data_travel['0']->no_invoice}}">
                             </div>
                             <div class="col-md-3">
                                 <label for="">Trip Type</label>
@@ -348,6 +359,32 @@ function rupiah($angka){
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
+<script type="text/javascript">
+$(document).ready(function () {
+    if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+        window.bindReimbursementDuplicateChecks({
+            formSelector: '#travel_edit_overseas_form',
+            checks: [
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    params: function ($form) {
+                        var date = $form.find('input[name="date"]').val();
+                        return date ? { reimbursement_type: 2, dates: [date], exclude_id: {{ (int) $data['0']->id }} } : null;
+                    }
+                },
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
+                    params: function ($form) {
+                        var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
+                        return number ? { no_invoice: number, exclude_id: {{ (int) $data['0']->id }} } : null;
+                    }
+                }
+            ]
+        });
+    }
+});
+</script>
 
 <script type="text/javascript">
 $(document).ready(function(){

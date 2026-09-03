@@ -53,7 +53,8 @@ class ReimbursementController extends Controller
             ], 422);
         }
 
-        $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), $type, $dates);
+        $excludeId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), $type, $dates, $excludeId);
 
         return response()->json(\App\Support\DuplicateDateChecker::buildResponse($dates, $existingDates));
     }
@@ -73,7 +74,8 @@ class ReimbursementController extends Controller
             ], 422);
         }
 
-        $usedNumbers = \App\Support\ReimbursementDuplicateGuard::findDuplicateInvoiceNumbers($numbers);
+        $excludeId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $usedNumbers = \App\Support\ReimbursementDuplicateGuard::findDuplicateInvoiceNumbers($numbers, $excludeId);
 
         return response()->json(\App\Support\DuplicateInvoiceChecker::buildBatchResponse($numbers, $usedNumbers));
     }

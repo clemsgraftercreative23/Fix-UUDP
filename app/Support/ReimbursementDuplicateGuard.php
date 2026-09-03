@@ -9,8 +9,8 @@ use App\ReimbursementTravel;
  * The DB-touching half of duplicate detection (DuplicateDateChecker /
  * DuplicateInvoiceChecker stay pure so their decision logic is unit
  * testable). Shared by the pre-submit AJAX check endpoints AND the actual
- * store() methods -- the AJAX check is a convenience for the user, this
- * guard is what actually stops a duplicate from being saved.
+ * store()/update() methods -- the AJAX check is a convenience for the user,
+ * this guard is what actually stops a duplicate from being saved.
  */
 class ReimbursementDuplicateGuard
 {
@@ -22,8 +22,13 @@ class ReimbursementDuplicateGuard
      */
     private const STATUS_REJECTED = 4;
 
-    /** @return string[] dates (Y-m-d) already submitted (and not rejected) by this user for this reimbursement type */
-    public static function findDuplicateDates(int $userId, int $type, array $dates): array
+    /**
+     * @param ?int $excludeReimbursementId when editing an existing
+     *   submission, its own row must not be flagged as a duplicate of
+     *   itself when its date/invoice number is re-saved unchanged.
+     * @return string[] dates (Y-m-d) already submitted (and not rejected) by this user for this reimbursement type
+     */
+    public static function findDuplicateDates(int $userId, int $type, array $dates, ?int $excludeReimbursementId = null): array
     {
         if (empty($dates)) {
             return [];
@@ -32,6 +37,9 @@ class ReimbursementDuplicateGuard
         return Reimbursement::where('id_user', $userId)
             ->where('reimbursement_type', $type)
             ->where('status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('id', '!=', $excludeReimbursementId);
+            })
             ->whereIn('date', $dates)
             ->pluck('date')
             ->map(function ($date) {
@@ -49,9 +57,10 @@ class ReimbursementDuplicateGuard
      * reimbursement type or form it was originally used on. Rejected
      * submissions are excluded, same reasoning as findDuplicateDates().
      *
+     * @param ?int $excludeReimbursementId see findDuplicateDates()
      * @return string[] numbers already used, anywhere
      */
-    public static function findDuplicateInvoiceNumbers(array $numbers): array
+    public static function findDuplicateInvoiceNumbers(array $numbers, ?int $excludeReimbursementId = null): array
     {
         if (empty($numbers)) {
             return [];
@@ -59,12 +68,18 @@ class ReimbursementDuplicateGuard
 
         $usedInHeader = Reimbursement::whereIn('no_invoice', $numbers)
             ->where('status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('id', '!=', $excludeReimbursementId);
+            })
             ->pluck('no_invoice')
             ->all();
 
         $usedInTravelItems = ReimbursementTravel::whereIn('reimbursement_travel.no_invoice', $numbers)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
             ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
             ->pluck('reimbursement_travel.no_invoice')
             ->all();
 
@@ -73,16 +88,17 @@ class ReimbursementDuplicateGuard
 
     /**
      * Convenience wrapper for the single-date reimbursement types
-     * (driver/entertainment/medical): returns a ready-to-show rejection
-     * message, or null when the date isn't a duplicate (or is blank).
+     * (driver/entertainment/medical, and travel's single-leg edit form):
+     * returns a ready-to-show rejection message, or null when the date
+     * isn't a duplicate (or is blank).
      */
-    public static function rejectionMessageForDate(int $userId, int $type, string $date): ?string
+    public static function rejectionMessageForDate(int $userId, int $type, string $date, ?int $excludeReimbursementId = null): ?string
     {
         if ($date === '') {
             return null;
         }
 
-        if (empty(self::findDuplicateDates($userId, $type, [$date]))) {
+        if (empty(self::findDuplicateDates($userId, $type, [$date], $excludeReimbursementId))) {
             return null;
         }
 
@@ -90,7 +106,7 @@ class ReimbursementDuplicateGuard
     }
 
     /** @return ?string ready-to-show rejection message, or null when none of the given numbers are duplicates */
-    public static function rejectionMessageForInvoiceNumbers(array $numbers): ?string
+    public static function rejectionMessageForInvoiceNumbers(array $numbers, ?int $excludeReimbursementId = null): ?string
     {
         $numbers = array_values(array_unique(array_filter($numbers, function ($n) {
             return $n !== '' && $n !== null;
@@ -100,7 +116,7 @@ class ReimbursementDuplicateGuard
             return null;
         }
 
-        $used = self::findDuplicateInvoiceNumbers($numbers);
+        $used = self::findDuplicateInvoiceNumbers($numbers, $excludeReimbursementId);
         if (empty($used)) {
             return null;
         }

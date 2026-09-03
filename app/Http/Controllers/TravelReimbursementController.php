@@ -2245,6 +2245,17 @@ class TravelReimbursementController extends Controller
 
         $this->validateTravelReimbursementItemRequest($request, false);
 
+        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 2, (string) $request->date, (int) $id);
+        if ($dateError) {
+            return redirect()->back()->withInput()->withErrors([$dateError]);
+        }
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([
+            \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
+        ], (int) $id);
+        if ($invoiceError) {
+            return redirect()->back()->withInput()->withErrors([$invoiceError]);
+        }
+
         $remark = $request->remark;
         $reimbursement_department_id = $request->reimbursement_department_id;
 
@@ -2281,8 +2292,9 @@ class TravelReimbursementController extends Controller
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
             'end_time'        =>  $this->normalizeTravelTime($request->end_time, $request->trip_type_id),
             'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id),
+            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
         );
-        
+
         ReimbursementTravel::where('reimbursement_id', $id)->update($form_data);
 
         //Update table  reimbursement_travel_details
