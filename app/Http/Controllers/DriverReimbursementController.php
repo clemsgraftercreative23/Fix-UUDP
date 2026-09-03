@@ -810,12 +810,6 @@ class DriverReimbursementController extends Controller
         if ($dateError) {
             return redirect()->back()->withInput()->withErrors([$dateError]);
         }
-        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([
-            \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
-        ]);
-        if ($invoiceError) {
-            return redirect()->back()->withInput()->withErrors([$invoiceError]);
-        }
 
         DB::beginTransaction();
         if ($request->has('save') && !$request->has('save_draft')) {

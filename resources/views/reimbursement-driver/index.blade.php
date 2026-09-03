@@ -410,13 +410,6 @@ $(document).ready(function(){
                         var date = $form.find('input[name="date"]').val();
                         return date ? { reimbursement_type: 1, dates: [date] } : null;
                     }
-                },
-                {
-                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
-                    params: function ($form) {
-                        var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
-                        return number ? { no_invoice: number } : null;
-                    }
                 }
             ]
         });
