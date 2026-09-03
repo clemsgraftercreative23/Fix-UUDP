@@ -402,6 +402,10 @@ $(document).ready(function(){
         $('#modalPassword').modal('show');
     @endif
 
+    @if ($errors->any())
+        $('#formModal').modal('show');
+    @endif
+
     if (typeof window.bindReimbursementDuplicateChecks === 'function') {
         window.bindReimbursementDuplicateChecks({
             formSelector: '#sample_form',
