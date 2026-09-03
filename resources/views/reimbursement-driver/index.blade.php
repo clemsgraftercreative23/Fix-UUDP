@@ -219,13 +219,6 @@
                      <input type="date" class="form-control date-picker" name="date" id="exampleFormControlInput1" style="border-radius: 10px;" required>
                    </div>
                   </div>
-                  <div class="col-md-3">
-                    <div class="form-group">
-                     <label for="no_invoice_driver">No. Invoice / Receipt</label>
-                     <input type="text" class="form-control" name="no_invoice" id="no_invoice_driver" style="border-radius: 10px;" placeholder="Nomor invoice/struk" required>
-                   </div>
-                  </div>
-
                   <div class="col-md-6">
                     <div class="form-group">
                       <label for="exampleFormControlInput1">Department</label>
