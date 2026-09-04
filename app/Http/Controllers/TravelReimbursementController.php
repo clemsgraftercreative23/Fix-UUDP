@@ -994,6 +994,35 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Same hard block as guardAgainstDuplicateSubmission(), but for the
+     * tab-based add/edit-item flow where items are saved one at a time
+     * after the initial submission. Skips the check when the number is
+     * blank or unchanged from what this item already has saved, so
+     * re-saving an item without touching its invoice number doesn't flag
+     * it as a duplicate of itself.
+     */
+    private function guardAgainstDuplicateItemInvoice(?int $id_travel, string $normalizedInvoice): void
+    {
+        if ($normalizedInvoice === '') {
+            return;
+        }
+
+        if ($id_travel) {
+            $current = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
+                (string) (DB::table('reimbursement_travel')->where('id', $id_travel)->value('no_invoice') ?? '')
+            );
+            if ($normalizedInvoice === $current) {
+                return;
+            }
+        }
+
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalizedInvoice]);
+        if ($invoiceError) {
+            throw ValidationException::withMessages(['no_invoice' => [$invoiceError]]);
+        }
+    }
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -1666,11 +1695,14 @@ class TravelReimbursementController extends Controller
 
             $id_detail = null;
             if ($shouldCreateTravelRow) {
+                $normalizedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? '');
+                $this->guardAgainstDuplicateItemInvoice(null, $normalizedInvoice);
+
                 $form_travel = array(
                     'reimbursement_id'        =>  $id_main,
                     'date'        =>  $request->date,
                     'purpose'        =>  $request->purpose,
-                    'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
+                    'no_invoice'        =>  $normalizedInvoice,
                     'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
                     'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
                     'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
@@ -2551,10 +2583,13 @@ class TravelReimbursementController extends Controller
 
         //Update table  reimbursement_travel
 
+        $normalizedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? '');
+        $this->guardAgainstDuplicateItemInvoice((int) $id_travel, $normalizedInvoice);
+
         $form_data = array(
             'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
-            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
+            'no_invoice'        =>  $normalizedInvoice,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
@@ -2820,10 +2855,13 @@ class TravelReimbursementController extends Controller
 
         //Update table  reimbursement_travel
 
+        $normalizedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? '');
+        $this->guardAgainstDuplicateItemInvoice((int) $id_travel, $normalizedInvoice);
+
         $form_data = array(
             'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
-            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
+            'no_invoice'        =>  $normalizedInvoice,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
@@ -3068,10 +3106,13 @@ class TravelReimbursementController extends Controller
 
         //Update table  reimbursement_travel
 
+        $normalizedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? '');
+        $this->guardAgainstDuplicateItemInvoice((int) $id_travel, $normalizedInvoice);
+
         $form_data = array(
             'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
-            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
+            'no_invoice'        =>  $normalizedInvoice,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
