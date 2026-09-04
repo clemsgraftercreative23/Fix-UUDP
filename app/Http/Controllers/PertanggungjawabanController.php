@@ -465,17 +465,20 @@ class PertanggungjawabanController extends Controller
         if ($data->pj_status == 0 && ($jabatan == "Direktur Operasional" || $isSuperadmin)) {
             $data->update([
                 'pj_status' => 1,
-                'pj_operasional' => auth()->user()->name
+                'pj_operasional' => auth()->user()->name,
+                'pj_operasional_at' => now(),
             ]);
         } elseif ($data->pj_status == 1 && ($jabatan == "Finance" || $isSuperadmin)) {
             $data->update([
                 'pj_status' => 2,
-                'pj_finance' => auth()->user()->name
+                'pj_finance' => auth()->user()->name,
+                'pj_finance_at' => now(),
             ]);
         } elseif ($data->pj_status == 2 && ($jabatan == "Owner" || $isSuperadmin)) {
             $data->update([
                 'pj_status' => 3,
-                'pj_owner' => auth()->user()->name
+                'pj_owner' => auth()->user()->name,
+                'pj_owner_at' => now(),
             ]);
         }
         

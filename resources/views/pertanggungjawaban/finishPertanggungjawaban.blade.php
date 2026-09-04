@@ -68,14 +68,23 @@
                         <div class="form-group col-md-4">
                             <label for="inputEmail4">Mengetahui Direktur Operasional</label>
                             <input type="text" class="form-control" value="{{$pengajuan['0']->pj_operasional}}" readonly>
+                            @if(!empty($pengajuan['0']->pj_operasional_at))
+                                <small class="form-text text-muted">{{date('d-m-Y H:i', strtotime($pengajuan['0']->pj_operasional_at))}}</small>
+                            @endif
                         </div>
                         <div class="form-group col-md-4">
                             <label for="inputPassword4">Mengetahui Finance</label>
                             <input type="text" class="form-control" value="{{$pengajuan['0']->pj_finance}}" readonly >
+                            @if(!empty($pengajuan['0']->pj_finance_at))
+                                <small class="form-text text-muted">{{date('d-m-Y H:i', strtotime($pengajuan['0']->pj_finance_at))}}</small>
+                            @endif
                         </div>
                         <div class="form-group col-md-4">
                             <label for="inputPassword4">Menyetujui Direktur Utama</label>
                             <input type="text" class="form-control" value="{{$pengajuan['0']->pj_owner}}" readonly >
+                            @if(!empty($pengajuan['0']->pj_owner_at))
+                                <small class="form-text text-muted">{{date('d-m-Y H:i', strtotime($pengajuan['0']->pj_owner_at))}}</small>
+                            @endif
                         </div>
                     </div>
 
