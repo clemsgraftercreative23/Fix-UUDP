@@ -167,6 +167,10 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
         <input type="text" name="purpose" class="form-control" required value="{{$data_travel['0']->purpose}}">
     </div>
     <div class="col-md-3">
+        <label for="">No. Invoice / Receipt</label>
+        <input type="text" name="no_invoice" class="form-control" placeholder="Nomor invoice/struk" required value="{{$data_travel['0']->no_invoice}}">
+    </div>
+    <div class="col-md-3">
         <label for="">Trip Type</label>
         <select id="trip_type_id" class="form-control change-type" name="trip_type_id">
             <option value="">None</option>

@@ -1670,6 +1670,7 @@ class TravelReimbursementController extends Controller
                     'reimbursement_id'        =>  $id_main,
                     'date'        =>  $request->date,
                     'purpose'        =>  $request->purpose,
+                    'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
                     'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
                     'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
                     'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
@@ -2553,6 +2554,7 @@ class TravelReimbursementController extends Controller
         $form_data = array(
             'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
+            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
@@ -2821,6 +2823,7 @@ class TravelReimbursementController extends Controller
         $form_data = array(
             'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
+            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
@@ -3068,6 +3071,7 @@ class TravelReimbursementController extends Controller
         $form_data = array(
             'date'        =>  $request->date,
             'purpose'        =>  $request->purpose,
+            'no_invoice'        =>  \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice ?? ''),
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
             'hotel_condition_id'        =>  $this->normalizeHotelConditionId($request->hotel_condition_id, $request->trip_type_id),
             'start_time'        =>  $this->normalizeTravelTime($request->start_time, $request->trip_type_id),
