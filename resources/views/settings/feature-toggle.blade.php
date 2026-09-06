@@ -19,6 +19,29 @@
 
                   <div class="form-group">
                     <div class="custom-control custom-switch">
+                      <input type="hidden" name="travel_entertainment_ocr_check_enabled" value="0">
+                      <input
+                        type="checkbox"
+                        class="custom-control-input"
+                        id="travel_entertainment_ocr_check_enabled"
+                        name="travel_entertainment_ocr_check_enabled"
+                        value="1"
+                        @if($travelEntertainmentOcrEnabled) checked @endif
+                      >
+                      <label class="custom-control-label" for="travel_entertainment_ocr_check_enabled">
+                        Aktifkan pengecekan OCR No. Invoice/Receipt untuk reimbursement Travel &amp; Entertainment
+                      </label>
+                    </div>
+                    <small class="form-text text-muted">
+                      Kalau aktif: No. Invoice/Receipt di form Travel &amp; Entertainment otomatis dibaca dari foto
+                      struk yang diupload, dan struk yang sudah pernah dipakai di pengajuan lain akan ditolak otomatis.
+                      Kalau nonaktif: tidak ada pembacaan OCR sama sekali (tidak ada panggilan ke Gemini API / tidak
+                      memakai kuota), form berjalan seperti biasa tanpa pengisian ataupun pengecekan No. Invoice/Receipt.
+                    </small>
+                  </div>
+
+                  <div class="form-group">
+                    <div class="custom-control custom-switch">
                       <input type="hidden" name="driver_ocr_invoice_check_enabled" value="0">
                       <input
                         type="checkbox"
@@ -35,7 +58,7 @@
                     <small class="form-text text-muted">
                       Kalau aktif: No. Invoice/Receipt di form Driver otomatis dibaca dari foto struk yang diupload
                       (bukan diketik manual lagi), dan struk yang sudah pernah dipakai di pengajuan lain akan ditolak
-                      otomatis -- sama seperti yang sudah berjalan di Travel &amp; Entertainment.
+                      otomatis.
                       Kalau nonaktif, form Driver tetap seperti sekarang (No. Invoice diketik manual, tanpa pengecekan).
                     </small>
                   </div>

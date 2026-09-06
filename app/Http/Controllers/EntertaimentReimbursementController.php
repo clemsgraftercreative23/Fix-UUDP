@@ -256,6 +256,8 @@ class EntertaimentReimbursementController extends Controller
      */
     private function syncEntertainmentAttachments(Request $request, int $rowIndex, int $reimbursementId, int $newDetailId, int $oldDetailId = 0, string $legacyEvidence = ''): array
     {
+        $ocrEnabled = \App\AppSetting::isTravelEntertainmentOcrCheckEnabled();
+
         if (!$this->attachmentTableReady()) {
             $uploaded = $this->getEntertainmentRowUploadedFiles($request, $rowIndex);
             if (!empty($uploaded)) {
@@ -327,7 +329,9 @@ class EntertaimentReimbursementController extends Controller
                 $fileSize = 0;
             }
 
-            $ocrResult = $this->extractReceiptInvoiceNumber($file);
+            $ocrResult = $ocrEnabled
+                ? $this->extractReceiptInvoiceNumber($file)
+                : ['status' => null, 'extracted_no_invoice' => null, 'extracted_amount' => null, 'message' => null];
             if ($extractedInvoice === '' && !empty($ocrResult['extracted_no_invoice'])) {
                 $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($ocrResult['extracted_no_invoice']);
             }
@@ -356,23 +360,25 @@ class EntertaimentReimbursementController extends Controller
             $newNames[] = $stored;
         }
 
-        // No fresh file uploaded (attachment kept as-is) -- fall back to whatever this
-        // row already had rather than silently wiping out an already-OCR'd invoice number.
-        if ($extractedInvoice === '' && $oldDetailId > 0) {
-            $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
-                (string) (DB::table('reimbursement_entertaiments')->where('id', $oldDetailId)->value('no_invoice') ?? '')
-            );
-        }
+        if ($ocrEnabled) {
+            // No fresh file uploaded (attachment kept as-is) -- fall back to whatever this
+            // row already had rather than silently wiping out an already-OCR'd invoice number.
+            if ($extractedInvoice === '' && $oldDetailId > 0) {
+                $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
+                    (string) (DB::table('reimbursement_entertaiments')->where('id', $oldDetailId)->value('no_invoice') ?? '')
+                );
+            }
 
-        // Still nothing -- this row's evidence may simply have never been OCR'd
-        // yet (e.g. attached before this feature existed). Give its still-
-        // unchecked attachment(s) one chance to catch up now.
-        if ($extractedInvoice === '' && $oldDetailId > 0) {
-            $extractedInvoice = (new \App\Support\ReceiptOcrVerifier())
-                ->backfillUncheckedAttachment('reimbursement_entertaiments', $oldDetailId);
-        }
+            // Still nothing -- this row's evidence may simply have never been OCR'd
+            // yet (e.g. attached before this feature existed). Give its still-
+            // unchecked attachment(s) one chance to catch up now.
+            if ($extractedInvoice === '' && $oldDetailId > 0) {
+                $extractedInvoice = (new \App\Support\ReceiptOcrVerifier())
+                    ->backfillUncheckedAttachment('reimbursement_entertaiments', $oldDetailId);
+            }
 
-        $this->guardAgainstDuplicateEntertainmentRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
+            $this->guardAgainstDuplicateEntertainmentRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
+        }
 
         return [
             'files' => array_values(array_filter(array_merge($kept, $newNames))),
@@ -520,7 +526,8 @@ class EntertaimentReimbursementController extends Controller
             'project' => Master_project::get(),
             'kelompok' => Master_kelompok_kegiatan::get(),
             'daftar' => Master_daftar_rencana::get(),
-            'driver' => User::whereIn('id',Reimbursement::select('id_user')->get()->pluck('id_user'))->get()
+            'driver' => User::whereIn('id',Reimbursement::select('id_user')->get()->pluck('id_user'))->get(),
+            'travelEntertainmentOcrEnabled' => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
         ]);
     }
     

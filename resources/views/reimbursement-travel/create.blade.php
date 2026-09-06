@@ -400,7 +400,9 @@ $(document).ready(function(){
 
   });
 </script>
+@if($travelEntertainmentOcrEnabled ?? false)
 <script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
+@endif
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 <script>
   var OCR_CREATE_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_item'];

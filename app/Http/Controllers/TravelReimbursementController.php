@@ -1195,6 +1195,31 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Single gate for every row-level No. Invoice/Receipt resolution --
+     * behind App\AppSetting::isTravelEntertainmentOcrCheckEnabled(). Off
+     * means no Gemini call happens at all (no extraction, no backfill, no
+     * duplicate check); the row simply saves with no invoice number, same
+     * as before this feature existed. On means the existing OCR + carry-
+     * forward + duplicate-guard pipeline runs exactly as it always has.
+     *
+     * @param UploadedFile[] $files
+     */
+    private function resolveTravelRowInvoiceNumber(array $files, ?int $oldDetailId): string
+    {
+        if (!\App\AppSetting::isTravelEntertainmentOcrCheckEnabled()) {
+            return '';
+        }
+
+        $extractedInvoice = $this->carryForwardInvoiceNumber(
+            $this->extractReceiptInvoiceNumber($files),
+            $oldDetailId
+        );
+        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $extractedInvoice);
+
+        return $extractedInvoice;
+    }
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -1474,7 +1499,8 @@ class TravelReimbursementController extends Controller
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
-            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId()
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
         ]);
 
     }
@@ -1495,7 +1521,8 @@ class TravelReimbursementController extends Controller
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
-            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId()
+            "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
         ]);
 
     }
@@ -1631,9 +1658,7 @@ class TravelReimbursementController extends Controller
                         null,
                         $uploadFiles
                     );
-                    $extractedInvoice = $this->extractReceiptInvoiceNumber($uploadFiles);
-                    $this->guardAgainstDuplicateRowInvoice(null, $extractedInvoice);
-                    $payloadDetail['no_invoice'] = $extractedInvoice;
+                    $payloadDetail['no_invoice'] = $this->resolveTravelRowInvoiceNumber($uploadFiles, null);
 
                     if (!empty($uploadFiles)) {
                         $firstStored = $this->storeTravelEvidenceFile($uploadFiles[0]);
@@ -1947,11 +1972,10 @@ class TravelReimbursementController extends Controller
                     $oldDetailId > 0 ? $oldDetailId : null,
                     $this->getUploadedFilesByRow($request, $i)
                 );
-                $extractedInvoice = $this->carryForwardInvoiceNumber(
-                    $this->extractReceiptInvoiceNumber($this->getUploadedFilesByRow($request, $i)),
+                $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+                    $this->getUploadedFilesByRow($request, $i),
                     $oldDetailId > 0 ? $oldDetailId : null
                 );
-                $this->guardAgainstDuplicateRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
 
                 $new = new ReimbursementTravelDetail;
                 $new->reimbursement_id = $id_main;
@@ -2246,6 +2270,7 @@ class TravelReimbursementController extends Controller
             "data_item" => $item,
             "travel_type" => $travel_type,
             "is_overseas" => ($travel_type !== 'Domestic'),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
         ];
 
         if ($request->query('rt_partial') === '1' || $request->header('X-RT-Partial') === '1') {
@@ -2321,6 +2346,7 @@ class TravelReimbursementController extends Controller
             "currency" => $currency,
             "data_item" => $item,
             "travel_type" => $travel_type,
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
         ]);
     }
 
@@ -2552,11 +2578,10 @@ class TravelReimbursementController extends Controller
                 $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
-            $extractedInvoice = $this->carryForwardInvoiceNumber(
-                $this->extractReceiptInvoiceNumber($this->getUploadedFilesByRow($request, $i)),
+            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+                $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null
             );
-            $this->guardAgainstDuplicateRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
 
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id;
@@ -2849,11 +2874,10 @@ class TravelReimbursementController extends Controller
                 $oldDetailId > 0 ? $oldDetailId : null,
                 $this->getUploadedFilesByRow($request, $i)
             );
-            $extractedInvoice = $this->carryForwardInvoiceNumber(
-                $this->extractReceiptInvoiceNumber($this->getUploadedFilesByRow($request, $i)),
+            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+                $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null
             );
-            $this->guardAgainstDuplicateRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
 
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
@@ -3123,11 +3147,10 @@ class TravelReimbursementController extends Controller
                 $oldDetailId > 0 ? $oldDetailId : null,
                 $this->getUploadedFilesByRow($request, $i)
             );
-            $extractedInvoice = $this->carryForwardInvoiceNumber(
-                $this->extractReceiptInvoiceNumber($this->getUploadedFilesByRow($request, $i)),
+            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+                $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null
             );
-            $this->guardAgainstDuplicateRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
 
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
@@ -3388,11 +3411,10 @@ class TravelReimbursementController extends Controller
                 $oldDetailId > 0 ? $oldDetailId : null,
                 $this->getUploadedFilesByRow($request, $i)
             );
-            $extractedInvoice = $this->carryForwardInvoiceNumber(
-                $this->extractReceiptInvoiceNumber($this->getUploadedFilesByRow($request, $i)),
+            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+                $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null
             );
-            $this->guardAgainstDuplicateRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
 
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id_main;
