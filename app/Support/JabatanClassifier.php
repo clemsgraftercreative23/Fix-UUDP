@@ -33,4 +33,10 @@ class JabatanClassifier
     {
         return in_array($jabatan, ['Owner', 'superadmin', 'admin'], true);
     }
+
+    /** The two jabatans treated as full admin throughout this app (sidebar's whole "Setting" menu is gated on this same check). */
+    public static function isAdmin(?string $jabatan): bool
+    {
+        return in_array($jabatan, ['superadmin', 'admin'], true);
+    }
 }

@@ -1775,10 +1775,14 @@ class TravelReimbursementController extends Controller
 
             
 
+        } catch (ValidationException $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors($e->validator)->withInput();
+
         } catch(\Exception $e) {
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
-    
+
         } catch(\Throwable $e) {
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);

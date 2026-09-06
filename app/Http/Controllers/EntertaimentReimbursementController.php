@@ -758,12 +758,16 @@ class EntertaimentReimbursementController extends Controller
             DB::commit();
             return redirect()->back()->with(['success' => $notif]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors($e->validator)->withInput();
+
         } catch(\Exception $e) {
             // return var_dump($e);
             dd($e->getMessage() . " at line ". $e->getLine());
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
-    
+
         } catch(\Throwable $e) {
             // return var_dump($e);
             dd($e->getMessage() . " at line ". $e->getLine());
@@ -1030,12 +1034,16 @@ class EntertaimentReimbursementController extends Controller
             
             return redirect()->back()->with(['success' => $notif]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors($e->validator)->withInput();
+
         } catch(\Exception $e) {
             // return var_dump($e);
             dd($e->getMessage() . " at line ". $e->getLine());
             DB::rollback();
             return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
-    
+
         } catch(\Throwable $e) {
             // return var_dump($e);
             dd($e->getMessage() . " at line ". $e->getLine());
@@ -1136,12 +1144,16 @@ class EntertaimentReimbursementController extends Controller
 
                 return redirect()->back()->with(['success' => $notif]);
 
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                DB::rollback();
+                return redirect()->back()->withErrors($e->validator)->withInput();
+
             } catch(\Exception $e) {
                 // return var_dump($e);
                 dd($e->getMessage() . " at line ". $e->getLine());
                 DB::rollback();
                 return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
-        
+
             } catch(\Throwable $e) {
                 // return var_dump($e);
                 dd($e->getMessage() . " at line ". $e->getLine());
@@ -1231,6 +1243,10 @@ class EntertaimentReimbursementController extends Controller
                 return redirect()
                   ->back()
                   ->with(['success' => 'Reimbursement Successfully Updated']);
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                      DB::rollback();
+                      return redirect()->back()->withErrors($e->validator)->withInput();
+
                 } catch (\Exception $e) {
                       // return var_dump($e);
                       dd($e->getMessage() . " at line " . $e->getLine());

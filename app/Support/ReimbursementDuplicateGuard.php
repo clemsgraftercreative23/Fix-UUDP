@@ -2,7 +2,9 @@
 
 namespace App\Support;
 
+use App\AppSetting;
 use App\Reimbursement;
+use App\ReimbursementDriver;
 use App\ReimbursementEntertaiment;
 use App\ReimbursementTravel;
 use App\ReimbursementTravelDetail;
@@ -54,11 +56,13 @@ class ReimbursementDuplicateGuard
 
     /**
      * Checked across every place an invoice/receipt number can be saved
-     * (the per-submission header, Travel's legacy per-day/item numbers, and
-     * the current per-row numbers on Travel/Entertainment cost lines) -- a
-     * physical receipt shouldn't be claimed twice regardless of which
-     * reimbursement type, form, or row it was originally used on. Rejected
-     * submissions are excluded, same reasoning as findDuplicateDates().
+     * (the per-submission header, Travel's legacy per-day/item numbers, the
+     * current per-row numbers on Travel/Entertainment cost lines, and
+     * Driver's per-row numbers once an admin has switched Driver over to
+     * OCR-derived invoices) -- a physical receipt shouldn't be claimed twice
+     * regardless of which reimbursement type, form, or row it was originally
+     * used on. Rejected submissions are excluded, same reasoning as
+     * findDuplicateDates().
      *
      * @param ?int $excludeReimbursementId see findDuplicateDates()
      * @return string[] numbers already used, anywhere
@@ -106,11 +110,29 @@ class ReimbursementDuplicateGuard
             ->pluck('reimbursement_entertaiments.no_invoice')
             ->all();
 
+        // Driver's invoice numbers only join the global search once an admin has
+        // switched it from free-typed to OCR-derived (see AppSetting::isDriverOcrCheckEnabled())
+        // -- while off, its ungoverned manual entries must never risk falsely
+        // blocking a Travel/Entertainment upload.
+        $usedInDriverItems = [];
+        if (AppSetting::isDriverOcrCheckEnabled()) {
+            $usedInDriverItems = ReimbursementDriver::whereIn('reimbursement_driver.no_invoice', $numbers)
+                ->where('reimbursement_driver.status', 1)
+                ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
+                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                    $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+                })
+                ->pluck('reimbursement_driver.no_invoice')
+                ->all();
+        }
+
         return array_values(array_unique(array_merge(
             $usedInHeader,
             $usedInTravelItems,
             $usedInTravelDetails,
-            $usedInEntertainmentItems
+            $usedInEntertainmentItems,
+            $usedInDriverItems
         )));
     }
 

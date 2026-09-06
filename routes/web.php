@@ -36,6 +36,10 @@
   Route::get('/filter/totalfilter/{id}','HomeController@totalfilter');
 
 
+  // pengaturan fitur (admin-only, see sidebar's "Setting" menu)
+  Route::get('pengaturan-fitur', 'SystemSettingController@index');
+  Route::post('pengaturan-fitur', 'SystemSettingController@update');
+
   // karyawan
   Route::resource('/karyawan', 'KaryawanController');
   Route::get('/karyawan/profile/{id}','KaryawanController@show');

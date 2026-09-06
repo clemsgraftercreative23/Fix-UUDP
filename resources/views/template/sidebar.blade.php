@@ -169,6 +169,13 @@
                                @endif
                                    <a href="{{url('user_aplikasi')}}">User Application</a>
                                </li>
+                               @if($segment1 == 'pengaturan-fitur')
+                                  <li class="active-page">
+                               @else
+                                  <li>
+                               @endif
+                                   <a href="{{url('pengaturan-fitur')}}">Pengaturan Fitur</a>
+                               </li>
                            </ul>
                        </li>
                         <li>

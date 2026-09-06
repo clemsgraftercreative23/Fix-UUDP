@@ -304,7 +304,9 @@
                             <input type="text" class="form-control" name="remark[]" placeholder="Remark">
                         </td>
                         <td>
+                            @if(!($driverOcrEnabled ?? false))
                             <input type="text" class="form-control" name="no_invoice[]" placeholder="Contoh: 60578, T787099">
+                            @endif
                         </td>
                         <td>
                             <button type="button" name="add" id="add" class="btn btn-success addMore">+</button>
@@ -385,6 +387,9 @@
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
+@if($driverOcrEnabled ?? false)
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
+@endif
 <script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 <script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script type="text/javascript">
@@ -1364,7 +1369,7 @@ $(document).ready(function(){
       );
 
       if ($('body').find('.fieldGroup').length < maxGroup) {    
-           var fieldHTML = '<tr class="fieldGroup"><td>'+i+'</td><td><input type="hidden" name="id_detail[]"><input type="text" class="form-control amount-toll currency toll'+i+' change-price" name="toll[]" value="0" placeholder="Toll" required></td><td><input type="text" class="form-control amount-parking currency parking'+i+' change-price" name="parking[]" value="0" placeholder="Parking" required></td><td><input type="text" class="form-control amount-gasoline currency gasoline'+i+' change-price" name="gasoline[]" value="0" placeholder="Gasoline" required></td><td><input type="text" class="form-control amount-other currency others'+i+' change-price" name="others[]" value="0" placeholder="Other" required></td><td><input type="text" class="form-control amount-total currency subtotal'+i+' change-price" name="total[]" readonly placeholder="Total"></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="Cash">Cash</option><option value="Fleet">Fleet</option></select></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><input type="text" class="form-control" name="no_invoice[]" placeholder="Contoh: 60578, T787099"></td><td><button type="button" class="btn btn-danger remove-item">-</button></td></tr>';
+           var fieldHTML = '<tr class="fieldGroup"><td>'+i+'</td><td><input type="hidden" name="id_detail[]"><input type="text" class="form-control amount-toll currency toll'+i+' change-price" name="toll[]" value="0" placeholder="Toll" required></td><td><input type="text" class="form-control amount-parking currency parking'+i+' change-price" name="parking[]" value="0" placeholder="Parking" required></td><td><input type="text" class="form-control amount-gasoline currency gasoline'+i+' change-price" name="gasoline[]" value="0" placeholder="Gasoline" required></td><td><input type="text" class="form-control amount-other currency others'+i+' change-price" name="others[]" value="0" placeholder="Other" required></td><td><input type="text" class="form-control amount-total currency subtotal'+i+' change-price" name="total[]" readonly placeholder="Total"></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="Cash">Cash</option><option value="Fleet">Fleet</option></select></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td>@if(!($driverOcrEnabled ?? false))<input type="text" class="form-control" name="no_invoice[]" placeholder="Contoh: 60578, T787099">@endif</td><td><button type="button" class="btn btn-danger remove-item">-</button></td></tr>';
 
                $('body').find('.fieldGroup:last').after(fieldHTML);
       $('.currency').mask("#.##0", {

@@ -325,6 +325,102 @@ class DriverReimbursementController extends Controller
         return $files;
     }
 
+    /**
+     * Driver's "No. Invoice/Receipt" stays plain manual input unless an
+     * admin has switched it on via the "Pengaturan Fitur" toggle
+     * (App\AppSetting::isDriverOcrCheckEnabled()) -- when off, this is a
+     * passthrough that changes nothing from today's behavior. When on, it
+     * mirrors Travel/Entertainment's per-row flow: OCR the row's uploaded
+     * receipt(s), carry forward / backfill when nothing fresh was uploaded,
+     * then hard-block on a real duplicate.
+     */
+    private function resolveDriverRowInvoiceNumber(Request $request, int $rowIndex, ?int $oldDetailId, ?string $manualInvoice): string
+    {
+        if (!\App\AppSetting::isDriverOcrCheckEnabled()) {
+            return \App\Support\DuplicateInvoiceChecker::normalizeNumber($manualInvoice ?? '');
+        }
+
+        $extractedInvoice = $this->carryForwardInvoiceNumber(
+            $this->extractReceiptInvoiceNumber($this->getDriverRowUploadedFiles($request, $rowIndex)),
+            $oldDetailId
+        );
+        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $extractedInvoice);
+
+        return $extractedInvoice;
+    }
+
+    /**
+     * @param UploadedFile[] $files
+     * @return string first non-empty OCR-extracted No. Invoice/Receipt
+     *   among the given files (normalized), or '' if OCR read none.
+     */
+    private function extractReceiptInvoiceNumber(array $files): string
+    {
+        $verifier = new \App\Support\ReceiptOcrVerifier();
+        $extractedInvoice = '';
+        foreach ($files as $file) {
+            if (!$file instanceof UploadedFile) {
+                continue;
+            }
+            $result = $verifier->read($file);
+            if ($extractedInvoice === '' && !empty($result['extracted_no_invoice'])) {
+                $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($result['extracted_no_invoice']);
+            }
+        }
+
+        return $extractedInvoice;
+    }
+
+    /**
+     * Falls back to the previous save's stored invoice number when this save
+     * carries no fresh OCR read (e.g. the row's attachment was kept as-is),
+     * then to a one-time OCR backfill if even that's blank (evidence never
+     * checked before) -- otherwise resaving a row without touching its
+     * receipt would silently wipe out an already-verified invoice number.
+     */
+    private function carryForwardInvoiceNumber(string $extractedInvoice, ?int $oldDetailId): string
+    {
+        if ($extractedInvoice !== '' || !$oldDetailId) {
+            return $extractedInvoice;
+        }
+
+        $stored = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
+            (string) (DB::table('reimbursement_driver')->where('id', $oldDetailId)->value('no_invoice') ?? '')
+        );
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        return (new \App\Support\ReceiptOcrVerifier())->backfillUncheckedAttachment('reimbursement_driver', $oldDetailId);
+    }
+
+    /**
+     * Hard block on saving a cost-line row whose OCR-extracted No.
+     * Invoice/Receipt number is already used elsewhere. Skips silently when
+     * OCR couldn't read a number (blank never blocks) or when re-saving a
+     * row leaves its own already-stored number unchanged.
+     */
+    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice): void
+    {
+        if ($normalizedInvoice === '') {
+            return;
+        }
+
+        if ($excludeDetailId) {
+            $current = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
+                (string) (DB::table('reimbursement_driver')->where('id', $excludeDetailId)->value('no_invoice') ?? '')
+            );
+            if ($normalizedInvoice === $current) {
+                return;
+            }
+        }
+
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalizedInvoice]);
+        if ($invoiceError) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['evidence' => [$invoiceError]]);
+        }
+    }
+
     private function ensureDriverLegacyAttachment(int $reimbursementId, int $detailId, string $legacyEvidence): void
     {
         if (!$this->attachmentTableReady()) {
@@ -456,7 +552,7 @@ class DriverReimbursementController extends Controller
         $id_user = auth()->user()->id;
 
         if (request()->ajax()) {
-            if (auth()->user()->jabatan == 'superadmin') {
+            if (in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true)) {
                 $data = Reimbursement::leftJoin('master_project', 'reimbursement.id_project', 'master_project.id')
                     ->select('reimbursement.*', 'master_project.nama', 'master_project.no_project', 'master_project.keterangan')
                     ->where('reimbursement.reimbursement_type', 1);
@@ -608,6 +704,7 @@ class DriverReimbursementController extends Controller
                     ->get()
                     ->pluck('id_user')
             )->get(),
+            'driverOcrEnabled' => \App\AppSetting::isDriverOcrCheckEnabled(),
         ]);
     }
 
@@ -861,7 +958,7 @@ class DriverReimbursementController extends Controller
                     'subtotal' => isset($request->total[$i]) ? str_replace(".", "", $request->total[$i]) : 0,
                     'remark' => isset($request->remark[$i]) ? str_replace(".", "", $request->remark[$i]) : null,
                     'payment_type' => isset($request->payment_type[$i]) ? str_replace(".", "", $request->payment_type[$i]) : null,
-                    'no_invoice' => isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null,
+                    'no_invoice' => $this->resolveDriverRowInvoiceNumber($request, $i, null, $request->no_invoice[$i] ?? null),
                 ];
                 $payload['evidence'] = '';
                 $dt = ReimbursementDriver::create($payload);
@@ -882,6 +979,9 @@ class DriverReimbursementController extends Controller
 
             return redirect('reimbursement-driver')
                 ->with(['success' => $notif]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors($e->validator)->withInput();
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error('Driver reimbursement store failed', [
@@ -912,7 +1012,7 @@ class DriverReimbursementController extends Controller
         $isSubmitter = (int) $user->id === (int) $data->id_user;
 
         // Pengaju yang juga punya peran verifikator tidak boleh buka inquiry/approve sendiri di pipeline.
-        $approverJabatans = ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin'];
+        $approverJabatans = ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'];
         if ($isSubmitter
             && in_array($jabatan, $approverJabatans, true)
             && in_array($status, [0, 1, 2, 11], true)) {
@@ -920,7 +1020,7 @@ class DriverReimbursementController extends Controller
         }
 
         // Same rules as resources/views/reimbursement-driver/detail.blade.php + index "Edit" deep-link (open inquiry modal).
-        if ($jabatan === 'superadmin' && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
+        if (in_array($jabatan, ['superadmin', 'admin'], true) && in_array($status, [0, 1, 2, 9, 10, 11], true)) {
             return true;
         }
         // Align with entertainment: Head Department can open inquiry at status 0 when assigned as approver.
@@ -980,6 +1080,7 @@ class DriverReimbursementController extends Controller
             'name' => $name,
             'metode_cash' => $metode_cash,
             'open_edit_modal' => $openEditModal,
+            'driverOcrEnabled' => \App\AppSetting::isDriverOcrCheckEnabled(),
         ]);
     }
 
@@ -1049,7 +1150,7 @@ class DriverReimbursementController extends Controller
                 $new->subtotal = str_replace(".", "", $request->total[$i]);
                 $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
                 $new->remark = $request->remark[$i];
-                $new->no_invoice = isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null;
+                $new->no_invoice = $this->resolveDriverRowInvoiceNumber($request, $i, $oldDetailId > 0 ? $oldDetailId : null, $request->no_invoice[$i] ?? null);
                 $new->evidence = '';
                 $new->status = 1;
                 $new->save();
@@ -1079,6 +1180,9 @@ class DriverReimbursementController extends Controller
 
             return redirect('reimbursement-driver')
                 ->with(['success' => 'Reimbursement Successfully Submitted']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollback();
+            return redirect()->back()->withErrors($e->validator)->withInput();
         } catch (\Exception $e) {
             // return var_dump($e);
             dd($e->getMessage() . " at line " . $e->getLine());
@@ -1167,7 +1271,7 @@ class DriverReimbursementController extends Controller
                   $new->subtotal = str_replace(".", "", $request->total[$i]);
                   $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
                   $new->remark = $request->remark[$i];
-                  $new->no_invoice = isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null;
+                  $new->no_invoice = $this->resolveDriverRowInvoiceNumber($request, $i, $oldDetailId > 0 ? $oldDetailId : null, $request->no_invoice[$i] ?? null);
                   $new->evidence = '';
                   $new->status = 1;
                   $new->save();
@@ -1199,6 +1303,9 @@ class DriverReimbursementController extends Controller
               return redirect()
                   ->back()
                   ->with(['success' => $notif]);
+          } catch (\Illuminate\Validation\ValidationException $e) {
+              DB::rollback();
+              return redirect()->back()->withErrors($e->validator)->withInput();
           } catch (\Exception $e) {
               DB::rollback();
               return redirect()
@@ -1255,7 +1362,7 @@ class DriverReimbursementController extends Controller
                   $new->subtotal = str_replace(".", "", $request->total[$i]);
                   $new->payment_type = str_replace(".", "", $request->payment_type[$i]);
                   $new->remark = $request->remark[$i];
-                  $new->no_invoice = isset($request->no_invoice[$i]) ? trim((string) $request->no_invoice[$i]) : null;
+                  $new->no_invoice = $this->resolveDriverRowInvoiceNumber($request, $i, $oldDetailId > 0 ? $oldDetailId : null, $request->no_invoice[$i] ?? null);
                   $new->evidence = '';
                   $new->status = 1;
                   $new->save();
@@ -1285,6 +1392,9 @@ class DriverReimbursementController extends Controller
               return redirect()
                   ->back()
                   ->with(['success' => 'Reimbursement Successfully Updated']);
+              } catch (\Illuminate\Validation\ValidationException $e) {
+                  DB::rollback();
+                  return redirect()->back()->withErrors($e->validator)->withInput();
               } catch (\Exception $e) {
                   // return var_dump($e);
                   dd($e->getMessage() . " at line " . $e->getLine());
@@ -1460,7 +1570,7 @@ class DriverReimbursementController extends Controller
             $user = User::where('id', $row->id_user)->first(['phoneNumber']);
 
             if ($user && $user->phoneNumber) {
-                if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
+                if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $isSuperadmin)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
@@ -1501,17 +1611,17 @@ class DriverReimbursementController extends Controller
                             ])
                             ->post();
                     }
-                } 
+                }
 
-                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $isSuperadmin)) {
                     $this->notifyDriverHrGaApproved($row, auth()->user()->name);
-                } 
+                }
 
                 if ($bulkStatus === 2 && $jab === 'Finance Supervisor') {
                     $this->notifyDriverFinanceSupervisorApproved($row);
                 }
 
-                if (($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 3 && ($jab === 'Owner' || $jab === 'superadmin'))) {
+                if (($bulkStatus === 2 && ($jab === 'Owner' || $isSuperadmin)) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $isSuperadmin)) || ($bulkStatus === 3 && ($jab === 'Owner' || $isSuperadmin))) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
