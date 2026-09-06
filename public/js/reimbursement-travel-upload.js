@@ -9,6 +9,7 @@ window.TravelUpload = (function () {
   var PDF_ICON = 'https://cdn-icons-png.flaticon.com/512/337/337946.png';
   var ACCEPT_TYPES = 'image/*,.pdf,application/pdf';
   var PANE = '#rt-travel-item-pane';
+  var OCR_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_submit', '#edit_finance', '#edit_owner'];
 
   function scaleDimensions(width, height) {
     var w = width;
@@ -241,9 +242,10 @@ window.TravelUpload = (function () {
   }
 
   function removePendingPreview($item) {
+    var $row = $item.closest('tr');
     var uid = $item.attr('data-uid');
     if (uid) {
-      $item.closest('tr').find('.pending-attachment-input[data-uid="' + uid + '"]').remove();
+      $row.find('.pending-attachment-input[data-uid="' + uid + '"]').remove();
     }
     $item.find('a[href^="blob:"]').each(function () {
       try {
@@ -254,11 +256,22 @@ window.TravelUpload = (function () {
       } catch (e) { /* ignore */ }
     });
     $item.remove();
+    // The removed file may have been the one OCR flagged as a mismatch -- clear
+    // its status/badge rather than leaving a stale block on an empty row.
+    $row.removeAttr(window.ReimbursementOcrCheck ? window.ReimbursementOcrCheck.STATUS_ATTR : 'data-ocr-status');
+    $row.find('.ocr-check-badge').remove();
     syncUploadWarning();
+  }
+
+  function applyOcrBlockState() {
+    if (window.ReimbursementOcrCheck && window.ReimbursementOcrCheck.hasBlockingMismatch($(PANE))) {
+      window.ReimbursementOcrCheck.toggleSubmitButtons(true, OCR_SUBMIT_SELECTORS);
+    }
   }
 
   function syncUploadWarning() {
     $('#action_button, #action_button_draft, #action_button_submit, #edit_finance, #edit_owner').prop('disabled', false);
+    applyOcrBlockState();
   }
 
   function enableSubmitButtons() {
@@ -267,6 +280,27 @@ window.TravelUpload = (function () {
     if (typeof window.rtTravelSyncFileUploadWarning === 'function') {
       window.rtTravelSyncFileUploadWarning($(PANE));
     }
+    applyOcrBlockState();
+  }
+
+  function ocrCheckOptions($row, previewDiv) {
+    return {
+      row: $row,
+      badgeContainer: previewDiv,
+      submitSelectors: OCR_SUBMIT_SELECTORS,
+      formScope: $(PANE),
+      excludeId: $(PANE).attr('data-main-id')
+    };
+  }
+
+  function runOcrCheckForRow(row, file, previewDiv) {
+    if (!window.ReimbursementOcrCheck) {
+      return;
+    }
+    var $row = $(row);
+    window.ReimbursementOcrCheck.verifyAndRender(
+      Object.assign({ file: file }, ocrCheckOptions($row, previewDiv))
+    );
   }
 
   function processAndAppendFile(row, file) {
@@ -277,6 +311,7 @@ window.TravelUpload = (function () {
       return renderFilePreview(processed, uid).then(function ($el) {
         previewDiv.append($el);
         enableSubmitButtons();
+        runOcrCheckForRow(row, processed, previewDiv);
         return processed;
       });
     });

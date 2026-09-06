@@ -191,10 +191,6 @@
                                     <input type="text" :name="'reimburse['+i+'][purpose]'" class="form-control" required value="" />
                                 </div>
                                 <div class="col-md-3">
-                                    <label for="">No. Invoice / Receipt</label>
-                                    <input type="text" :name="'reimburse['+i+'][no_invoice]'" class="form-control travel-item-invoice" placeholder="Nomor invoice/struk" required value="" />
-                                </div>
-                                <div class="col-md-3">
                                     <label for="">Trip Type</label>
                                     <select :name="'reimburse['+i+'][trip_type_id]'" id="" class="form-control" v-model="data.trip" @change="changeTrip(i)">
                                         <option value="" selected disabled>Pilih...</option>
@@ -406,9 +402,29 @@ $(document).ready(function(){
 
   });
 </script>
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 <script>
-  
+  var OCR_CREATE_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_item'];
+
+  function ocrCreateRowOptions($row) {
+    return {
+      row: $row,
+      badgeContainer: $row.find('[id^="preview_"]').first(),
+      submitSelectors: OCR_CREATE_SUBMIT_SELECTORS,
+      formScope: $('#travel_overseas_reimbursement_form')
+    };
+  }
+
+  function runOcrCheckForCreateRow($row, file) {
+    if (!window.ReimbursementOcrCheck) {
+      return;
+    }
+    window.ReimbursementOcrCheck.verifyAndRender(
+      Object.assign({ file: file }, ocrCreateRowOptions($row))
+    );
+  }
+
   new Vue({
       el: '#app',
       data: {
@@ -704,12 +720,15 @@ $(document).ready(function(){
                   $("#action_button").prop("disabled", false);
                   $("#action_button_draft").prop("disabled", false);
                   $("#action_button_item").prop("disabled", false);
+
+                  runOcrCheckForCreateRow($(this).closest('tr'), file);
                 }
               });
             });
           
             $(".addCamera").on('click', function() {
                 let idx = $(this).attr("data-idx"); // Ambil data-idx
+                let $row = $(this).closest('tr');
                 let fileInput = $(this).parent().find(".file-input")[0];
 
                 $("#modalPhoto").modal("show");
@@ -752,7 +771,8 @@ $(document).ready(function(){
                                     .css({ maxWidth: '100%', maxHeight: '200px', border: '2px solid #28a745', borderRadius: '5px' });
                                 $("#preview_" + idx).append(img);
 
-                            }, "image/jpeg", 0.85); 
+                                runOcrCheckForCreateRow($row, file);
+                            }, "image/jpeg", 0.85);
 
                             // Stop kamera setelah capture
                             stream.getTracks().forEach(track => track.stop());
@@ -988,19 +1008,6 @@ $(document).ready(function(){
                           }
                       });
                       return dates.length ? { reimbursement_type: 2, dates: dates } : null;
-                  }
-              },
-              {
-                  url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
-                  params: function ($form) {
-                      var numbers = [];
-                      $form.find('.travel-item-invoice').each(function () {
-                          var value = (this.value || '').trim();
-                          if (value) {
-                              numbers.push(value);
-                          }
-                      });
-                      return numbers.length ? { numbers: numbers } : null;
                   }
               }
           ]

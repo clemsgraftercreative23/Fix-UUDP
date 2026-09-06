@@ -106,6 +106,50 @@ class EntertaimentReimbursementController extends Controller
         return $filename;
     }
 
+    /**
+     * Hard block when the OCR reading of an uploaded receipt/invoice photo
+     * doesn't match the typed No. Invoice/Receipt (header-level, one per
+     * submission) or amount (per row) for this entertainment cost line.
+     * Returns the verification result so the caller can persist it onto
+     * the ReimbursementAttachment row without re-running OCR. A broken/
+     * unconfigured OCR service never blocks -- only a real detected
+     * mismatch does (see ReceiptOcrVerifier).
+     */
+    /** OCRs an uploaded receipt to read its No. Invoice/Receipt -- amount is not verified against the receipt, it's manual input only. */
+    private function extractReceiptInvoiceNumber(UploadedFile $file): array
+    {
+        $verifier = new \App\Support\ReceiptOcrVerifier();
+        return $verifier->read($file);
+    }
+
+    /**
+     * Hard block on saving a cost-line row whose OCR-extracted No.
+     * Invoice/Receipt number is already used elsewhere. Skips silently when
+     * OCR couldn't read a number (blank never blocks -- see
+     * ReceiptOcrVerifier) or when re-saving a row leaves its own
+     * already-stored number unchanged.
+     */
+    private function guardAgainstDuplicateEntertainmentRowInvoice(?int $excludeDetailId, string $normalizedInvoice): void
+    {
+        if ($normalizedInvoice === '') {
+            return;
+        }
+
+        if ($excludeDetailId) {
+            $current = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
+                (string) (DB::table('reimbursement_entertaiments')->where('id', $excludeDetailId)->value('no_invoice') ?? '')
+            );
+            if ($normalizedInvoice === $current) {
+                return;
+            }
+        }
+
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalizedInvoice]);
+        if ($invoiceError) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['evidence' => [$invoiceError]]);
+        }
+    }
+
     private function getEntertainmentRowUploadedFiles(Request $request, int $index): array
     {
         $files = [];
@@ -205,16 +249,21 @@ class EntertaimentReimbursementController extends Controller
         }
     }
 
+    /**
+     * @return array{files: string[], no_invoice: string} attachment file names kept/added for this row,
+     *   and the row's OCR-extracted No. Invoice/Receipt (already deduped -- '' if OCR read nothing and
+     *   there was no prior value to carry forward from $oldDetailId).
+     */
     private function syncEntertainmentAttachments(Request $request, int $rowIndex, int $reimbursementId, int $newDetailId, int $oldDetailId = 0, string $legacyEvidence = ''): array
     {
         if (!$this->attachmentTableReady()) {
             $uploaded = $this->getEntertainmentRowUploadedFiles($request, $rowIndex);
             if (!empty($uploaded)) {
                 $first = $this->storeAttachmentFile($uploaded[0]);
-                return $first === '' ? [] : [$first];
+                return ['files' => $first === '' ? [] : [$first], 'no_invoice' => ''];
             }
             $legacyEvidence = trim((string) $legacyEvidence);
-            return $legacyEvidence === '' ? [] : [$legacyEvidence];
+            return ['files' => $legacyEvidence === '' ? [] : [$legacyEvidence], 'no_invoice' => ''];
         }
 
         $kept = [];
@@ -256,6 +305,7 @@ class EntertaimentReimbursementController extends Controller
         }
 
         $newNames = [];
+        $extractedInvoice = '';
         foreach ($this->getEntertainmentRowUploadedFiles($request, $rowIndex) as $file) {
             $originalName = '';
             $mimeType = null;
@@ -277,6 +327,11 @@ class EntertaimentReimbursementController extends Controller
                 $fileSize = 0;
             }
 
+            $ocrResult = $this->extractReceiptInvoiceNumber($file);
+            if ($extractedInvoice === '' && !empty($ocrResult['extracted_no_invoice'])) {
+                $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($ocrResult['extracted_no_invoice']);
+            }
+
             $stored = $this->storeAttachmentFile($file);
             if ($stored === '') {
                 continue;
@@ -291,12 +346,38 @@ class EntertaimentReimbursementController extends Controller
                 'original_name' => ($originalName !== '' ? $originalName : $stored),
                 'mime_type' => $mimeType,
                 'file_size' => $fileSize,
+                'ocr_status' => $ocrResult['status'],
+                'ocr_extracted_no_invoice' => $ocrResult['extracted_no_invoice'],
+                'ocr_extracted_amount' => $ocrResult['extracted_amount'],
+                'ocr_message' => $ocrResult['message'],
+                'ocr_checked_at' => now(),
                 'created_by' => auth()->id(),
             ]);
             $newNames[] = $stored;
         }
 
-        return array_values(array_filter(array_merge($kept, $newNames)));
+        // No fresh file uploaded (attachment kept as-is) -- fall back to whatever this
+        // row already had rather than silently wiping out an already-OCR'd invoice number.
+        if ($extractedInvoice === '' && $oldDetailId > 0) {
+            $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
+                (string) (DB::table('reimbursement_entertaiments')->where('id', $oldDetailId)->value('no_invoice') ?? '')
+            );
+        }
+
+        // Still nothing -- this row's evidence may simply have never been OCR'd
+        // yet (e.g. attached before this feature existed). Give its still-
+        // unchecked attachment(s) one chance to catch up now.
+        if ($extractedInvoice === '' && $oldDetailId > 0) {
+            $extractedInvoice = (new \App\Support\ReceiptOcrVerifier())
+                ->backfillUncheckedAttachment('reimbursement_entertaiments', $oldDetailId);
+        }
+
+        $this->guardAgainstDuplicateEntertainmentRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
+
+        return [
+            'files' => array_values(array_filter(array_merge($kept, $newNames))),
+            'no_invoice' => $extractedInvoice,
+        ];
     }
     /**
      * Display a listing of the resource.
@@ -569,12 +650,6 @@ class EntertaimentReimbursementController extends Controller
         if ($dateError) {
             return redirect()->back()->withInput()->withErrors([$dateError]);
         }
-        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([
-            \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
-        ]);
-        if ($invoiceError) {
-            return redirect()->back()->withInput()->withErrors([$invoiceError]);
-        }
 
         DB::beginTransaction();
         if (isset($_POST['save'])) {
@@ -589,7 +664,6 @@ class EntertaimentReimbursementController extends Controller
             $data = [
                 "id_user" => auth()->user()->id,
                 "no_reimbursement" => "PENDING",
-                "no_invoice" => \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
                 "date" => $request->date,
                 "reimbursement_department_id" => $request->reimbursement_department_id,
                 "mengetahui_op" => "-",
@@ -635,8 +709,9 @@ class EntertaimentReimbursementController extends Controller
                 $new->status = 1;
                 $new->save();
 
-                $allAttachmentNames = $this->syncEntertainmentAttachments($request, $i, (int) $id_reim, (int) $new->id);
-                $new->evidence = $allAttachmentNames[0] ?? '';
+                $attachmentResult = $this->syncEntertainmentAttachments($request, $i, (int) $id_reim, (int) $new->id);
+                $new->evidence = $attachmentResult['files'][0] ?? '';
+                $new->no_invoice = $attachmentResult['no_invoice'];
                 $new->save();
             }
 
@@ -890,7 +965,7 @@ class EntertaimentReimbursementController extends Controller
                 $new->status = 1;
                 $new->save();
 
-                $allAttachmentNames = $this->syncEntertainmentAttachments(
+                $attachmentResult = $this->syncEntertainmentAttachments(
                     $request,
                     $i,
                     (int) $data->id,
@@ -898,7 +973,8 @@ class EntertaimentReimbursementController extends Controller
                     $oldDetailId,
                     $legacyEvidence
                 );
-                $new->evidence = $allAttachmentNames[0] ?? '';
+                $new->evidence = $attachmentResult['files'][0] ?? '';
+                $new->no_invoice = $attachmentResult['no_invoice'];
                 $new->save();
                 
             }
@@ -1038,7 +1114,7 @@ class EntertaimentReimbursementController extends Controller
                     $new->status = 1;
                     $new->save();
 
-                    $allAttachmentNames = $this->syncEntertainmentAttachments(
+                    $attachmentResult = $this->syncEntertainmentAttachments(
                         $request,
                         $i,
                         (int) $data->id,
@@ -1046,7 +1122,8 @@ class EntertaimentReimbursementController extends Controller
                         $oldDetailId,
                         $legacyEvidence
                     );
-                    $new->evidence = $allAttachmentNames[0] ?? '';
+                    $new->evidence = $attachmentResult['files'][0] ?? '';
+                    $new->no_invoice = $attachmentResult['no_invoice'];
                     $new->save();
                     
                 }
@@ -1126,7 +1203,7 @@ class EntertaimentReimbursementController extends Controller
                     $new->status = 1;
                     $new->save();
 
-                    $allAttachmentNames = $this->syncEntertainmentAttachments(
+                    $attachmentResult = $this->syncEntertainmentAttachments(
                         $request,
                         $i,
                         (int) $data->id,
@@ -1134,7 +1211,8 @@ class EntertaimentReimbursementController extends Controller
                         $oldDetailId,
                         $legacyEvidence
                     );
-                    $new->evidence = $allAttachmentNames[0] ?? '';
+                    $new->evidence = $attachmentResult['files'][0] ?? '';
+                    $new->no_invoice = $attachmentResult['no_invoice'];
                     $new->save();
                     
                 }
@@ -1481,7 +1559,7 @@ class EntertaimentReimbursementController extends Controller
             $user = User::where('id', $row->id_user)->first(['phoneNumber']);
 
             if ($user && $user->phoneNumber) {
-                if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $jab === 'superadmin')) {
+                if ($bulkStatus === 0 && ($jab === 'Direktur Operasional' || $isSuperadmin)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
@@ -1524,7 +1602,7 @@ class EntertaimentReimbursementController extends Controller
                     }
                 } 
 
-                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $jab === 'superadmin')) {
+                if ($bulkStatus === 1 && ($jab === 'Finance' || $jab === 'HR GA' || $jab === 'Finance Supervisor' || $isSuperadmin)) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([
@@ -1610,7 +1688,7 @@ class EntertaimentReimbursementController extends Controller
                     }
                 }
 
-                if (($bulkStatus === 2 && ($jab === 'Owner' || $jab === 'superadmin')) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $jab === 'superadmin'))) {
+                if (($bulkStatus === 2 && ($jab === 'Owner' || $isSuperadmin)) || ($bulkStatus === 11 && ($jab === 'Finance Manager' || $jab === 'Owner' || $isSuperadmin))) {
                     $curl = \Curl::to('https://api.fonnte.com/send')
                     ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
                     ->withData([

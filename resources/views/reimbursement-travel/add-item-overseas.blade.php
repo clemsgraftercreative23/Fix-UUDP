@@ -348,6 +348,7 @@ function rate_input($angka){
 
 
 @push('scripts')
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 <script src="{{ asset('js/reimbursement-travel-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-upload.js')) }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>

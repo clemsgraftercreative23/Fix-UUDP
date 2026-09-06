@@ -292,16 +292,13 @@ if (!function_exists('travel_attachment_cache_bust')) {
                             ?>
                         </td>
                     </tr>
-                    <tr>
-                        <th>No. Invoice / Receipt</th>
-                        <td class="bg-secondary" colspan="7">{{$item->no_invoice}}</td>
-                    </tr>
                 </table>
                 <table class="table table-bordered mb-2">
                 <thead>
                     <th>Cost Type</th>
                     <th>Destination</th>
                     <th>Remarks</th>
+                    <th>No. Invoice/Receipt</th>
                     <th>Currency</th>
                     <th>Amount</th>
                     <th>Amount (IDR)</th>
@@ -309,11 +306,12 @@ if (!function_exists('travel_attachment_cache_bust')) {
                     <th>Evidence</th>
                 </thead>
                 @foreach ($item->details as $dt)
-                    
+
                 <tr>
                     <td>{{$dt->costType->name}}</td>
                     <td>{{$dt->destination}}</td>
                     <td>{{ $data->remark ?? '' }}</td>
+                    <td>{{$dt->no_invoice}}</td>
                     <td>{{$dt->currency}}</td>
                     <td>{{$dt->currency}} {{ travel_detail_idr($dt->amount) }}</td>
                     <td>{{ travel_detail_idr($dt->idr_rate) }}</td>

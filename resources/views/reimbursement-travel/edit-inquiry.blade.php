@@ -119,10 +119,6 @@ function rupiah($angka){
                                 <input type="text" name="purpose" class="form-control" required value="{{$data_travel['0']->purpose}}">
                             </div>
                             <div class="col-md-3">
-                                <label for="">No. Invoice / Receipt</label>
-                                <input type="text" name="no_invoice" class="form-control" placeholder="Contoh: 60578, T787099" value="{{$data_travel['0']->no_invoice}}">
-                            </div>
-                            <div class="col-md-3">
                                 <label for="">Trip Type</label>
                                 <select id="trip_type_id" class="form-control change-type" name="trip_type_id">
                                     <option value="" selected disabled>Pilih...</option>
@@ -359,7 +355,30 @@ function rupiah($angka){
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
 <script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 <script type="text/javascript">
+var OCR_EDIT_INQUIRY_EXCLUDE_ID = {{ (int) $data['0']->id }};
+var OCR_EDIT_INQUIRY_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_submit'];
+
+function ocrEditInquiryRowOptions($row) {
+    return {
+        row: $row,
+        badgeContainer: $row.find('[id^="preview_"]').first(),
+        submitSelectors: OCR_EDIT_INQUIRY_SUBMIT_SELECTORS,
+        formScope: $('#travel_edit_inquiry_form'),
+        excludeId: OCR_EDIT_INQUIRY_EXCLUDE_ID
+    };
+}
+
+function runOcrCheckForEditInquiryRow($row, file) {
+    if (!window.ReimbursementOcrCheck) {
+        return;
+    }
+    window.ReimbursementOcrCheck.verifyAndRender(
+        Object.assign({ file: file }, ocrEditInquiryRowOptions($row))
+    );
+}
+
 $(document).ready(function () {
     if (typeof window.bindReimbursementDuplicateChecks === 'function') {
         window.bindReimbursementDuplicateChecks({
@@ -370,13 +389,6 @@ $(document).ready(function () {
                     params: function ($form) {
                         var date = $form.find('input[name="date"]').val();
                         return date ? { reimbursement_type: 2, dates: [date], exclude_id: {{ (int) $data['0']->id }} } : null;
-                    }
-                },
-                {
-                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
-                    params: function ($form) {
-                        var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
-                        return number ? { no_invoice: number, exclude_id: {{ (int) $data['0']->id }} } : null;
                     }
                 }
             ]
@@ -962,29 +974,32 @@ $(document).ready(function(){
         $(this).parent().find(".file-input").click();
           $(this).parent().find(".file-input").change(function(event) {
             var file = event.target.files[0];
-            
+            var $row = $(this).closest('tr');
+
             if (file) {
                 var reader = new FileReader();
-                
+
                 reader.onload = function(e) {
                     $('#preview_'+$(this).parent().find(".addFile").data('idx')).empty(); // Clear previous preview
-                    
+
                     var img = $('<img>');
                     img.attr('src', e.target.result);
                     img.css({ maxWidth: '100%', maxHeight: '200px' }); // Adjust height as needed
                     $('#preview_'+$(this).parent().find(".addFile").data('idx')).append(img);
                 };
-              
+
               reader.readAsDataURL(file);
+              runOcrCheckForEditInquiryRow($row, file);
           }
         })
         
     });
     
-    $("body").on("click",".addCamera",function(){ 
-        
+    $("body").on("click",".addCamera",function(){
+
         idx = $(this).data('idx')
-        fileInput = $(this).parent().find(".file-input")[0]; 
+        var $row = $(this).closest('tr');
+        fileInput = $(this).parent().find(".file-input")[0];
         $("#modalPhoto").modal('show')
         const videoElement = $('#videoElement')[0];
         const canvas = $('#canvas')[0];
@@ -1010,8 +1025,8 @@ $(document).ready(function(){
                         const dataTransfer = new DataTransfer();
                         dataTransfer.items.add(file);
                         fileInput.files = dataTransfer.files;
-                        console.log(fileInput)
-                    }, 'image/png'); 
+                        runOcrCheckForEditInquiryRow($row, file);
+                    }, 'image/png');
                     
                     stream.getTracks().forEach(function(track) {
                         return track.stop();

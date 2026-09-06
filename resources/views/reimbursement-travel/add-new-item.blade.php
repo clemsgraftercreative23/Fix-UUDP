@@ -323,10 +323,6 @@ function rate_input($angka){
                                 <input type="text" name="purpose" class="form-control" required>
                             </div>
                             <div class="col-md-3">
-                                <label for="">No. Invoice / Receipt</label>
-                                <input type="text" name="no_invoice" class="form-control" placeholder="Nomor invoice/struk" required>
-                            </div>
-                            <div class="col-md-3">
                                 <label for="">Trip Type</label>
                                 <select id="trip_type_id" class="form-control change-type" name="trip_type_id">
                                     <option value="">None</option>
@@ -527,6 +523,7 @@ function rate_input($angka){
 
 
 @push('scripts')
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 <script src="{{ asset('js/reimbursement-travel-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-upload.js')) }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>

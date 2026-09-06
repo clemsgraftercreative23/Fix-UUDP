@@ -80,6 +80,45 @@ class ReimbursementController extends Controller
         return response()->json(\App\Support\DuplicateInvoiceChecker::buildBatchResponse($numbers, $usedNumbers));
     }
 
+    /**
+     * Fast-feedback endpoint hit right after a receipt photo is attached
+     * client-side: OCRs the photo to extract its No. Invoice/Receipt (no
+     * longer typed by the user -- this IS the value) and checks it for
+     * duplicates. Amount is not verified against the receipt -- it's manual
+     * input only. Stateless -- no DB write. The real, unbypassable block
+     * happens server-side when the item is actually saved (see
+     * TravelReimbursementController/EntertaimentReimbursementController
+     * extractReceiptInvoiceNumber() / guardAgainstDuplicateRowInvoice()).
+     */
+    public function verifyReceiptOcr(Request $request)
+    {
+        if (!$request->hasFile('receipt')) {
+            return response()->json([
+                'status' => 'skipped',
+                'extracted_no_invoice' => null,
+                'extracted_amount' => null,
+                'message' => 'Tidak ada file untuk diverifikasi.',
+                'duplicate' => false,
+                'duplicate_message' => null,
+            ], 422);
+        }
+
+        $verifier = new \App\Support\ReceiptOcrVerifier();
+        $result = $verifier->read($request->file('receipt'));
+
+        $excludeReimbursementId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $duplicateMessage = null;
+        if (!empty($result['extracted_no_invoice'])) {
+            $normalized = \App\Support\DuplicateInvoiceChecker::normalizeNumber($result['extracted_no_invoice']);
+            $duplicateMessage = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalized], $excludeReimbursementId);
+        }
+
+        $result['duplicate'] = $duplicateMessage !== null;
+        $result['duplicate_message'] = $duplicateMessage;
+
+        return response()->json($result);
+    }
+
     private function attachmentTableReady(): bool
     {
         return Schema::hasTable('reimbursement_attachments');

@@ -3,7 +3,9 @@
 namespace App\Support;
 
 use App\Reimbursement;
+use App\ReimbursementEntertaiment;
 use App\ReimbursementTravel;
+use App\ReimbursementTravelDetail;
 
 /**
  * The DB-touching half of duplicate detection (DuplicateDateChecker /
@@ -52,9 +54,10 @@ class ReimbursementDuplicateGuard
 
     /**
      * Checked across every place an invoice/receipt number can be saved
-     * (the per-submission header, and Travel's per-day/item numbers) -- a
+     * (the per-submission header, Travel's legacy per-day/item numbers, and
+     * the current per-row numbers on Travel/Entertainment cost lines) -- a
      * physical receipt shouldn't be claimed twice regardless of which
-     * reimbursement type or form it was originally used on. Rejected
+     * reimbursement type, form, or row it was originally used on. Rejected
      * submissions are excluded, same reasoning as findDuplicateDates().
      *
      * @param ?int $excludeReimbursementId see findDuplicateDates()
@@ -83,7 +86,32 @@ class ReimbursementDuplicateGuard
             ->pluck('reimbursement_travel.no_invoice')
             ->all();
 
-        return array_values(array_unique(array_merge($usedInHeader, $usedInTravelItems)));
+        $usedInTravelDetails = ReimbursementTravelDetail::whereIn('reimbursement_travel_details.no_invoice', $numbers)
+            ->where('reimbursement_travel_details.status', 1)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement_travel_details.no_invoice')
+            ->all();
+
+        $usedInEntertainmentItems = ReimbursementEntertaiment::whereIn('reimbursement_entertaiments.no_invoice', $numbers)
+            ->where('reimbursement_entertaiments.status', 1)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_entertaiments.reimbursement_id')
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement_entertaiments.no_invoice')
+            ->all();
+
+        return array_values(array_unique(array_merge(
+            $usedInHeader,
+            $usedInTravelItems,
+            $usedInTravelDetails,
+            $usedInEntertainmentItems
+        )));
     }
 
     /**

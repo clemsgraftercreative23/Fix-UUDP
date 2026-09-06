@@ -209,13 +209,6 @@
                        <input type="date" class="form-control date-picker" name="date" id="exampleFormControlInput1" style="border-radius: 10px;" required>
                      </div>
                   </div>
-                  <div class="col-md-3">
-                    <div class="form-group">
-                       <label for="no_invoice_entertaiment">No. Invoice / Receipt</label>
-                       <input type="text" class="form-control" name="no_invoice" id="no_invoice_entertaiment" style="border-radius: 10px;" placeholder="Nomor invoice/struk" required>
-                     </div>
-                  </div>
-
                   <div class="col-md-6">
                     <div class="form-group">
                       <label for="exampleFormControlInput1">Department</label>
@@ -391,6 +384,7 @@
 <!-- End Modal -->
 
 @push('scripts')
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 <script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
 <script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
@@ -415,13 +409,6 @@ $(document).ready(function(){
                     params: function ($form) {
                         var date = $form.find('input[name="date"]').val();
                         return date ? { reimbursement_type: 3, dates: [date] } : null;
-                    }
-                },
-                {
-                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
-                    params: function ($form) {
-                        var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
-                        return number ? { no_invoice: number } : null;
                     }
                 }
             ]

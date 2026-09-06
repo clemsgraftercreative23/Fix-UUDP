@@ -220,9 +220,10 @@ window.DriverUpload = (function () {
   }
 
   function removePendingPreview($item) {
+    var $row = $item.closest('tr');
     var uid = $item.attr('data-uid');
     if (uid) {
-      $item.closest('tr').find('.pending-attachment-input[data-uid="' + uid + '"]').remove();
+      $row.find('.pending-attachment-input[data-uid="' + uid + '"]').remove();
     }
     $item.find('a[href^="blob:"]').each(function () {
       try {
@@ -233,11 +234,56 @@ window.DriverUpload = (function () {
       } catch (e) { /* ignore */ }
     });
     $item.remove();
+    if (window.ReimbursementOcrCheck) {
+      $row.removeAttr(window.ReimbursementOcrCheck.STATUS_ATTR);
+      $row.find('.ocr-check-badge').remove();
+    }
+  }
+
+  var OCR_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_submit'];
+
+  /**
+   * OCR receipt verification (Gemini vision API): only active on pages that
+   * load public/js/reimbursement-ocr-check.js (currently Entertainment) --
+   * a no-op everywhere else, including Driver, which shares this file.
+   */
+  function formExcludeId($form) {
+    var action = $form.attr('action') || '';
+    var match = action.match(/\/(\d+)(?:[/?].*)?$/);
+    return match ? match[1] : null;
+  }
+
+  function ocrCheckOptions($row) {
+    var $form = $row.closest('form');
+    return {
+      row: $row,
+      badgeContainer: getPreviewDivFromRow($row),
+      submitSelectors: OCR_SUBMIT_SELECTORS,
+      formScope: $form,
+      excludeId: formExcludeId($form)
+    };
+  }
+
+  function runOcrCheckForRow(row, file) {
+    if (!window.ReimbursementOcrCheck) {
+      return;
+    }
+    var $row = $(row);
+    window.ReimbursementOcrCheck.verifyAndRender(
+      Object.assign({ file: file }, ocrCheckOptions($row))
+    );
+  }
+
+  function applyOcrBlockState() {
+    if (window.ReimbursementOcrCheck && window.ReimbursementOcrCheck.hasBlockingMismatch()) {
+      window.ReimbursementOcrCheck.toggleSubmitButtons(true, OCR_SUBMIT_SELECTORS);
+    }
   }
 
   function enableSubmitButtons() {
     $('#action_button, #action_button_draft, #action_button_submit').prop('disabled', false);
     $('.warning-upload').hide();
+    applyOcrBlockState();
   }
 
   /**
@@ -275,6 +321,7 @@ window.DriverUpload = (function () {
       return renderFilePreview(processed, uid).then(function ($el) {
         previewDiv.append($el);
         enableSubmitButtons();
+        runOcrCheckForRow(row, processed);
         return processed;
       });
     });
