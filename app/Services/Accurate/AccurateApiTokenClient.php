@@ -113,6 +113,66 @@ class AccurateApiTokenClient
     }
 
     /**
+     * Lightweight single-attempt connectivity check, meant for a purely
+     * cosmetic "Accurate Status: Online/Offline" display (see
+     * AppServiceProvider::boot()). Unlike request(), it does not retry across
+     * every signature mode/key combination — that retry loop is appropriate
+     * for an actual write operation, but multiplied by request()'s default
+     * 60s-per-attempt timeout it could take minutes and blow past PHP's own
+     * max_execution_time on every single page load whenever Accurate is slow
+     * or unreachable. This uses a short, fixed timeout and a single attempt.
+     *
+     * @return bool
+     */
+    public function quickStatusCheck($timeoutSeconds = 5)
+    {
+        if (!$this->isConfigured()) {
+            return false;
+        }
+
+        $method = 'GET';
+        $url = $this->absoluteUrl('/accurate/api/department/list.do');
+        $pathForSign = $this->extractPathAndQuery($url);
+        $timestamp = $this->buildTimestampString();
+        $signingKeys = $this->buildSigningKeys();
+        $signature = $this->buildSignature($method, $pathForSign, $timestamp, '', $signingKeys[0]);
+
+        $headers = [
+            'Accept: application/json',
+            'Authorization: Bearer '.$this->token,
+            'X-Api-Timestamp: '.$timestamp,
+            'X-Api-Signature: '.$signature,
+        ];
+        if ($this->applicationName !== '') {
+            $headers[] = 'X-Api-Application: '.$this->applicationName;
+            $headers[] = 'X-Api-Application-Name: '.$this->applicationName;
+        }
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeoutSeconds);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSeconds);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_HTTPGET, true);
+
+        $body = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($errno !== 0) {
+            return false;
+        }
+
+        $bodyStr = is_string($body) ? $body : '';
+
+        return $status >= 200 && $status < 400 && $this->responseBodyIndicatesAccurateSuccess($bodyStr, $status);
+    }
+
+    /**
      * @return string[]
      */
     public function configurationErrorMessages()

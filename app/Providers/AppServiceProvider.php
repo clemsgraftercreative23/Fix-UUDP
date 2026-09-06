@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use App\Services\Accurate\AccurateApiTokenClient;
@@ -34,17 +35,18 @@ class AppServiceProvider extends ServiceProvider
                 'status' => false
             ]);
         } else {
-            $accurateClient = new AccurateApiTokenClient();
-            $curl = $accurateClient->request('GET', '/accurate/api/department/list.do');
-            if (!($curl['ok'] ?? false)) {
-                View::share('accurate', [
-                    'status' => false
-                ]);
-            } else {
-                View::share('accurate', [
-                    'status' => true
-                ]);
-            }
+            // Cached + a short single-attempt timeout: this status ping is
+            // purely cosmetic (header "Accurate Status: Online/Offline"
+            // badge) but used to run request()'s full multi-signature-mode
+            // retry loop on every single page load with a 60s timeout per
+            // attempt — when Accurate was slow/unreachable that could exceed
+            // PHP's own max_execution_time and fatal-error every page.
+            $status = Cache::remember('accurate_status_online', now()->addMinutes(2), function () {
+                return (new AccurateApiTokenClient())->quickStatusCheck();
+            });
+            View::share('accurate', [
+                'status' => $status
+            ]);
         }
 
       if(config('app.env') === 'production') {
