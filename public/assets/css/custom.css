@@ -362,3 +362,18 @@ padding: .5rem !important;
 .page-container {
   background: inherit;
 }
+
+/*
+ * Large-screen responsiveness fix: .page-sidebar is a fixed 280px column and
+ * .page-content otherwise has no width cap at all, so on large monitors
+ * (1920px+, ultrawide, 4K) form fields and table columns stretch across the
+ * remaining ~1600-3000px+ with huge dead space between them instead of
+ * staying readable. Only applies at the theme's own desktop breakpoint
+ * (min-width: 1200px -- see connect.css's "max-width: 1199px" sidebar
+ * collapse) so the mobile/tablet off-canvas layout is untouched.
+ */
+@media (min-width: 1200px) {
+  .page-content {
+    max-width: 1600px;
+  }
+}

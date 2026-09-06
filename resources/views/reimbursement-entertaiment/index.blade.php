@@ -170,7 +170,7 @@
     <form method="post" id="sample_form" action="{{url('/')."/reimbursement-entertaiment"}}" enctype="multipart/form-data">
     @csrf
       <!--<div class="modal-dialog modal-xxl" style="max-width: 80% !important">-->
-      <div class="modal-dialog modal-xxl" style="max-width: 100%;margin: 19;top: 19;bottom: 19;left: 19;right: 19;display: flex;">
+      <div class="modal-dialog modal-xxl" style="max-width: min(100%, 1400px);margin: 19px auto;display: flex;">
           <div class="modal-content">
               <div class="modal-header border-bottom"  >
               <div class="d-flex justify-content-between w-100">
