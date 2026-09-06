@@ -12,8 +12,19 @@ use Illuminate\Support\Facades\Log;
  */
 class GeminiOcrClient
 {
-    /** Delays (ms) between retries when Gemini reports the model is overloaded -- per Google, these spikes are "usually temporary". */
-    private const RETRY_DELAYS_MS = [1000, 2000];
+    /**
+     * Delays (ms) between retries when Gemini reports the model is overloaded --
+     * per Google, these spikes are "usually temporary". Kept short enough that
+     * 4 attempts at REQUEST_TIMEOUT_SECONDS each plus every delay still lands
+     * comfortably under PHP's own max_execution_time (60s on this app's dev
+     * server) -- this call runs synchronously inside a controller request, so
+     * it must never risk fataling the whole page the way an unbounded Accurate
+     * API retry loop once did (see AppServiceProvider::boot()).
+     */
+    private const RETRY_DELAYS_MS = [1000, 2000, 3000];
+
+    /** Per-attempt curl timeout. Short on purpose: a healthy Gemini response (success or a fast 503 rejection) takes a few seconds -- anything hitting this is a stalled connection, not worth waiting out at the old 45s. */
+    private const REQUEST_TIMEOUT_SECONDS = 10;
 
     private const PROMPT = <<<'PROMPT'
 You are reading a receipt or invoice photo for an expense reimbursement system.
@@ -103,7 +114,7 @@ PROMPT;
                     ],
                 ])
                 ->asJson(true)
-                ->withTimeout(45)
+                ->withTimeout(self::REQUEST_TIMEOUT_SECONDS)
                 ->post();
 
             if (!is_array($decoded)) {
