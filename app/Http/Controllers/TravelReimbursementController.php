@@ -1220,6 +1220,56 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Whether this save request wants a JSON response instead of a full-page
+     * redirect -- the tab-based add/edit-item forms submit via AJAX (see
+     * public/js/reimbursement-travel-tabs.js) so the pane can be refreshed in
+     * place instead of the browser reloading the whole page.
+     */
+    private function wantsAjaxSave(Request $request): bool
+    {
+        return $request->ajax() || $request->wantsJson();
+    }
+
+    /**
+     * Converts a successful save's RedirectResponse into a JSON response
+     * carrying the same target URL + flashed message, when the request wants
+     * one -- the client decides what to do with that URL (swap the pane in
+     * place for an add-item URL, or navigate away for anything else, e.g.
+     * the approval list). Non-AJAX requests get the exact same redirect as
+     * always, unchanged.
+     */
+    private function respondAfterTravelSave(Request $request, \Illuminate\Http\RedirectResponse $return)
+    {
+        if (!$this->wantsAjaxSave($request)) {
+            return $return;
+        }
+
+        return response()->json([
+            'success' => true,
+            'redirect_url' => $return->getTargetUrl(),
+            'message' => session('success'),
+        ]);
+    }
+
+    /**
+     * Same idea as respondAfterTravelSave() but for a caught non-validation
+     * error -- keeps the exact existing redirect-with-error behavior for
+     * normal requests, and returns a clean 422 JSON error for AJAX ones
+     * instead of a redirect the client would never navigate to.
+     */
+    private function respondErrorForTravelSave(Request $request, string $message, \Illuminate\Http\RedirectResponse $fallback)
+    {
+        if (!$this->wantsAjaxSave($request)) {
+            return $fallback;
+        }
+
+        return response()->json([
+            'success' => false,
+            'errors' => ['error' => [$message]],
+        ], 422);
+    }
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -1793,24 +1843,24 @@ class TravelReimbursementController extends Controller
             $id_travel = DB::select(DB::raw("SELECT id FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id;
 
             if ($notif!='redirect') {
-                return redirect()->route('reimbursement-travel.index')->with(['success' => $notif]);    
+                $return = redirect()->route('reimbursement-travel.index')->with(['success' => $notif]);
             } else {
-                return redirect('reimbursement-travel/add-item/'.$id_main.'/?new=1');
+                $return = redirect('reimbursement-travel/add-item/'.$id_main.'/?new=1');
             }
 
-            
+            return $this->respondAfterTravelSave($request, $return);
 
         } catch (ValidationException $e) {
             DB::rollback();
-            return redirect()->back()->withErrors($e->validator)->withInput();
+            throw $e;
 
         } catch(\Exception $e) {
             DB::rollback();
-            return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
+            return $this->respondErrorForTravelSave($request, $e->getMessage(), redirect()->back()->withErrors(['Error '.$e->getMessage()]));
 
         } catch(\Throwable $e) {
             DB::rollback();
-            return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
+            return $this->respondErrorForTravelSave($request, $e->getMessage(), redirect()->back()->withErrors(['Error '.$e->getMessage()]));
         }
     }
 
@@ -2148,27 +2198,27 @@ class TravelReimbursementController extends Controller
             $id_travel = DB::select(DB::raw("SELECT id FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->id;
 
             if ($notif!='redirect') {
-                return redirect()->route('reimbursement-travel.index')->with(['success' => $notif]);    
+                $return = redirect()->route('reimbursement-travel.index')->with(['success' => $notif]);
             } else {
-                return redirect('reimbursement-travel/add-item/'.$id_main.'/?new=1');
+                $return = redirect('reimbursement-travel/add-item/'.$id_main.'/?new=1');
             }
 
-            
+            return $this->respondAfterTravelSave($request, $return);
 
         } catch (ValidationException $e) {
             DB::rollback();
-            return redirect()->back()->withErrors($e->validator)->withInput();
-    
+            throw $e;
+
         } catch(\Exception $e) {
             DB::rollback();
-            return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
-    
+            return $this->respondErrorForTravelSave($request, $e->getMessage(), redirect()->back()->withErrors(['Error '.$e->getMessage()]));
+
         } catch(\Throwable $e) {
             DB::rollback();
-            return redirect()->back()->withErrors(['Error '.$e->getMessage()]);
+            return $this->respondErrorForTravelSave($request, $e->getMessage(), redirect()->back()->withErrors(['Error '.$e->getMessage()]));
         }
 
-        
+
     }
 
     public function show($id)
@@ -2334,7 +2384,7 @@ class TravelReimbursementController extends Controller
             }
         }
 
-        return view('reimbursement-travel.'.$file.'',[
+        $payload = [
             "trip_types" => $tripTypes,
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
@@ -2346,8 +2396,15 @@ class TravelReimbursementController extends Controller
             "currency" => $currency,
             "data_item" => $item,
             "travel_type" => $travel_type,
+            "is_overseas" => ($travel_type !== 'Domestic'),
             "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
-        ]);
+        ];
+
+        if ($request->query('rt_partial') === '1' || $request->header('X-RT-Partial') === '1') {
+            return response()->view('reimbursement-travel.partials.travel-item-pane', $payload);
+        }
+
+        return view('reimbursement-travel.'.$file.'', $payload);
     }
 
     private function recalculateTravelSummary($id_main)
@@ -3052,10 +3109,10 @@ class TravelReimbursementController extends Controller
               }
           }
         }
-            
-        return $return;
+
+        return $this->respondAfterTravelSave($request, $return);
     }
-  
+
     public function updateItemReject(Request $request, $id_main, $id_travel)
     {
         $id_travel = $this->resolveActiveTravelId($request, (int) $id_main, (int) $id_travel);
@@ -3316,8 +3373,8 @@ class TravelReimbursementController extends Controller
                       ])->post();
               }
         }
-            
-        return $return;
+
+        return $this->respondAfterTravelSave($request, $return);
     }
 
     public function updateItemApproval(Request $request, $id_main, $id_travel)
@@ -3669,7 +3726,7 @@ class TravelReimbursementController extends Controller
             }
         }
         
-        return redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);;
+        return $this->respondAfterTravelSave($request, redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]));
     }
 
     

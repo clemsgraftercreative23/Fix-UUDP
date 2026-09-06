@@ -1252,6 +1252,115 @@
     }
   }
 
+  /**
+   * Saving a row/tab no longer does a full-page form POST + redirect (see
+   * public/js/reimbursement-travel-tabs.js's submit handler below). Instead
+   * the form is posted via AJAX; the controller (see
+   * TravelReimbursementController::respondAfterTravelSave()) returns the same
+   * redirect target as JSON instead of a real redirect, and this decides what
+   * to do with it: swap the existing pane in place for an add-item URL
+   * (reusing loadTravelItemTabPartial(), the exact same mechanism tab-
+   * switching already uses), or navigate away for anything else (e.g. the
+   * approval list -- that's a real destination change, not a same-page
+   * update).
+   */
+  function rtRemoveFormAlert($form) {
+    $form.find('.rt-ajax-alert').remove();
+  }
+
+  function rtShowFormAlert($form, message) {
+    rtRemoveFormAlert($form);
+    const $pane = $form.find('#rt-travel-item-pane').first();
+    const $alert = $(
+      '<div class="alert alert-danger rt-ajax-alert" role="alert"></div>'
+    ).text(message);
+    if ($pane.length) {
+      $alert.insertBefore($pane);
+    } else {
+      $form.prepend($alert);
+    }
+    $alert.get(0).scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  function rtShowSaveSuccess(message) {
+    if (typeof window.swal === 'function') {
+      window.swal({
+        title: 'Berhasil',
+        text: message || 'Data berhasil disimpan.',
+        icon: 'success',
+        button: false,
+        timer: 1400
+      });
+    }
+  }
+
+  function rtErrorsToMessage(errors) {
+    const parts = [];
+    $.each(errors || {}, function (_key, val) {
+      if ($.isArray(val)) {
+        parts.push.apply(parts, val);
+      } else if (val) {
+        parts.push(String(val));
+      }
+    });
+    return parts.length ? parts.join(' ') : 'Terjadi kesalahan saat menyimpan data.';
+  }
+
+  function submitTravelFormAjax($form, $pane, submitterEl) {
+    const formData = new FormData($form.get(0));
+    if (submitterEl && submitterEl.name) {
+      formData.append(submitterEl.name, submitterEl.value || '');
+    }
+
+    const $submitButtons = $form.find('button[type="submit"], input[type="submit"]');
+    $submitButtons.prop('disabled', true);
+    $pane.addClass('rt-pane-loading');
+    rtRemoveFormAlert($form);
+
+    $.ajax({
+      url: $form.attr('action'),
+      type: 'POST',
+      data: formData,
+      processData: false,
+      contentType: false,
+      dataType: 'json'
+    }).done(function (resp) {
+      if (!resp || !resp.success) {
+        rtShowFormAlert($form, (resp && resp.message) || 'Gagal menyimpan data.');
+        return;
+      }
+
+      // Only a "stay on this same tab" redirect target (add-item/{main}/{travel}
+      // with the identical numeric travel id) is refreshed in place -- reusing
+      // loadTravelItemTabPartial(), the exact mechanism tab-switching already
+      // uses. Anything else (a new tab was just created, or the target is a
+      // genuinely different page like the approval list) still navigates for
+      // now; the tab bar's own client-side draft-state bookkeeping isn't
+      // something this save path should risk getting out of sync with blind.
+      const url = String(resp.redirect_url || '');
+      const sameItemMatch = url.match(/\/add-item\/(\d+)\/(\d+)(?:[/?#]|$)/);
+      const currentTravelId = String(readTravelIdAttr($pane));
+
+      if (sameItemMatch && sameItemMatch[2] === currentTravelId) {
+        loadTravelItemTabPartial($pane, url, sameItemMatch[2], true);
+        rtShowSaveSuccess(resp.message);
+      } else if (url) {
+        window.location.href = url;
+      } else {
+        rtShowSaveSuccess(resp.message);
+      }
+    }).fail(function (xhr) {
+      const payload = xhr && xhr.responseJSON;
+      const message = payload && payload.errors
+        ? rtErrorsToMessage(payload.errors)
+        : (payload && payload.message) || 'Terjadi kesalahan saat menyimpan data.';
+      rtShowFormAlert($form, message);
+    }).always(function () {
+      $submitButtons.prop('disabled', false);
+      $pane.removeClass('rt-pane-loading');
+    });
+  }
+
   $(function () {
     const $clearOnView = $('[data-rt-clear-travel-drafts]').first();
     if ($clearOnView.length) {
@@ -1479,9 +1588,13 @@
       loadTravelItemTabPartial($pane, baseUrl.split('?')[0], travelFromUrl, false);
     });
 
-    $('form').on('submit', function () {
+    $(document).on('submit', 'form:has(#rt-travel-item-pane)', function (e) {
+      const $form = $(this);
       const $p = $('#rt-travel-item-pane');
       if (!$p.length) return;
+
+      e.preventDefault();
+
       if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
         window.TravelUpload.syncDetailRowIndices($p);
       }
@@ -1490,8 +1603,11 @@
       if (mid) {
         try {
           localStorage.removeItem(itemsStateKey(mid));
-        } catch (e) { /* ignore */ }
+        } catch (e2) { /* ignore */ }
       }
+
+      const submitter = e.originalEvent && e.originalEvent.submitter;
+      submitTravelFormAjax($form, $p, submitter);
     });
 
     $(document).on('click', '.js-rt-save-item-tab, #action_button_item', function (e) {
@@ -1500,7 +1616,7 @@
       if (!$form.length) return;
       $form.find('input[type="hidden"][name="save_item"]').remove();
       $('<input type="hidden" name="save_item" value="1">').appendTo($form);
-      $form[0].submit();
+      $form.trigger('submit');
     });
 
     $(document).on('keydown', 'form:has(#rt-travel-item-pane) input, form:has(#rt-travel-item-pane) select', function (e) {
