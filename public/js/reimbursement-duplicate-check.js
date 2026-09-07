@@ -13,6 +13,16 @@
   }
 
   function showDuplicateBlocked(message) {
+    // Classic SweetAlert (v1, window.swal) can silently no-op a new swal()
+    // call while it still considers a previous one "open" -- close any
+    // leftover instance first so this reliably shows again on every single
+    // blocked attempt, not just the first one.
+    try {
+      if (typeof window.swal.close === 'function') {
+        window.swal.close();
+      }
+    } catch (e) { /* ignore */ }
+
     return window.swal({
       title: 'Tidak Bisa Diajukan',
       text: message,
@@ -38,6 +48,16 @@
     if (!$form.length || typeof window.swal !== 'function') {
       return;
     }
+
+    // Guard against the same form getting bound more than once (e.g. this
+    // init script running again) -- two independent handlers on the same
+    // 'submit' event have led to inconsistent behavior (blocked once, then
+    // silently let through on the next click) since each keeps its own
+    // separate confirmed/lastClickedSubmitter state.
+    if ($form.data('rtDuplicateCheckBound')) {
+      return;
+    }
+    $form.data('rtDuplicateCheckBound', true);
 
     var checks = Array.isArray(options.checks) ? options.checks : [];
     var confirmed = false;

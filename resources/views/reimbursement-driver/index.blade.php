@@ -185,7 +185,7 @@
               <div class="modal-header border-bottom"  >
               <div class="d-flex justify-content-between w-100">
                     <h2 class="modal-title maintitle clr-green mb-0" id="exampleModalCenterTitle">Buat Reimbursement Driver</h2>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <button type="button" class="close js-rt-driver-cancel-create" data-dismiss="modal" aria-label="Close">
                       <i class="material-icons">close</i>
                   </button>
                 </div>
@@ -326,9 +326,9 @@
 
               <span style="color:#62d49e;text-align:right;" class="warning-upload">The button is disabled until a file is uploaded.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
               <div class="modal-footer">
-                  <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
+                  <button type="button" class="btn btn-danger js-rt-driver-cancel-create" data-dismiss="modal">Cancel</button>
                   <button class="btn btn-primary" type="submit" id="action_button" name="save" value="1">Submit</button>
-                  <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" value="1">Draft</button>
+                  <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" value="1" formnovalidate>Draft</button>
               </div>
           </div>
       </div>
@@ -401,6 +401,17 @@ $(document).ready(function(){
     @if ($errors->any())
         $('#formModal').modal('show');
     @endif
+
+    // A failed submission (e.g. blocked as a duplicate) redisplays this page
+    // with the old input still filled in via Laravel's withInput(), and the
+    // modal auto-reopens above. Closing it via Cancel/X only hides the
+    // Bootstrap modal -- the stale old() values stay in the DOM -- so
+    // reopening "+ New Inquiry" afterward showed that same failed data
+    // again instead of a blank form. Reload instead of just dismissing, so
+    // the next open always starts from a fresh page load with no old input.
+    $(document).on('click', '.js-rt-driver-cancel-create', function () {
+        window.location.reload();
+    });
 
     if (typeof window.bindReimbursementDuplicateChecks === 'function') {
         window.bindReimbursementDuplicateChecks({
