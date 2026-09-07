@@ -12,6 +12,15 @@
   var ITEMS_STATE_PREFIX = 'rtTravelItemsState:v2:';
   /** localStorage travel segment for add-new-item pane (data-travel-id="0"); not a real DB id. */
   var NEW_ITEM_DRAFT_KEY = 'new';
+  /**
+   * Drafts older than this are ignored by restorePaneFull() instead of being
+   * silently reapplied over freshly-fetched server data. Without this, a
+   * leftover draft from a long-abandoned editing session (or -- since
+   * localStorage is shared by everyone using the same browser/PC -- from a
+   * different person's old unsaved edit) could resurface and overwrite
+   * someone else's since-updated data on every later visit to that tab.
+   */
+  var MAX_DRAFT_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
   function storageKeyV1(mainId, travelId) {
     return STORAGE_V1_PREFIX + mainId + ':' + travelId;
@@ -378,7 +387,10 @@
       const rawV2 = localStorage.getItem(storageKeyV2(mainId, draftTid));
       if (rawV2) {
         const state = JSON.parse(rawV2);
-        if (state && state.v === 2 && Array.isArray(state.rows)) {
+        const isStale = state && state.savedAt && (Date.now() - Number(state.savedAt)) > MAX_DRAFT_AGE_MS;
+        if (isStale) {
+          localStorage.removeItem(storageKeyV2(mainId, draftTid));
+        } else if (state && state.v === 2 && Array.isArray(state.rows)) {
           if (isDraftNewTravelItemId(draftTid)) {
             state.rows = stripTempFilesFromRows(state.rows);
           }
@@ -1329,6 +1341,18 @@
         rtShowFormAlert($form, (resp && resp.message) || 'Gagal menyimpan data.');
         return;
       }
+
+      // The just-submitted tab's local draft (autosaved while typing, see
+      // schedulePersist()/persistCurrentPane()) is now stale -- its data is
+      // already on the server. Both loadTravelItemTabPartial() below and a
+      // plain page load always call restorePaneFull(), which reapplies
+      // whatever draft is sitting in localStorage for this (mainId, travelId)
+      // on top of the freshly-fetched server data. Leaving the old draft in
+      // place meant any leftover/abandoned edit from a previous visit to this
+      // same tab would silently resurrect and overwrite the value just saved
+      // (and everyone on the same machine shares this localStorage, so this
+      // could even resurrect someone else's old unsaved edit).
+      clearStorageForPane($pane);
 
       // Only a "stay on this same tab" redirect target (add-item/{main}/{travel}
       // with the identical numeric travel id) is refreshed in place -- reusing
