@@ -155,6 +155,71 @@ class ReimbursementDuplicateGuard
         return 'Tanggal pengajuan ini sudah pernah diajukan sebelumnya. Silakan ajukan dengan tanggal yang berbeda.';
     }
 
+    /**
+     * Driver-specific: a driver can legitimately have two separate
+     * settlements on the same date -- one Cash, one Fleet (company card) --
+     * since those are reconciled separately. Blocking the whole date
+     * outright (like findDuplicateDates() does for every other type) was
+     * wrongly rejecting that case. Only the *payment type(s)* actually
+     * already used on this date, by this user, count as a duplicate; a
+     * different payment type on the same date is fine.
+     *
+     * @param string[] $paymentTypes payment types in the new submission (e.g. one per row)
+     * @return string[] payment types (as submitted, case/whitespace preserved from the first match) already used on this date
+     */
+    public static function findDuplicateDatePaymentTypes(int $userId, string $date, array $paymentTypes, ?int $excludeReimbursementId = null): array
+    {
+        $requested = array_values(array_unique(array_filter(array_map(function ($p) {
+            return trim((string) $p);
+        }, $paymentTypes))));
+
+        if ($date === '' || empty($requested)) {
+            return [];
+        }
+
+        $existing = ReimbursementDriver::where('reimbursement_driver.status', 1)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
+            ->where('reimbursement.id_user', $userId)
+            ->where('reimbursement.reimbursement_type', 1)
+            ->whereDate('reimbursement.date', $date)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement_driver.payment_type')
+            ->map(function ($p) {
+                return trim((string) $p);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $requestedUpper = array_map('mb_strtoupper', $requested);
+        $existingUpper = array_map('mb_strtoupper', $existing);
+
+        $duplicates = [];
+        foreach ($requested as $i => $type) {
+            if (in_array($requestedUpper[$i], $existingUpper, true)) {
+                $duplicates[] = $type;
+            }
+        }
+
+        return array_values(array_unique($duplicates));
+    }
+
+    /** @return ?string ready-to-show rejection message, or null when no payment type on this date is a duplicate */
+    public static function rejectionMessageForDatePaymentTypes(int $userId, string $date, array $paymentTypes, ?int $excludeReimbursementId = null): ?string
+    {
+        $duplicates = self::findDuplicateDatePaymentTypes($userId, $date, $paymentTypes, $excludeReimbursementId);
+        if (empty($duplicates)) {
+            return null;
+        }
+
+        return 'Tanggal ' . $date . ' dengan jenis transaksi ' . implode(', ', $duplicates)
+            . ' sudah pernah diajukan sebelumnya. Silakan ajukan dengan tanggal yang berbeda, atau pastikan jenis transaksinya tidak sama dengan pengajuan yang sudah ada (mis. Cash vs Fleet).';
+    }
+
     /** @return ?string ready-to-show rejection message, or null when none of the given numbers are duplicates */
     public static function rejectionMessageForInvoiceNumbers(array $numbers, ?int $excludeReimbursementId = null): ?string
     {

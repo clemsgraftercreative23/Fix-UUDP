@@ -54,6 +54,26 @@ class ReimbursementController extends Controller
         }
 
         $excludeId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+
+        // Driver: same date is allowed twice as long as the payment type(s)
+        // don't overlap with what's already submitted for that date (see
+        // ReimbursementDuplicateGuard::findDuplicateDatePaymentTypes()) --
+        // every other type keeps the plain "date already used" check.
+        $paymentTypes = (array) $request->input('payment_types', []);
+        if ($type === 1 && !empty($paymentTypes)) {
+            $message = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDatePaymentTypes(
+                auth()->id(),
+                (string) ($dates[0] ?? ''),
+                $paymentTypes,
+                $excludeId
+            );
+
+            return response()->json([
+                'duplicate' => $message !== null,
+                'message' => $message,
+            ]);
+        }
+
         $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), $type, $dates, $excludeId);
 
         return response()->json(\App\Support\DuplicateDateChecker::buildResponse($dates, $existingDates));

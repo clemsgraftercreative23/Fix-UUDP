@@ -903,7 +903,14 @@ class DriverReimbursementController extends Controller
 
     public function store(Request $request)
     {
-        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 1, (string) $request->date);
+        // Same date is allowed twice for Driver -- e.g. a Cash settlement and a
+        // separate BDC settlement on the same day -- as long as the payment
+        // type(s) don't overlap with what's already submitted for that date.
+        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDatePaymentTypes(
+            auth()->id(),
+            (string) $request->date,
+            (array) ($request->payment_type ?? [])
+        );
         if ($dateError) {
             return redirect()->back()->withInput()->withErrors([$dateError]);
         }

@@ -410,7 +410,15 @@ $(document).ready(function(){
                     url: '{{ url('/reimbursement/check-duplicate-date') }}',
                     params: function ($form) {
                         var date = $form.find('input[name="date"]').val();
-                        return date ? { reimbursement_type: 1, dates: [date] } : null;
+                        if (!date) return null;
+                        var paymentTypes = $form.find('select[name="payment_type[]"]').map(function () {
+                            return $(this).val();
+                        }).get().filter(function (v) { return !!v; });
+                        // Same date is allowed twice for Driver as long as the payment
+                        // type(s) don't overlap with what's already submitted for that
+                        // date (e.g. a separate Cash settlement and Fleet settlement on
+                        // the same day) -- see ReimbursementDuplicateGuard::findDuplicateDatePaymentTypes().
+                        return { reimbursement_type: 1, dates: [date], payment_types: paymentTypes };
                     }
                 }
             ]
