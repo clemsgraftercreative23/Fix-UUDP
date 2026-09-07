@@ -1732,6 +1732,19 @@ class TravelReimbursementController extends Controller
             }
 
             $id_main = $data->id;
+
+            // Every day's `total` (and the header's nominal_pengajuan, both set
+            // above from the client-submitted Vue total) is untrusted client
+            // input -- every other write path in this controller (saveItem,
+            // updateItem, updateItemReject, updateItemApproval) already
+            // recomputes it server-side from the actual detail rows via this
+            // same helper, so a client-side miscalculation can never corrupt
+            // what gets stored. store() was the one path skipping that,
+            // letting a bad client total through uncorrected until someone
+            // happened to open the detail page (whose own repair pass -- see
+            // show() -- calls this exact function).
+            $this->recomputeAllTravelDayTotalsForReimbursement((int) $id_main);
+
             $travel_type = DB::select( DB::raw("SELECT travel_type FROM reimbursement WHERE id='$id_main'"))['0']->travel_type;
 
             if ($travel_type=='Domestic') {
