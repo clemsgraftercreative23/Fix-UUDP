@@ -7,6 +7,11 @@
     return number_format((float) $angka, 0, ',', '.');
 } ?>
 
+<?php function entertainment_amount_idr($angka)
+{
+    return number_format((float) \App\Support\ExchangeRateParser::parseFloat($angka), 2, ',', '.');
+} ?>
+
 @php
 if (!function_exists('ent_attachment_rows')) {
     function ent_attachment_rows($detailId, $legacy = '') {
@@ -581,7 +586,7 @@ if (!function_exists('ent_attachment_rows')) {
                                     </select>
                                 </td>
                                 <td>
-                                <input type="text" class="form-control amount-input amount1 currency change-amount" name="amount[]" placeholder="Amount" required value="{{ rupiah($detail[0]->amount ?? 0) }}">
+                                <input type="text" class="form-control amount-input amount1 currency change-amount" name="amount[]" placeholder="Amount" required value="{{ entertainment_amount_idr($detail[0]->amount ?? 0) }}">
                                 </td>
                                 <td class="file-proof">
                                     <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
@@ -664,7 +669,7 @@ if (!function_exists('ent_attachment_rows')) {
                                         </select>
                                   </td>
                                   <td>
-                                    <input type="text" class="form-control amount{{$numb}} currency change-amount" name="amount[]" placeholder="Amount" required value="{{rupiah($row->amount)}}">
+                                    <input type="text" class="form-control amount{{$numb}} currency change-amount" name="amount[]" placeholder="Amount" required value="{{entertainment_amount_idr($row->amount)}}">
                                   </td>
                                   <td class="file-proof">
                                         <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
@@ -721,7 +726,7 @@ if (!function_exists('ent_attachment_rows')) {
                 <label class="modal-title" id="exampleModalCenterTitle" style="color:green; font-size:10px;">Nominal</label>
                 <div class="form-group">
                 <label for="exampleFormControlInput1">Total Inquiry</label>
-                <input type="text" class="form-control number-format" id="sum" style="border-radius: 10px;" name="total_pengajuan" readonly placeholder="" value="{{rupiah($data->nominal_pengajuan)}}">
+                <input type="text" class="form-control number-format" id="sum" style="border-radius: 10px;" name="total_pengajuan" readonly placeholder="" value="{{entertainment_amount_idr($data->nominal_pengajuan)}}">
                 </div>
 
               </div>
@@ -868,15 +873,20 @@ if (!function_exists('ent_attachment_rows')) {
 
         $('[data-toggle="tooltip"]').tooltip();   
         
-        $('.currency').mask("#.##0", {
+        $('.currency').not('input[name="amount[]"]').mask("#.##0", {
           reverse: true
-        }); 
-      
+        });
+        $('input[name="amount[]"]').maskMoney({ thousands: '.', decimal: ',', precision: 2, allowZero: true, allowNegative: false });
+        $('input[name="amount[]"]').maskMoney('mask');
+
         function numberWithCommas(x) {
-            return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
+            var num = Math.round((parseFloat(x) || 0) * 100) / 100;
+            var parts = num.toFixed(2).split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return parts[1] === '00' ? parts[0] : parts[0] + ',' + parts[1];
         }
-        
-        
+
+
        var maxGroup = 10;
        var count = "{{count($detail)}}";
        
@@ -898,52 +908,52 @@ if (!function_exists('ent_attachment_rows')) {
                  $(this).parents(".fieldGroup").remove();
                  
                     if ($(".amount1").val()) {
-                        var amount1 = $(".amount1").val().split(".").join("");
+                        var amount1 = $(".amount1").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount1 = 0;
                     }
                     if ($(".amount2").val()) {
-                        var amount2 = $(".amount2").val().split(".").join("");
+                        var amount2 = $(".amount2").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount2 = 0;
                     }
                     if ($(".amount3").val()) {
-                        var amount3 = $(".amount3").val().split(".").join("");
+                        var amount3 = $(".amount3").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount3 = 0;
                     }
                     if ($(".amount4").val()) {
-                        var amount4 = $(".amount4").val().split(".").join("");
+                        var amount4 = $(".amount4").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount4 = 0;
                     }
                     if ($(".amount5").val()) {
-                        var amount5 = $(".amount5").val().split(".").join("");
+                        var amount5 = $(".amount5").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount5 = 0;
                     }
                     if ($(".amount6").val()) {
-                        var amount6 = $(".amount6").val().split(".").join("");
+                        var amount6 = $(".amount6").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount6 = 0;
                     }
                     if ($(".amount7").val()) {
-                        var amount7 = $(".amount7").val().split(".").join("");
+                        var amount7 = $(".amount7").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount7 = 0;
                     }
                     if ($(".amount8").val()) {
-                        var amount8 = $(".amount8").val().split(".").join("");
+                        var amount8 = $(".amount8").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount8 = 0;
                     }
                     if ($(".amount9").val()) {
-                        var amount9 = $(".amount9").val().split(".").join("");
+                        var amount9 = $(".amount9").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount9 = 0;
                     }
                     if ($(".amount10").val()) {
-                        var amount10 = $(".amount10").val().split(".").join("");
+                        var amount10 = $(".amount10").val().split(".").join("").replace(",", ".");
                     } else {
                         var amount10 = 0;
                     }
@@ -952,59 +962,61 @@ if (!function_exists('ent_attachment_rows')) {
                     $("#sum").val(numberWithCommas(total));
               });
               
-              $('.currency').mask("#.##0", {
+              $('.currency').not('input[name="amount[]"]').mask("#.##0", {
                   reverse: true
               });
-              
+              $('body').find('.fieldGroup:last').find('input[name="amount[]"]').maskMoney({ thousands: '.', decimal: ',', precision: 2, allowZero: true, allowNegative: false });
+              $('body').find('.fieldGroup:last').find('input[name="amount[]"]').maskMoney('mask');
+
               $(".change-amount").change(function(){
                 if ($(".amount1").val()) {
-                    var amount1 = $(".amount1").val().split(".").join("");
+                    var amount1 = $(".amount1").val().split(".").join("").replace(",", ".");
                     console.log(amount1);
                 } else {
                     var amount1 = 0;
                 }
                 if ($(".amount2").val()) {
-                    var amount2 = $(".amount2").val().split(".").join("");
+                    var amount2 = $(".amount2").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount2 = 0;
                 }
                 if ($(".amount3").val()) {
-                    var amount3 = $(".amount3").val().split(".").join("");
+                    var amount3 = $(".amount3").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount3 = 0;
                 }
                 if ($(".amount4").val()) {
-                    var amount4 = $(".amount4").val().split(".").join("");
+                    var amount4 = $(".amount4").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount4 = 0;
                 }
                 if ($(".amount5").val()) {
-                    var amount5 = $(".amount5").val().split(".").join("");
+                    var amount5 = $(".amount5").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount5 = 0;
                 }
                 if ($(".amount6").val()) {
-                    var amount6 = $(".amount6").val().split(".").join("");
+                    var amount6 = $(".amount6").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount6 = 0;
                 }
                 if ($(".amount7").val()) {
-                    var amount7 = $(".amount7").val().split(".").join("");
+                    var amount7 = $(".amount7").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount7 = 0;
                 }
                 if ($(".amount8").val()) {
-                    var amount8 = $(".amount8").val().split(".").join("");
+                    var amount8 = $(".amount8").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount8 = 0;
                 }
                 if ($(".amount9").val()) {
-                    var amount9 = $(".amount9").val().split(".").join("");
+                    var amount9 = $(".amount9").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount9 = 0;
                 }
                 if ($(".amount10").val()) {
-                    var amount10 = $(".amount10").val().split(".").join("");
+                    var amount10 = $(".amount10").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount10 = 0;
                 }
@@ -1021,53 +1033,53 @@ if (!function_exists('ent_attachment_rows')) {
       
           $(".change-amount").change(function(){
                 if ($(".amount1").val()) {
-                    var amount1 = $(".amount1").val().split(".").join("");
+                    var amount1 = $(".amount1").val().split(".").join("").replace(",", ".");
                     console.log(amount1);
                 } else {
                     var amount1 = 0;
                 }
                 if ($(".amount2").val()) {
-                    var amount2 = $(".amount2").val().split(".").join("");
+                    var amount2 = $(".amount2").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount2 = 0;
                 }
                 if ($(".amount3").val()) {
-                    var amount3 = $(".amount3").val().split(".").join("");
+                    var amount3 = $(".amount3").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount3 = 0;
                 }
                 if ($(".amount4").val()) {
-                    var amount4 = $(".amount4").val().split(".").join("");
+                    var amount4 = $(".amount4").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount4 = 0;
                 }
                 if ($(".amount5").val()) {
-                    var amount5 = $(".amount5").val().split(".").join("");
+                    var amount5 = $(".amount5").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount5 = 0;
                 }
                 if ($(".amount6").val()) {
-                    var amount6 = $(".amount6").val().split(".").join("");
+                    var amount6 = $(".amount6").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount6 = 0;
                 }
                 if ($(".amount7").val()) {
-                    var amount7 = $(".amount7").val().split(".").join("");
+                    var amount7 = $(".amount7").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount7 = 0;
                 }
                 if ($(".amount8").val()) {
-                    var amount8 = $(".amount8").val().split(".").join("");
+                    var amount8 = $(".amount8").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount8 = 0;
                 }
                 if ($(".amount9").val()) {
-                    var amount9 = $(".amount9").val().split(".").join("");
+                    var amount9 = $(".amount9").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount9 = 0;
                 }
                 if ($(".amount10").val()) {
-                    var amount10 = $(".amount10").val().split(".").join("");
+                    var amount10 = $(".amount10").val().split(".").join("").replace(",", ".");
                 } else {
                     var amount10 = 0;
                 }

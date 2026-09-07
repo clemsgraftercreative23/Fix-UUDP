@@ -240,9 +240,9 @@ class EntertaimentReimbursementController extends Controller
         }
 
         if (
-            (int) $data->nominal_pengajuan !== (int) $computed['nominal_pengajuan']
-            || (int) ($data->total_bdc ?? 0) !== (int) $computed['total_bdc']
-            || (int) ($data->total_cash ?? 0) !== (int) $computed['total_cash']
+            abs((float) $data->nominal_pengajuan - (float) $computed['nominal_pengajuan']) > 0.005
+            || abs((float) ($data->total_bdc ?? 0) - (float) $computed['total_bdc']) > 0.005
+            || abs((float) ($data->total_cash ?? 0) - (float) $computed['total_cash']) > 0.005
         ) {
             Reimbursement::whereId($data->id)->update($computed);
             $data->fill($computed);
@@ -676,7 +676,7 @@ class EntertaimentReimbursementController extends Controller
                 "mengetahui_op" => "-",
                 "mengetahui_finance" => "-",
                 "mengetahui_owner" => "-",
-                "nominal_pengajuan" => str_replace(".",'',$request->total_pengajuan),
+                "nominal_pengajuan" => \App\Support\ExchangeRateParser::normalizeForStorage($request->total_pengajuan ?? 0),
                 "status" => $status,
                 "reimbursement_type" => 3,
                 "created_by" => auth()->user()->name,
@@ -710,7 +710,7 @@ class EntertaimentReimbursementController extends Controller
                 $new->guest_position = str_replace(".", "", $request->guest_position[$i]);
                 $new->company = str_replace(".", "", $request->company[$i]);
                 $new->type = str_replace(".", "", $request->type[$i]);
-                $new->amount = str_replace(".", "", $request->amount[$i]);
+                $new->amount = \App\Support\ExchangeRateParser::normalizeForStorage($request->amount[$i] ?? 0);
                 $new->remark = $request->remark[$i];
                 $new->evidence = '';
                 $new->status = 1;
@@ -926,7 +926,7 @@ class EntertaimentReimbursementController extends Controller
                 "mengetahui_op" => "-",
                 "mengetahui_finance" => "-",
                 "mengetahui_owner" => "-",
-                "nominal_pengajuan" => str_replace(".","",$request->total_pengajuan),
+                "nominal_pengajuan" => \App\Support\ExchangeRateParser::normalizeForStorage($request->total_pengajuan ?? 0),
                 "status" => $status,
                 "reimbursement_type" => 3,
                 "created_by" => auth()->user()->name,
@@ -970,7 +970,7 @@ class EntertaimentReimbursementController extends Controller
                 $new->guest_position = str_replace(".", "", $request->guest_position[$i]);
                 $new->company = str_replace(".", "", $request->company[$i]);
                 $new->type = str_replace(".", "", $request->type[$i]);
-                $new->amount = str_replace(".", "", $request->amount[$i]);
+                $new->amount = \App\Support\ExchangeRateParser::normalizeForStorage($request->amount[$i] ?? 0);
                 $new->remark = str_replace(".", "", $request->remark[$i]);
                 $new->evidence = '';
                 $new->status = 1;
@@ -1081,7 +1081,7 @@ class EntertaimentReimbursementController extends Controller
                 $payload = [
                     "date" => $request->date,
                     "reimbursement_department_id" => $request->reimbursement_department_id,
-                    "nominal_pengajuan" => str_replace(".","",$request->total_pengajuan),
+                    "nominal_pengajuan" => \App\Support\ExchangeRateParser::normalizeForStorage($request->total_pengajuan ?? 0),
                     "remark" => $request->remark_parent,
                     "status" => $status,
                 ];
@@ -1123,7 +1123,7 @@ class EntertaimentReimbursementController extends Controller
                     $new->guest_position = str_replace(".", "", $request->guest_position[$i]);
                     $new->company = str_replace(".", "", $request->company[$i]);
                     $new->type = str_replace(".", "", $request->type[$i]);
-                    $new->amount = str_replace(".", "", $request->amount[$i]);
+                    $new->amount = \App\Support\ExchangeRateParser::normalizeForStorage($request->amount[$i] ?? 0);
                     $new->remark = str_replace(".", "", $request->remark[$i]);
                     $new->evidence = '';
                     $new->status = 1;
@@ -1175,7 +1175,7 @@ class EntertaimentReimbursementController extends Controller
                 $payload = [
                     "date" => $request->date,
                     "reimbursement_department_id" => $request->reimbursement_department_id,
-                    "nominal_pengajuan" => str_replace(".","",$request->total_pengajuan),
+                    "nominal_pengajuan" => \App\Support\ExchangeRateParser::normalizeForStorage($request->total_pengajuan ?? 0),
                     "remark" => $request->remark_parent
                 ];
 
@@ -1216,7 +1216,7 @@ class EntertaimentReimbursementController extends Controller
                     $new->guest_position = str_replace(".", "", $request->guest_position[$i]);
                     $new->company = str_replace(".", "", $request->company[$i]);
                     $new->type = str_replace(".", "", $request->type[$i]);
-                    $new->amount = str_replace(".", "", $request->amount[$i]);
+                    $new->amount = \App\Support\ExchangeRateParser::normalizeForStorage($request->amount[$i] ?? 0);
                     $new->remark = str_replace(".", "", $request->remark[$i]);
                     $new->evidence = '';
                     $new->status = 1;

@@ -36,12 +36,12 @@ class SystemSettingController extends Controller
 
         AppSetting::set(
             'driver_ocr_invoice_check_enabled',
-            $request->boolean('driver_ocr_invoice_check_enabled') ? '1' : '0',
+            $request->input('driver_ocr_invoice_check_enabled') == '1' ? '1' : '0',
             auth()->id()
         );
         AppSetting::set(
             'travel_entertainment_ocr_check_enabled',
-            $request->boolean('travel_entertainment_ocr_check_enabled') ? '1' : '0',
+            $request->input('travel_entertainment_ocr_check_enabled') == '1' ? '1' : '0',
             auth()->id()
         );
 

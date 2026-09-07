@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\ReimbursementEntertaiment;
+use App\Support\ExchangeRateParser;
 
 class EntertainmentTotal
 {
@@ -17,12 +18,15 @@ class EntertainmentTotal
         $totalCash = 0;
 
         foreach ($rows as $row) {
-            $amount = (int) preg_replace('/\D/', '', (string) ($row->amount ?? 0));
-            $nominal += $amount;
             $paymentType = strtoupper(trim((string) ($row->payment_type ?? '')));
+            $isBdc = $paymentType === 'BDC' || $paymentType === 'BOC';
+            $rawAmount = ExchangeRateParser::parseFloat($row->amount ?? 0);
+            $amount = $isBdc ? round($rawAmount, 2) : round($rawAmount);
+
+            $nominal += $amount;
             if ($paymentType === 'CASH') {
                 $totalCash += $amount;
-            } elseif ($paymentType === 'BDC' || $paymentType === 'BOC') {
+            } elseif ($isBdc) {
                 $totalBdc += $amount;
             }
         }
