@@ -418,7 +418,22 @@ $(document).ready(function(){
         });
     }
 
-    /** Amount: integer dengan pemisah ribuan titik; allowance tetap 2 desimal. */
+    /**
+     * Amount: integer dengan pemisah ribuan titik; allowance tetap 2 desimal.
+     *
+     * Runs on every existing row (not just a newly added one) whenever a row
+     * is appended -- e.g. rtTravelAppendDetailRow(). Re-masking a field by
+     * calling .maskMoney('mask') directly on whatever's already in its .val()
+     * is only safe if that string is already formatted under the EXACT same
+     * thousands/decimal/precision options being (re)applied -- otherwise
+     * maskMoney reinterprets the last `precision` digits as decimal cents,
+     * silently shifting the value by a factor of 100 (confirmed live: two
+     * existing rows' amounts got corrupted -- one x100, one /100 -- the
+     * moment a new row was added to their tab). Reading each field's real
+     * numeric value first with parseTravelMoney (locale/format-agnostic) and
+     * writing it back through a properly formatted string before masking
+     * makes the re-mask idempotent no matter what format was there before.
+     */
     function applyTravelReimbursementCurrencyMasks($pane) {
         if (!$pane || !$pane.length || !$.fn.maskMoney) return;
         var $allCurrency = $pane.find('.currency');
@@ -426,6 +441,9 @@ $(document).ready(function(){
             'input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input.exchange-rate-input[name="rate[]"]'
         );
         var $maskSrc = $allCurrency.not($excluded);
+        $maskSrc.each(function () {
+            $(this).data('rtRawValue', parseTravelMoney($(this).val()));
+        });
         try {
             $allCurrency.each(function () {
                 try { $(this).maskMoney('destroy'); } catch (e2) { /* not initialized */ }
@@ -437,18 +455,37 @@ $(document).ready(function(){
         var $allowanceOnly = $maskSrc.filter('input[name="allowance"]');
         var $amountOnly = $maskSrc.filter('input[name="amount[]"]');
         var $intLike = $maskSrc.not($allowanceOnly).not($amountOnly);
-        if ($allowanceOnly.length) {
-            $allowanceOnly.maskMoney(optsAllowance);
-            $allowanceOnly.maskMoney('mask');
+
+        // Formats using THIS field's own mask opts (thousands/decimal/precision
+        // can differ per file/field) rather than assuming a fixed locale, so
+        // the string handed to .maskMoney('mask') always matches what that
+        // mask instance expects.
+        function formatRawForMask(raw, opts) {
+            var n = Number(raw) || 0;
+            var precision = opts.precision || 0;
+            var fixed = Math.abs(n).toFixed(precision);
+            var parts = fixed.split('.');
+            var intPart = opts.thousands
+                ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, opts.thousands)
+                : parts[0];
+            var out = precision > 0 ? intPart + (opts.decimal || '.') + parts[1] : intPart;
+            return (n < 0 ? '-' : '') + out;
         }
-        if ($amountOnly.length) {
-            $amountOnly.maskMoney(optsAmountInt);
-            $amountOnly.maskMoney('mask');
+
+        function reapplyMask($fields, opts) {
+            if (!$fields.length) return;
+            $fields.maskMoney(opts);
+            $fields.each(function () {
+                var raw = $(this).data('rtRawValue') || 0;
+                $(this).val(formatRawForMask(raw, opts));
+            });
+            $fields.maskMoney('mask');
         }
-        if ($intLike.length) {
-            $intLike.maskMoney(opts0);
-            $intLike.maskMoney('mask');
-        }
+
+        reapplyMask($allowanceOnly, optsAllowance);
+        reapplyMask($amountOnly, optsAmountInt);
+        reapplyMask($intLike, opts0);
+
         $pane.find('tbody tr.fieldGroupDetail').each(function () {
             applyIdrTaxMaskForRow($(this));
         });

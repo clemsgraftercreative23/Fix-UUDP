@@ -612,6 +612,18 @@ $(document).ready(function(){
         });
     }
 
+    /**
+     * Re-masking a field via .maskMoney('mask') directly on its current
+     * .val() only works if that string is already formatted under the exact
+     * thousands/decimal/precision options being applied -- otherwise the
+     * last `precision` digits get reinterpreted as decimal cents, silently
+     * shifting the value by 100x (confirmed live: adding a row corrupted
+     * every OTHER existing row's amount this way). Read each field's real
+     * value first with parseTravelMoney, then write it back through a
+     * properly formatted string (matching THIS field's own opts, e.g.
+     * amount's `thousands: ''` here differs from the other rows) before
+     * masking, so it's idempotent.
+     */
     function applyTravelReimbursementCurrencyMasks($pane) {
         if (!$pane || !$pane.length || !$.fn.maskMoney) return;
         var $allCurrency = $pane.find('.currency');
@@ -619,6 +631,9 @@ $(document).ready(function(){
             'input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input.exchange-rate-input[name="rate[]"]'
         );
         var $maskSrc = $allCurrency.not($excluded);
+        $maskSrc.each(function () {
+            $(this).data('rtRawValue', parseTravelMoney($(this).val()));
+        });
         try {
             $allCurrency.each(function () {
                 try { $(this).maskMoney('destroy'); } catch (e2) { /* not initialized */ }
@@ -630,18 +645,33 @@ $(document).ready(function(){
         var $allowanceOnly = $maskSrc.filter('input[name="allowance"]');
         var $amountOnly = $maskSrc.filter('input[name="amount[]"]');
         var $intLike = $maskSrc.not($allowanceOnly).not($amountOnly);
-        if ($allowanceOnly.length) {
-            $allowanceOnly.maskMoney(optsAllowance);
-            $allowanceOnly.maskMoney('mask');
+
+        function formatRawForMask(raw, opts) {
+            var n = Number(raw) || 0;
+            var precision = opts.precision || 0;
+            var fixed = Math.abs(n).toFixed(precision);
+            var parts = fixed.split('.');
+            var intPart = opts.thousands
+                ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, opts.thousands)
+                : parts[0];
+            var out = precision > 0 ? intPart + (opts.decimal || '.') + parts[1] : intPart;
+            return (n < 0 ? '-' : '') + out;
         }
-        if ($amountOnly.length) {
-            $amountOnly.maskMoney(optsAmountInt);
-            $amountOnly.maskMoney('mask');
+
+        function reapplyMask($fields, opts) {
+            if (!$fields.length) return;
+            $fields.maskMoney(opts);
+            $fields.each(function () {
+                var raw = $(this).data('rtRawValue') || 0;
+                $(this).val(formatRawForMask(raw, opts));
+            });
+            $fields.maskMoney('mask');
         }
-        if ($intLike.length) {
-            $intLike.maskMoney(opts0);
-            $intLike.maskMoney('mask');
-        }
+
+        reapplyMask($allowanceOnly, optsAllowance);
+        reapplyMask($amountOnly, optsAmountInt);
+        reapplyMask($intLike, opts0);
+
         $pane.find('tbody tr.fieldGroupDetail').each(function () {
             applyIdrTaxMaskForRow($(this));
         });
