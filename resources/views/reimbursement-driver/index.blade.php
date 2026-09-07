@@ -421,7 +421,11 @@ $(document).ready(function(){
                         return { reimbursement_type: 1, dates: [date], payment_types: paymentTypes };
                     }
                 }
-            ]
+            ],
+            // Warn as soon as the date or a row's payment type is filled in,
+            // instead of only after every row (toll/parking/gasoline/etc.) is
+            // filled and Submit/Draft is clicked -- same check, just earlier.
+            earlyCheckSelectors: 'input[name="date"], select[name="payment_type[]"]'
         });
     }
 

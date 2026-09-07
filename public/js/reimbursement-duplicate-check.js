@@ -98,6 +98,29 @@
           // un-submitted until the user changes the date/invoice number.
         });
     });
+
+    // Early warning: run the exact same checks as soon as there's enough
+    // filled in to know (e.g. date + a payment type for Driver), instead of
+    // only finding out after filling in every row (toll/parking/gasoline...)
+    // and clicking Submit/Draft. Doesn't replace the submit-time check above
+    // (still the real, final gate) -- this just surfaces the same message
+    // earlier so a driver doesn't waste time on a date/type combo that's
+    // already taken.
+    var earlySelectors = options.earlyCheckSelectors;
+    if (earlySelectors) {
+      $form.on('change', earlySelectors, function () {
+        Promise.all(checks.map(function (check) { return runCheck(check, $form); }))
+          .then(function (results) {
+            var messages = results
+              .filter(function (res) { return res && res.duplicate; })
+              .map(function (res) { return res.message; });
+
+            if (messages.length) {
+              showDuplicateBlocked(messages.join('\n\n'));
+            }
+          });
+      });
+    }
   }
 
   window.bindReimbursementDuplicateChecks = bindReimbursementDuplicateChecks;
