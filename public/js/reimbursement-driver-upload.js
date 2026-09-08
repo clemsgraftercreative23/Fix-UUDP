@@ -304,7 +304,16 @@ window.DriverUpload = (function () {
         .appendTo($form);
     });
 
-    $form.on('submit', function () {
+    $form.on('submit', function (e) {
+      // Another submit handler (duplicate-date/payment-type check, OCR
+      // mismatch block) may have already called preventDefault() on this
+      // same submit event to stop it going through. Disabling the buttons
+      // anyway would leave the user unable to click Submit/Draft again --
+      // the blocked check's popup would then only ever show once, since a
+      // disabled button fires no further click/submit at all.
+      if (e.isDefaultPrevented()) {
+        return;
+      }
       setTimeout(function () {
         $form.find(
           '#action_button, #action_button_draft, button[type="submit"][name="save"], button[type="submit"][name="save_draft"]'
