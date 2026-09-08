@@ -390,7 +390,7 @@
 @if($driverOcrEnabled ?? false)
 <script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 @endif
-<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-driver-upload.js')) }}"></script>
 <script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){

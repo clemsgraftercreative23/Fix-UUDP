@@ -813,7 +813,7 @@ if (!function_exists('driver_attachment_rows')) {
 @if($driverOcrEnabled ?? false)
 <script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
 @endif
-<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-driver-upload.js')) }}"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 <script>

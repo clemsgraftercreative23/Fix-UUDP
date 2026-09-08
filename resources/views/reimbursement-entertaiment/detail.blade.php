@@ -859,7 +859,7 @@ if (!function_exists('ent_attachment_rows')) {
 <!-- End Custom Lightbox -->
   
 @push('scripts')
-<script src="{{ asset('js/reimbursement-driver-upload.js') }}"></script>
+<script src="{{ asset('js/reimbursement-driver-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-driver-upload.js')) }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 
