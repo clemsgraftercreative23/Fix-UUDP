@@ -135,7 +135,16 @@ class AccurateApiTokenClient
         $pathForSign = $this->extractPathAndQuery($url);
         $timestamp = $this->buildTimestampString();
         $signingKeys = $this->buildSigningKeys();
+
+        // request() always tries TIMESTAMP_ONLY first regardless of the
+        // configured sign_mode, and that is the mode Accurate actually
+        // accepts for this tenant -- sign with the configured mode here
+        // instead and every check gets rejected as a bad signature,
+        // permanently showing "Offline" even though real API calls succeed.
+        $configuredSignMode = $this->signMode;
+        $this->signMode = 'TIMESTAMP_ONLY';
         $signature = $this->buildSignature($method, $pathForSign, $timestamp, '', $signingKeys[0]);
+        $this->signMode = $configuredSignMode;
 
         $headers = [
             'Accept: application/json',
