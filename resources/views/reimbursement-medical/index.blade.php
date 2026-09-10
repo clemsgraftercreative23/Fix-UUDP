@@ -368,21 +368,21 @@ $(document).ready(function(){
     @endif
 
     if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+        // A duplicate is only flagged when Tanggal + No Invoice + Nominal
+        // ALL match an existing claim (business decision, Sep 2026) -- so
+        // this is one combined check, not separate date-only/invoice-only
+        // ones that used to each warn on their own.
         window.bindReimbursementDuplicateChecks({
             formSelector: '#sample_form',
+            earlyCheckSelectors: 'input[name="date"], input[name="no_invoice"], input[name="total_pengajuan"]',
             checks: [
                 {
-                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    url: '{{ url('/reimbursement/check-duplicate-invoice-line') }}',
                     params: function ($form) {
                         var date = $form.find('input[name="date"]').val();
-                        return date ? { reimbursement_type: 4, dates: [date] } : null;
-                    }
-                },
-                {
-                    url: '{{ url('/reimbursement/check-duplicate-invoice') }}',
-                    params: function ($form) {
                         var number = ($form.find('input[name="no_invoice"]').val() || '').trim();
-                        return number ? { no_invoice: number } : null;
+                        var amount = ($form.find('input[name="total_pengajuan"]').val() || '').split('.').join('');
+                        return (date && number && amount) ? { date: date, no_invoice: number, amount: amount } : null;
                     }
                 }
             ]

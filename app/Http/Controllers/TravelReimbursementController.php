@@ -972,49 +972,22 @@ class TravelReimbursementController extends Controller
     }
 
     /**
-     * Hard block (not just a warning) on submitting a date already used
-     * before -- applies to every save action (draft, item, or final
-     * submit), since duplicate identity, unlike field completeness, isn't
-     * something a draft is allowed to have. Invoice/receipt numbers are no
-     * longer typed on this form -- they're OCR-derived per cost-line row
-     * and deduped there instead (see guardAgainstDuplicateRowInvoice()).
-     */
-    private function guardAgainstDuplicateSubmission(Request $request): void
-    {
-        $legs = (array) $request->input('reimburse', []);
-        $dates = [];
-        foreach ($legs as $leg) {
-            if (!empty($leg['date'])) {
-                $dates[] = $leg['date'];
-            }
-        }
-
-        $dates = \App\Support\DuplicateDateChecker::normalizeDates($dates, null);
-        $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), 2, $dates);
-        if (!empty($existingDates)) {
-            throw ValidationException::withMessages(['reimburse' => [
-                'Tanggal ' . implode(', ', $existingDates) . ' sudah pernah diajukan sebelumnya untuk reimbursement travel. Silakan gunakan tanggal yang berbeda.',
-            ]]);
-        }
-    }
-
-    /**
-     * Same hard block as guardAgainstDuplicateSubmission(), but for the
-     * tab-based add/edit-item flow where items are saved one at a time
-     * after the initial submission. Skips the check when the number is
-     * blank or unchanged from what this item already has saved, so
-     * re-saving an item without touching its invoice number doesn't flag
-     * it as a duplicate of itself.
-     */
-    /**
      * Hard block on saving a cost-line row whose OCR-extracted No.
      * Invoice/Receipt number is already used elsewhere -- the row-level
      * analog of the old day-level guardAgainstDuplicateItemInvoice(). Skips
      * silently when OCR couldn't read a number (blank never blocks -- see
      * ReceiptOcrVerifier) or when re-saving a row leaves its own
      * already-stored number unchanged.
+     *
+     * Checked by (invoice, transaction date, amount) rather than invoice
+     * number alone -- one Bill No/invoice can legitimately span several days
+     * (e.g. a hotel Guest Folio with the same Bill No on 3, 4 and 5 Aug), so
+     * a plain number match would wrongly reject the 2nd/3rd day's valid row.
+     * See ReimbursementDuplicateGuard::invoiceLineAlreadyUsed().
+     *
+     * @param mixed $amountRaw
      */
-    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice): void
+    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice, string $legDate, $amountRaw): void
     {
         if ($normalizedInvoice === '') {
             return;
@@ -1029,7 +1002,11 @@ class TravelReimbursementController extends Controller
             }
         }
 
-        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalizedInvoice]);
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceLine(
+            $normalizedInvoice,
+            $legDate,
+            $this->normalizeTravelAmountValue($amountRaw ?? '')
+        );
         if ($invoiceError) {
             throw ValidationException::withMessages(['evidence' => [$invoiceError]]);
         }
@@ -1051,28 +1028,20 @@ class TravelReimbursementController extends Controller
     }
 
     /**
-     * Duplicate check for a single travel cost line, replacing a manually
-     * typed invoice/receipt number with two automatic signals:
-     *  (a) the uploaded evidence photo's exact byte content was already
-     *      used as evidence on another (non-rejected) travel submission --
-     *      catches the same physical receipt being photographed/re-used;
-     *  (b) this user already has a cost line with the same date, currency,
-     *      amount, destination, and cost type on a non-rejected submission
-     *      -- catches the same expense being entered twice even with a
-     *      different (or no) photo.
-     * $excludeDetailId lets re-saving an existing row (unchanged) skip
-     * flagging itself as a duplicate of itself.
+     * The same physical receipt photo (identical byte content) being
+     * uploaded as evidence on another (non-rejected) travel submission --
+     * this alone is always suspicious regardless of tanggal/No Invoice/
+     * Nominal, so it stays a separate, independent check. It used to run
+     * alongside a date+currency+amount+destination+cost-type combo block
+     * that ignored the invoice number entirely; that combo block is
+     * removed -- a duplicate is now only flagged when tanggal + No Invoice
+     * + Nominal ALL match (business decision, Sep 2026), which
+     * guardAgainstDuplicateRowInvoice() enforces per row.
+     *
+     * @param UploadedFile[] $newlyUploadedFiles
      */
-    private function guardAgainstDuplicateTravelDetail(
-        int $ownerUserId,
-        string $legDate,
-        string $currencyRaw,
-        $amountRaw,
-        string $destination,
-        $costTypeId,
-        ?int $excludeDetailId,
-        array $newlyUploadedFiles
-    ): void {
+    private function guardAgainstDuplicateEvidenceFile(array $newlyUploadedFiles): void
+    {
         foreach ($newlyUploadedFiles as $file) {
             if (!$file instanceof UploadedFile) {
                 continue;
@@ -1092,37 +1061,6 @@ class TravelReimbursementController extends Controller
                     'evidence' => ['Foto bukti/struk ini sudah pernah diupload pada pengajuan reimbursement travel lain. Silakan upload bukti yang berbeda.'],
                 ]);
             }
-        }
-
-        $legDate = trim($legDate);
-        $destination = trim($destination);
-        $currencyCode = strtoupper(trim($currencyRaw)) ?: 'IDR';
-        $amountValue = $this->normalizeTravelMoneyValue($amountRaw ?? '');
-
-        if ($legDate === '' || $destination === '' || $amountValue <= 0 || $ownerUserId <= 0) {
-            return;
-        }
-
-        $duplicateCombo = DB::table('reimbursement_travel_details as d')
-            ->join('reimbursement_travel as t', 't.id', '=', 'd.reimbursement_travel_id')
-            ->join('reimbursement as r', 'r.id', '=', 't.reimbursement_id')
-            ->where('r.id_user', $ownerUserId)
-            ->where('r.status', '!=', 4)
-            ->where('d.status', 1)
-            ->whereDate('t.date', $legDate)
-            ->where('d.currency', $currencyCode)
-            ->where('d.amount', $amountValue)
-            ->where('d.destination', $destination)
-            ->where('d.cost_type_id', $costTypeId)
-            ->when($excludeDetailId, function ($query) use ($excludeDetailId) {
-                $query->where('d.id', '!=', $excludeDetailId);
-            })
-            ->exists();
-
-        if ($duplicateCombo) {
-            throw ValidationException::withMessages([
-                'destination' => ['Rincian biaya ini (tanggal, tujuan, nominal, dan jenis biaya yang sama) sudah pernah diajukan sebelumnya. Kemungkinan duplikat.'],
-            ]);
         }
     }
 
@@ -1203,8 +1141,9 @@ class TravelReimbursementController extends Controller
      * forward + duplicate-guard pipeline runs exactly as it always has.
      *
      * @param UploadedFile[] $files
+     * @param mixed $amountRaw
      */
-    private function resolveTravelRowInvoiceNumber(array $files, ?int $oldDetailId): string
+    private function resolveTravelRowInvoiceNumber(array $files, ?int $oldDetailId, string $legDate, $amountRaw): string
     {
         if (!\App\AppSetting::isTravelEntertainmentOcrCheckEnabled()) {
             return '';
@@ -1214,7 +1153,7 @@ class TravelReimbursementController extends Controller
             $this->extractReceiptInvoiceNumber($files),
             $oldDetailId
         );
-        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $extractedInvoice);
+        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $extractedInvoice, $legDate, $amountRaw);
 
         return $extractedInvoice;
     }
@@ -1581,7 +1520,10 @@ class TravelReimbursementController extends Controller
     public function store(Request $request)
     {
         $this->validateTravelSubmissionRequest($request, isset($_POST['save']) && !isset($_POST['save_draft']));
-        $this->guardAgainstDuplicateSubmission($request);
+        // No standalone date-only block here -- a duplicate is only flagged
+        // when tanggal + No Invoice + Nominal ALL match an existing claim
+        // (business decision, Sep 2026), which is enforced per row by
+        // guardAgainstDuplicateRowInvoice() below.
 
         if (isset($_POST['save'])) {
             $status = 0;
@@ -1698,17 +1640,8 @@ class TravelReimbursementController extends Controller
                         $uploadFiles[] = $mainFile;
                     }
 
-                    $this->guardAgainstDuplicateTravelDetail(
-                        (int) auth()->id(),
-                        (string) ($value['date'] ?? ''),
-                        $currencyCode,
-                        $v['amount'] ?? '',
-                        (string) ($v['destination'] ?? ''),
-                        $v['cost_type_id'],
-                        null,
-                        $uploadFiles
-                    );
-                    $payloadDetail['no_invoice'] = $this->resolveTravelRowInvoiceNumber($uploadFiles, null);
+                    $this->guardAgainstDuplicateEvidenceFile($uploadFiles);
+                    $payloadDetail['no_invoice'] = $this->resolveTravelRowInvoiceNumber($uploadFiles, null, (string) ($value['date'] ?? ''), $v['amount'] ?? '');
 
                     if (!empty($uploadFiles)) {
                         $firstStored = $this->storeTravelEvidenceFile($uploadFiles[0]);
@@ -2025,19 +1958,12 @@ class TravelReimbursementController extends Controller
                 }
                 $amountValue = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
 
-                $this->guardAgainstDuplicateTravelDetail(
-                    $ownerUserId,
-                    (string) $request->date,
-                    $currencyCode,
-                    $request->amount[$i] ?? '',
-                    (string) ($request->destination[$i] ?? ''),
-                    $costTypeId,
-                    $oldDetailId > 0 ? $oldDetailId : null,
-                    $this->getUploadedFilesByRow($request, $i)
-                );
+                $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
                 $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
                     $this->getUploadedFilesByRow($request, $i),
-                    $oldDetailId > 0 ? $oldDetailId : null
+                    $oldDetailId > 0 ? $oldDetailId : null,
+                    (string) $request->date,
+                    $request->amount[$i] ?? ''
                 );
 
                 $new = new ReimbursementTravelDetail;
@@ -2578,10 +2504,10 @@ class TravelReimbursementController extends Controller
 
         $this->validateTravelReimbursementItemRequest($request, false);
 
-        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 2, (string) $request->date, (int) $id);
-        if ($dateError) {
-            return redirect()->back()->withInput()->withErrors([$dateError]);
-        }
+        // No standalone date-only block here -- a duplicate is only flagged
+        // when tanggal + No Invoice + Nominal ALL match an existing claim
+        // (business decision, Sep 2026), enforced per row by
+        // guardAgainstDuplicateRowInvoice().
         $remark = $request->remark;
         $reimbursement_department_id = $request->reimbursement_department_id;
 
@@ -2650,7 +2576,9 @@ class TravelReimbursementController extends Controller
 
             $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
-                $oldDetailId > 0 ? $oldDetailId : null
+                $oldDetailId > 0 ? $oldDetailId : null,
+                (string) $request->date,
+                $request->amount[$i] ?? ''
             );
 
             $new = new ReimbursementTravelDetail;
@@ -2934,19 +2862,12 @@ class TravelReimbursementController extends Controller
             }
             $amountValue = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
 
-            $this->guardAgainstDuplicateTravelDetail(
-                $ownerUserId,
-                (string) $request->date,
-                $currencyCode,
-                $request->amount[$i] ?? '',
-                (string) ($request->destination[$i] ?? ''),
-                $costTypeId,
-                $oldDetailId > 0 ? $oldDetailId : null,
-                $this->getUploadedFilesByRow($request, $i)
-            );
+            $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
             $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
-                $oldDetailId > 0 ? $oldDetailId : null
+                $oldDetailId > 0 ? $oldDetailId : null,
+                (string) $request->date,
+                $request->amount[$i] ?? ''
             );
 
             $new = new ReimbursementTravelDetail;
@@ -3207,19 +3128,12 @@ class TravelReimbursementController extends Controller
                 $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
-            $this->guardAgainstDuplicateTravelDetail(
-                $ownerUserId,
-                (string) $request->date,
-                strtoupper(trim((string) ($request->currency[$i] ?? ''))) ?: 'IDR',
-                $request->amount[$i] ?? '',
-                (string) ($request->destination[$i] ?? ''),
-                $costTypeId,
-                $oldDetailId > 0 ? $oldDetailId : null,
-                $this->getUploadedFilesByRow($request, $i)
-            );
+            $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
             $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
-                $oldDetailId > 0 ? $oldDetailId : null
+                $oldDetailId > 0 ? $oldDetailId : null,
+                (string) $request->date,
+                $request->amount[$i] ?? ''
             );
 
             $new = new ReimbursementTravelDetail;
@@ -3471,19 +3385,12 @@ class TravelReimbursementController extends Controller
                 $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
             }
 
-            $this->guardAgainstDuplicateTravelDetail(
-                $ownerUserId,
-                (string) $request->date,
-                strtoupper(trim((string) ($request->currency[$i] ?? ''))) ?: 'IDR',
-                $request->amount[$i] ?? '',
-                (string) ($request->destination[$i] ?? ''),
-                $costTypeId,
-                $oldDetailId > 0 ? $oldDetailId : null,
-                $this->getUploadedFilesByRow($request, $i)
-            );
+            $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
             $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
-                $oldDetailId > 0 ? $oldDetailId : null
+                $oldDetailId > 0 ? $oldDetailId : null,
+                (string) $request->date,
+                $request->amount[$i] ?? ''
             );
 
             $new = new ReimbursementTravelDetail;

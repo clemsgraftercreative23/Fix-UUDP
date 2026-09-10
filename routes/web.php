@@ -156,6 +156,7 @@ Route::post('pencairan-reimbursement/{id}/reverse-accurate', 'PencairanReimburse
   Route::post('reimbursement/reject/{id}', 'ReimbursementController@reject');
   Route::post('reimbursement/check-duplicate-date', 'ReimbursementController@checkDuplicateDate');
   Route::post('reimbursement/check-duplicate-invoice', 'ReimbursementController@checkDuplicateInvoice');
+  Route::post('reimbursement/check-duplicate-invoice-line', 'ReimbursementController@checkDuplicateInvoiceLine');
   Route::post('reimbursement/verify-receipt-ocr', 'ReimbursementController@verifyReceiptOcr');
 
   Route::get('reimbursement-user','ReimbursementController@listUser');

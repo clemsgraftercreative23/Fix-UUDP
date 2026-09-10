@@ -997,25 +997,11 @@ $(document).ready(function(){
       },
   });
 
-  if (typeof window.bindReimbursementDuplicateChecks === 'function') {
-      window.bindReimbursementDuplicateChecks({
-          formSelector: '#travel_reimbursement_form',
-          checks: [
-              {
-                  url: '{{ url('/reimbursement/check-duplicate-date') }}',
-                  params: function ($form) {
-                      var dates = [];
-                      $form.find('input[type="date"]').each(function () {
-                          if (this.value) {
-                              dates.push(this.value);
-                          }
-                      });
-                      return dates.length ? { reimbursement_type: 2, dates: dates } : null;
-                  }
-              }
-          ]
-      });
-  }
+  // No standalone date-only duplicate popup here -- a duplicate is only
+  // flagged when tanggal + No Invoice + Nominal ALL match an existing claim
+  // (business decision, Sep 2026), which is checked per cost-line row via
+  // the OCR badge (see reimbursement-ocr-check.js) and enforced server-side
+  // at save time.
 
 </script>
 

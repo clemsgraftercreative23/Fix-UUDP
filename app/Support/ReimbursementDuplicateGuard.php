@@ -238,4 +238,123 @@ class ReimbursementDuplicateGuard
 
         return 'Nomor invoice/receipt ' . implode(', ', $used) . ' sudah pernah digunakan pada pengajuan reimbursement sebelumnya.';
     }
+
+    /**
+     * The ONE duplicate rule across every reimbursement type: a claim is
+     * only flagged as a duplicate when its No. Invoice/Receipt, transaction
+     * date AND nominal ALL match an existing (non-rejected, not-self)
+     * claim -- matching on any one or two of those alone is NOT a duplicate
+     * (business decision, Sep 2026: "harus semua kondisi dulu sama baru
+     * muncul duplikat"). This replaces the old, independent single-field
+     * gates (date-only, invoice-only, or the date+destination+amount+type
+     * combo that ignored invoice) that used to each block on their own --
+     * e.g. a hotel Guest Folio (one Bill No covering "Room Charge" on 3, 4
+     * and 5 Aug) would previously get its 2nd/3rd day wrongly rejected by
+     * the date-only or invoice-only checks even though nothing was actually
+     * being claimed twice.
+     *
+     * Checked against every place a claim can be recorded:
+     *  - the submission header (reimbursement.no_invoice/date/nominal_pengajuan
+     *    -- Medical's one-invoice-per-submission shape, and Driver/Entertainment's
+     *    shared submission date);
+     *  - Travel cost-line rows (no_invoice/amount on reimbursement_travel_details,
+     *    date from their parent reimbursement_travel leg -- can differ per day
+     *    within one trip);
+     *  - Entertainment cost-line rows (no_invoice/amount on
+     *    reimbursement_entertaiments, date from the submission header since
+     *    every row in one Entertainment submission shares the same event date);
+     *  - Driver rows (no_invoice/subtotal on reimbursement_driver, date from
+     *    the submission header), only once OCR-derived Driver invoices are
+     *    enabled (AppSetting::isDriverOcrCheckEnabled()) -- same gate as
+     *    findDuplicateInvoiceNumbers(), since off means no_invoice there is
+     *    ungoverned manual/free-typed input.
+     *
+     * @param mixed $amount
+     */
+    public static function invoiceLineAlreadyUsed(string $number, string $date, $amount, ?int $excludeReimbursementId = null): bool
+    {
+        $number = DuplicateInvoiceChecker::normalizeNumber($number);
+        $date = trim($date);
+        if (!DuplicateInvoiceChecker::isCompleteLine($number, $date, $amount)) {
+            return false;
+        }
+        $amount = DuplicateInvoiceChecker::normalizeAmount($amount);
+        $amountMatches = function ($existingAmount) use ($amount) {
+            return DuplicateInvoiceChecker::amountsMatch($existingAmount, $amount);
+        };
+
+        $inHeader = Reimbursement::where('reimbursement.no_invoice', $number)
+            ->whereDate('reimbursement.date', $date)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement.nominal_pengajuan')
+            ->contains($amountMatches);
+
+        if ($inHeader) {
+            return true;
+        }
+
+        $inTravelDetails = ReimbursementTravelDetail::where('reimbursement_travel_details.no_invoice', $number)
+            ->where('reimbursement_travel_details.status', 1)
+            ->join('reimbursement_travel', 'reimbursement_travel.id', '=', 'reimbursement_travel_details.reimbursement_travel_id')
+            ->whereDate('reimbursement_travel.date', $date)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement_travel_details.amount')
+            ->contains($amountMatches);
+
+        if ($inTravelDetails) {
+            return true;
+        }
+
+        $inEntertainmentItems = ReimbursementEntertaiment::where('reimbursement_entertaiments.no_invoice', $number)
+            ->where('reimbursement_entertaiments.status', 1)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_entertaiments.reimbursement_id')
+            ->whereDate('reimbursement.date', $date)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement_entertaiments.amount')
+            ->contains($amountMatches);
+
+        if ($inEntertainmentItems) {
+            return true;
+        }
+
+        if (!AppSetting::isDriverOcrCheckEnabled()) {
+            return false;
+        }
+
+        return ReimbursementDriver::where('reimbursement_driver.no_invoice', $number)
+            ->where('reimbursement_driver.status', 1)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
+            ->whereDate('reimbursement.date', $date)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->pluck('reimbursement_driver.subtotal')
+            ->contains($amountMatches);
+    }
+
+    /**
+     * @param mixed $amount
+     * @return ?string ready-to-show rejection message, or null when this line isn't a duplicate
+     */
+    public static function rejectionMessageForInvoiceLine(string $number, string $date, $amount, ?int $excludeReimbursementId = null): ?string
+    {
+        $number = DuplicateInvoiceChecker::normalizeNumber($number);
+        if ($number === '' || !self::invoiceLineAlreadyUsed($number, $date, $amount, $excludeReimbursementId)) {
+            return null;
+        }
+
+        return "No. Invoice/Receipt \"{$number}\" dengan tanggal dan nominal yang sama sudah pernah diklaim pada pengajuan reimbursement sebelumnya. "
+            . 'Kemungkinan duplikat -- pastikan ini bukan klaim yang sama sebelum melanjutkan.';
+    }
 }

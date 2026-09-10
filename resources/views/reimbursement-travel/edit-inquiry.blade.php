@@ -380,20 +380,11 @@ function runOcrCheckForEditInquiryRow($row, file) {
 }
 
 $(document).ready(function () {
-    if (typeof window.bindReimbursementDuplicateChecks === 'function') {
-        window.bindReimbursementDuplicateChecks({
-            formSelector: '#travel_edit_inquiry_form',
-            checks: [
-                {
-                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
-                    params: function ($form) {
-                        var date = $form.find('input[name="date"]').val();
-                        return date ? { reimbursement_type: 2, dates: [date], exclude_id: {{ (int) $data['0']->id }} } : null;
-                    }
-                }
-            ]
-        });
-    }
+    // No standalone date-only duplicate popup here -- a duplicate is only
+    // flagged when tanggal + No Invoice + Nominal ALL match an existing
+    // claim (business decision, Sep 2026), which is checked per cost-line
+    // row via the OCR badge (see reimbursement-ocr-check.js) and enforced
+    // server-side at save time.
 });
 </script>
 

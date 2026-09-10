@@ -101,6 +101,38 @@ class ReimbursementController extends Controller
     }
 
     /**
+     * Early-warning AJAX check for forms with one header-level tanggal +
+     * No Invoice + Nominal (currently Medical): a duplicate is only flagged
+     * when ALL THREE match an existing claim (business decision, Sep 2026)
+     * -- date-only or invoice-only reuse is not, on its own, a reason to
+     * warn. Mirrors ReimbursementDuplicateGuard::rejectionMessageForInvoiceLine(),
+     * the same check store() runs as the real, unbypassable gate.
+     */
+    public function checkDuplicateInvoiceLine(Request $request)
+    {
+        $number = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->input('no_invoice'));
+        $date = trim((string) $request->input('date'));
+        $amount = $request->input('amount');
+
+        if ($number === '' || $date === '' || !is_numeric($amount)) {
+            return response()->json([
+                'duplicate' => false,
+                'code' => 'INVALID_REQUEST',
+                'message' => 'Tanggal, No Invoice, dan Nominal wajib diisi.',
+            ], 422);
+        }
+
+        $excludeId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $message = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceLine($number, $date, $amount, $excludeId);
+
+        return response()->json([
+            'duplicate' => $message !== null,
+            'code' => $message !== null ? 'DUPLICATE_INVOICE_LINE' : 'OK',
+            'message' => $message ?? 'Tanggal, No Invoice, dan Nominal ini belum pernah diajukan sebelumnya.',
+        ]);
+    }
+
+    /**
      * Fast-feedback endpoint hit right after a receipt photo is attached
      * client-side: OCRs the photo to extract its No. Invoice/Receipt (no
      * longer typed by the user -- this IS the value) and checks it for

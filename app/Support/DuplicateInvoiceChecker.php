@@ -53,6 +53,43 @@ class DuplicateInvoiceChecker
     }
 
     /**
+     * Whether $number/$date/$amount are all present/well-formed enough to be
+     * checked as a line-level duplicate (see ReimbursementDuplicateGuard::
+     * invoiceLineAlreadyUsed()). One Bill No/invoice number can legitimately
+     * span several days (e.g. a hotel Guest Folio listing "Room Charge" on
+     * 3, 4 and 5 Aug under the same Bill No) -- date and amount are what
+     * tell those rows apart from an actual re-claim of the same charge.
+     *
+     * @param mixed $amount
+     */
+    public static function isCompleteLine(string $number, string $date, $amount): bool
+    {
+        return self::normalizeNumber($number) !== '' && trim($date) !== '' && is_numeric($amount);
+    }
+
+    /**
+     * Rounds to the 2 decimal places every amount column in this app is
+     * stored at (see ExchangeRateParser::normalizeForStorage()), so a
+     * request-side float and a DB-stored numeric string compare equal.
+     *
+     * @param mixed $amount
+     */
+    public static function normalizeAmount($amount): float
+    {
+        return round((float) $amount, 2);
+    }
+
+    /** @param mixed $amount */
+    public static function amountsMatch($amount, $otherAmount): bool
+    {
+        if (!is_numeric($amount) || !is_numeric($otherAmount)) {
+            return false;
+        }
+
+        return self::normalizeAmount($amount) === self::normalizeAmount($otherAmount);
+    }
+
+    /**
      * @param string[] $requestedNumbers numbers the user is trying to submit
      * @param string[] $usedNumbers numbers already found on file, anywhere
      */

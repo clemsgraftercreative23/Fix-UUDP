@@ -344,7 +344,12 @@ class DriverReimbursementController extends Controller
             $this->extractReceiptInvoiceNumber($this->getDriverRowUploadedFiles($request, $rowIndex)),
             $oldDetailId
         );
-        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $extractedInvoice);
+        $this->guardAgainstDuplicateRowInvoice(
+            $oldDetailId,
+            $extractedInvoice,
+            (string) $request->date,
+            $request->total[$rowIndex] ?? ''
+        );
 
         return $extractedInvoice;
     }
@@ -399,8 +404,15 @@ class DriverReimbursementController extends Controller
      * Invoice/Receipt number is already used elsewhere. Skips silently when
      * OCR couldn't read a number (blank never blocks) or when re-saving a
      * row leaves its own already-stored number unchanged.
+     *
+     * Checked by (invoice, submission date, nominal/subtotal) rather than
+     * invoice number alone -- a duplicate is only flagged when tanggal + No
+     * Invoice + Nominal ALL match (business decision, Sep 2026). See
+     * ReimbursementDuplicateGuard::invoiceLineAlreadyUsed().
+     *
+     * @param mixed $amountRaw
      */
-    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice): void
+    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice, string $date, $amountRaw): void
     {
         if ($normalizedInvoice === '') {
             return;
@@ -415,7 +427,11 @@ class DriverReimbursementController extends Controller
             }
         }
 
-        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalizedInvoice]);
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceLine(
+            $normalizedInvoice,
+            $date,
+            \App\Support\ExchangeRateParser::parseFloat($amountRaw ?? '')
+        );
         if ($invoiceError) {
             throw \Illuminate\Validation\ValidationException::withMessages(['evidence' => [$invoiceError]]);
         }

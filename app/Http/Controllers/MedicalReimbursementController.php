@@ -241,13 +241,14 @@ class MedicalReimbursementController extends Controller
      */
     public function store(Request $request)
     {
-        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 4, (string) $request->date);
-        if ($dateError) {
-            return redirect()->back()->withInput()->withErrors([$dateError]);
-        }
-        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([
+        // Only a full match on tanggal + No Invoice + Nominal counts as a
+        // duplicate (business decision, Sep 2026) -- date-only or
+        // invoice-only reuse is not, on its own, a reason to block.
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceLine(
             \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->no_invoice),
-        ]);
+            (string) $request->date,
+            \App\Support\ExchangeRateParser::parseFloat($request->total_pengajuan ?? '')
+        );
         if ($invoiceError) {
             return redirect()->back()->withInput()->withErrors([$invoiceError]);
         }

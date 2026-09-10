@@ -128,8 +128,17 @@ class EntertaimentReimbursementController extends Controller
      * OCR couldn't read a number (blank never blocks -- see
      * ReceiptOcrVerifier) or when re-saving a row leaves its own
      * already-stored number unchanged.
+     *
+     * Checked by (invoice, event date, amount) rather than invoice number
+     * alone -- the same receipt/invoice can legitimately be split across
+     * several rows of one Entertainment submission (e.g. one receipt, cost
+     * split per attendee), all sharing this submission's header date; only
+     * an exact (invoice, date, amount) repeat is a genuine re-claim. See
+     * ReimbursementDuplicateGuard::invoiceLineAlreadyUsed().
+     *
+     * @param mixed $amountRaw
      */
-    private function guardAgainstDuplicateEntertainmentRowInvoice(?int $excludeDetailId, string $normalizedInvoice): void
+    private function guardAgainstDuplicateEntertainmentRowInvoice(?int $excludeDetailId, string $normalizedInvoice, string $eventDate, $amountRaw): void
     {
         if ($normalizedInvoice === '') {
             return;
@@ -144,7 +153,11 @@ class EntertaimentReimbursementController extends Controller
             }
         }
 
-        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalizedInvoice]);
+        $invoiceError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceLine(
+            $normalizedInvoice,
+            $eventDate,
+            \App\Support\ExchangeRateParser::parseFloat($amountRaw ?? '')
+        );
         if ($invoiceError) {
             throw \Illuminate\Validation\ValidationException::withMessages(['evidence' => [$invoiceError]]);
         }
@@ -377,7 +390,12 @@ class EntertaimentReimbursementController extends Controller
                     ->backfillUncheckedAttachment('reimbursement_entertaiments', $oldDetailId);
             }
 
-            $this->guardAgainstDuplicateEntertainmentRowInvoice($oldDetailId > 0 ? $oldDetailId : null, $extractedInvoice);
+            $this->guardAgainstDuplicateEntertainmentRowInvoice(
+                $oldDetailId > 0 ? $oldDetailId : null,
+                $extractedInvoice,
+                (string) $request->date,
+                $request->amount[$rowIndex] ?? ''
+            );
         }
 
         return [
@@ -653,11 +671,10 @@ class EntertaimentReimbursementController extends Controller
     
     public function store(Request $request)
     {
-        $dateError = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForDate(auth()->id(), 3, (string) $request->date);
-        if ($dateError) {
-            return redirect()->back()->withInput()->withErrors([$dateError]);
-        }
-
+        // No standalone date-only block here -- a duplicate is only flagged
+        // when tanggal + No Invoice + Nominal ALL match an existing claim
+        // (business decision, Sep 2026), which is enforced per row by
+        // guardAgainstDuplicateEntertainmentRowInvoice() below.
         DB::beginTransaction();
         if (isset($_POST['save'])) {
             $status = 0;
