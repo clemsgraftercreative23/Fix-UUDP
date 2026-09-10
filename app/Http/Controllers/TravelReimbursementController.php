@@ -3772,7 +3772,7 @@ class TravelReimbursementController extends Controller
            
 
             
-            if(isset($request->start))
+            if(isset($request->start)) {
                 $data = $data->whereDate('reimbursement.created_at','>=',$request->start);
                 $bdc = $bdc->whereDate('reimbursement.created_at','>=',$request->start);
                 $allowance_bdc = $allowance_bdc->whereDate('reimbursement.created_at','>=',$request->start);
@@ -3798,9 +3798,9 @@ class TravelReimbursementController extends Controller
                 $train_cash = $train_cash->whereDate('reimbursement.created_at','>=',$request->start);
                 $tax_cash = $tax_cash->whereDate('reimbursement.created_at','>=',$request->start);
                 $others_cash = $others_cash->whereDate('reimbursement.created_at','>=',$request->start);
+            }
 
-                
-            if(isset($request->end))
+            if(isset($request->end)) {
                 $data = $data->whereDate('reimbursement.created_at','<=',$request->end);
                 $bdc = $bdc->whereDate('reimbursement.created_at','<=',$request->end);
                 $allowance_bdc = $allowance_bdc->whereDate('reimbursement.created_at','<=',$request->end);
@@ -3826,6 +3826,7 @@ class TravelReimbursementController extends Controller
                 $train_cash = $train_cash->whereDate('reimbursement.created_at','<=',$request->end);
                 $tax_cash = $tax_cash->whereDate('reimbursement.created_at','<=',$request->end);
                 $others_cash = $others_cash->whereDate('reimbursement.created_at','<=',$request->end);
+            }
 
             if(isset($request->status) && $request->status != "" && $request->status != "ALL") {
                 $data = $data->where('reimbursement.status',$request->status);
