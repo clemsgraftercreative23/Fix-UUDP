@@ -1433,6 +1433,8 @@ class TravelReimbursementController extends Controller
                         $meng = 'HR GA';
                     } else if($data->mengetahui_owner=='-') {
                         $meng = 'FINANCE';
+                    } else {
+                        $meng = '';
                     }
                     $button = '<button  class="view btn btn-danger btn-sm">REJECTED '.$meng.'</button>';
                 } else {

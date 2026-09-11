@@ -647,11 +647,13 @@ class DriverReimbursementController extends Controller
                             $meng = 'HR GA';
                         } elseif ($data->mengetahui_owner == '-') {
                             $meng = 'FINANCE';
+                        } else {
+                            $meng = '';
                         }
                         $button = '<button  class="view btn btn-danger btn-sm">REJECTED ' . $meng . '</button>';
                     } elseif ($data->status == 10) {
                         $button = '<button  class="view btn btn-warning btn-sm">DRAFT</button>';
-                    } 
+                    }
 
                     return $button;
                 })
