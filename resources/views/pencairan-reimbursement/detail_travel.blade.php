@@ -201,7 +201,7 @@
                 <tr>
                     <td>{{ optional($dt->costType)->name ?? '-' }}</td>
                     <td>{{$dt->destination}}</td>
-                    <td>{{ $data->remark ?? '' }}</td>
+                    <td>{{ $dt->remarks ?? '' }}</td>
                     <td>{{$dt->currency}}</td>
                     <td>{{$dt->currency}} {{number_format($dt->amount,0,',','.')}}</td>
                     <td>{{number_format($dt->idr_rate,0,',','.')}}</td>

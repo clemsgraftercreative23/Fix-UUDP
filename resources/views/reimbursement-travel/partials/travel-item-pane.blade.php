@@ -88,6 +88,7 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         'id' => '',
         'cost_type_id' => null,
         'destination' => '',
+        'remarks' => '',
         'currency' => '',
         'amount' => 0,
         'idr_rate' => 0,
@@ -220,6 +221,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                 <tr>
                     <th width="200">Cost Type</th>
                     <th width="200">Destination</th>
+                    <th width="200">Remarks</th>
                     <th width="200">Currency</th>
                     <th width="200">Amount</th>
                     <th width="200">IDR Rate</th>
@@ -243,6 +245,9 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                     </td>
                     <td>
                         <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="{{ $rtRow0->destination }}">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="mis. Hotel for 18-20 Aug 2026" value="{{ $rtRow0->remarks ?? '' }}">
                     </td>
                     <td>
                         <select class="form-control currency0 currency-select" name="currency[]" style="width:130%">
@@ -311,6 +316,9 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                     </td>
                     <td>
                         <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="{{$row->destination}}">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="mis. Hotel for 18-20 Aug 2026" value="{{$row->remarks ?? ''}}">
                     </td>
                     <td>
                         <select class="form-control currency{{$key}} currency-select" name="currency[]" style="width:130%">
@@ -382,6 +390,9 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
     </td>
     <td>
         <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="">
+    </td>
+    <td>
+        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="mis. Hotel for 18-20 Aug 2026" value="">
     </td>
     <td>
         <select class="form-control currency__IDX__ currency-select" name="currency[]" style="width:130%">

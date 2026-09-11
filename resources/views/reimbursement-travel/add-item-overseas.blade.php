@@ -624,6 +624,7 @@ $(document).ready(function(){
         var rate = getTripRateForCurrency(currency);
         var val = roundIdrForPayment(amount * (currency === 'IDR' ? 1 : rate), paymentType);
         $tr.find('input[name="idr_rate[]"]').val(formatTravelIdrMoney(val, paymentType));
+        warnLargeTravelAmountForElement($tr.find('input[name="amount[]"]'), val, paymentType);
         if (cost_type == 3) {
             $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(val * 2 / 100, paymentType));
         } else {

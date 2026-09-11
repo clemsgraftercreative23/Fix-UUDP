@@ -98,6 +98,56 @@
     return formatTravelIdrMoney(num, hasBdc ? 'BDC' : 'Cash');
   }
 
+  /**
+   * Sekedar peringatan non-blocking untuk nominal satu baris biaya yang
+   * tidak wajar (mis. salah ketik kelebihan angka nol). TIDAK menolak/
+   * memblokir penyimpanan dan TIDAK dibandingkan ke hasil baca struk
+   * (fitur amount-vs-OCR sudah sengaja dihapus, lihat memori proyek).
+   */
+  var LARGE_TRAVEL_AMOUNT_IDR = 50000000;
+  var largeTravelAmountWarnState = {};
+
+  function checkLargeTravelAmount(key, idrValue) {
+    var suspicious = Number(idrValue) >= LARGE_TRAVEL_AMOUNT_IDR;
+    if (suspicious && !largeTravelAmountWarnState[key]) {
+      largeTravelAmountWarnState[key] = true;
+      return true;
+    }
+    if (!suspicious) {
+      largeTravelAmountWarnState[key] = false;
+    }
+    return false;
+  }
+
+  function warnLargeTravelAmount(key, idrValue, paymentType) {
+    if (!checkLargeTravelAmount(key, idrValue)) {
+      return;
+    }
+    window.alert(
+      'Nominal Rp ' + formatTravelIdrMoney(idrValue, paymentType) +
+      ' pada baris biaya ini terlihat sangat besar. Mohon dicek kembali, ' +
+      'siapa tahu ada kelebihan angka nol saat mengetik.'
+    );
+  }
+
+  /** Sama seperti warnLargeTravelAmount, tapi status "sudah diperingatkan" disimpan di elemen jQuery-nya sendiri (tidak perlu key unik). */
+  function warnLargeTravelAmountForElement($el, idrValue, paymentType) {
+    if (!$el || !$el.length) {
+      return;
+    }
+    var suspicious = Number(idrValue) >= LARGE_TRAVEL_AMOUNT_IDR;
+    if (suspicious && !$el.data('largeAmountWarned')) {
+      $el.data('largeAmountWarned', true);
+      window.alert(
+        'Nominal Rp ' + formatTravelIdrMoney(idrValue, paymentType) +
+        ' pada baris biaya ini terlihat sangat besar. Mohon dicek kembali, ' +
+        'siapa tahu ada kelebihan angka nol saat mengetik.'
+      );
+    } else if (!suspicious) {
+      $el.data('largeAmountWarned', false);
+    }
+  }
+
   global.isBdcPayment = isBdcPayment;
   global.roundIdrForPayment = roundIdrForPayment;
   global.formatTravelIdrMoney = formatTravelIdrMoney;
@@ -106,4 +156,7 @@
   global.getPaymentTypeFromRow = getPaymentTypeFromRow;
   global.scopeHasBdcPayment = scopeHasBdcPayment;
   global.formatTravelDayTotal = formatTravelDayTotal;
+  global.checkLargeTravelAmount = checkLargeTravelAmount;
+  global.warnLargeTravelAmount = warnLargeTravelAmount;
+  global.warnLargeTravelAmountForElement = warnLargeTravelAmountForElement;
 })(typeof window !== 'undefined' ? window : this);

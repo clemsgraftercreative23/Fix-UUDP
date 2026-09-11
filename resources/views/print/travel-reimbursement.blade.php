@@ -311,7 +311,7 @@
             <tr>
                 <td colspan="3" class="cell-cost-type">{{ optional($dt->costType)->name ?? '-' }}</td>
                 <td colspan="3" class="cell-destination">{{$dt->destination}}</td>
-                <td colspan="2" class="cell-remarks">{{ $data->remark ?? '' }}</td>
+                <td colspan="2" class="cell-remarks">{{ $dt->remarks ?? '' }}</td>
                 <td>{{$dt->currency}}</td>
                 <td align="right">{{ number_format((float) $dt->amount, 2, ',', '.') }}</td>
                 <td align="right">{{ number_format((float) $dt->idr_rate, 2, ',', '.') }}</td>

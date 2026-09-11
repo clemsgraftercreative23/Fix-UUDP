@@ -239,6 +239,7 @@
                                             <thead style="width: 100%;">
                                                 <tr>
                                                     <th width="200">Cost Type</th>
+                                                    <th>Destination</th>
                                                     <th>Remarks</th>
                                                     <th>Currency</th>
                                                     <th>Amount</th>
@@ -262,6 +263,9 @@
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control destination-input" :name="'reimburse['+i+'][detail]['+a+'][destination]'" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control remarks-input" placeholder="mis. Hotel for 18-20 Aug 2026" :name="'reimburse['+i+'][detail]['+a+'][remarks]'" />
                                                     </td>
                                                     <td>
                                                         <select :name="'reimburse['+i+'][detail]['+a+'][currency]'" class="form-control currency-select" id="" v-model="dt.currency" required>
@@ -963,6 +967,7 @@ $(document).ready(function(){
                 const idrVal = roundIdrForPayment(this.getRate(currency, amount), paymentType)
                 this.reimburses[i].details[a].idr_rate = this.formatIdrForPayment(idrVal, paymentType)
                 this.reimburses[i].details[a].tax = this.formatIdrForPayment(idrVal * tax / 100, paymentType)
+                warnLargeTravelAmount('reimburse-' + i + '-' + a, idrVal, paymentType)
                 const hasBdc = (this.reimburses[i].details || []).some(function (d) {
                     return isBdcPayment(d.payment_type);
                 });

@@ -173,6 +173,7 @@ function rupiah($angka){
                                         <tr>
                                             <th width="200">Cost Type</th>
                                             <th width="200">Destination</th>
+                                            <th width="200">Remarks</th>
                                             <th width="200">Currency</th>
                                             <th width="200">Amount</th>
                                             <th width="200">IDR Rate</th>
@@ -195,6 +196,9 @@ function rupiah($angka){
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control" name="destination[]" value="{{$travel_detail['0']->destination}}">
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control remarks-input" name="remarks[]" placeholder="mis. Hotel for 18-20 Aug 2026" value="{{$travel_detail['0']->remarks ?? ''}}">
                                             </td>
                                             <td>
                                                 <select class="form-control currency0" name="currency[]" style="width:130%">
@@ -251,6 +255,9 @@ function rupiah($angka){
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control" name="destination[]" value="{{$row->destination}}">
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control remarks-input" name="remarks[]" placeholder="mis. Hotel for 18-20 Aug 2026" value="{{$row->remarks ?? ''}}">
                                             </td>
                                             <td>
                                                 <select class="form-control currency{{$key}}" name="currency[]" style="width:130%">
@@ -600,7 +607,7 @@ $(document).ready(function(){
         count++;
         if($('body').find('.fieldGroupDetail').length < maxGroup){
          
-          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Select...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><select class="form-control currency'+count+'" name="currency[]" style="width:130%"><option value="">Select...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><button type="button" data-idx="1" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="1" class="btn btn-success btn-sm addCamera" ><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none; " class="file-input"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"><div id="preview_1"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Select...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><input type="text" class="form-control remarks-input" name="remarks[]"></td><td><select class="form-control currency'+count+'" name="currency[]" style="width:130%"><option value="">Select...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><button type="button" data-idx="1" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="1" class="btn btn-success btn-sm addCamera" ><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none; " class="file-input"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"><div id="preview_1"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
           $('body').find('.fieldGroupDetail:last').after(fieldHTML);
           $('.currency').not('input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input[name="amount[]"]').mask("#.##0", {
               reverse: true

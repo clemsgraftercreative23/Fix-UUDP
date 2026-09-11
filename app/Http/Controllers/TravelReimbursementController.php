@@ -1623,6 +1623,7 @@ class TravelReimbursementController extends Controller
                         'reimbursement_id' => $data->id,
                         'reimbursement_travel_id' => $dt->id,
                         'destination' => $v['destination'],
+                        'remarks' => $v['remarks'] ?? null,
                         'payment_type' => $v['payment_type'],
                         'cost_type_id' => $v['cost_type_id'],
                         'currency' => $currencyCode,
@@ -1971,6 +1972,7 @@ class TravelReimbursementController extends Controller
                 $new->reimbursement_travel_id = $id_detail;
                 $new->cost_type_id = (int) $costTypeId;
                 $new->destination = $request->destination[$i] ?? '';
+                $new->remarks = $request->remarks[$i] ?? null;
                 $new->payment_type = $request->payment_type[$i] ?? '';
                 $new->no_invoice = $extractedInvoice;
                 $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
@@ -2586,6 +2588,7 @@ class TravelReimbursementController extends Controller
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i] ?? '';
+            $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->no_invoice = $extractedInvoice;
             $new->currency = $request->currency[$i] ?? '';
@@ -2875,6 +2878,7 @@ class TravelReimbursementController extends Controller
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i] ?? '';
+            $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->no_invoice = $extractedInvoice;
             $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
@@ -3141,6 +3145,7 @@ class TravelReimbursementController extends Controller
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i] ?? '';
+            $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->no_invoice = $extractedInvoice;
             $new->currency = $request->currency[$i] ?? '';
@@ -3398,6 +3403,7 @@ class TravelReimbursementController extends Controller
             $new->reimbursement_travel_id = $id_detail;
             $new->cost_type_id = (int) $costTypeId;
             $new->destination = $request->destination[$i] ?? '';
+            $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
             $new->no_invoice = $extractedInvoice;
             $new->currency = $request->currency[$i] ?? '';
@@ -4372,6 +4378,7 @@ class TravelReimbursementController extends Controller
                     $payloadDetail = [
                         'reimbursement_travel_id' => $dt->id,
                         'destination' => $v['destination'],
+                        'remarks' => $v['remarks'] ?? null,
                         'payment_type' => $v['payment_type'],
                         'cost_type_id' => $v['cost_type_id'],
                         'currency' => !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR',

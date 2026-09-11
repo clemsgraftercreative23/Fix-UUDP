@@ -584,6 +584,7 @@ $(document).ready(function(){
         var rate = getTripRateForCurrency(currency);
         var val = roundIdrForPayment(amount * (currency === 'IDR' ? 1 : rate), paymentType);
         $tr.find('input[name="idr_rate[]"]').val(formatTravelIdrMoney(val, paymentType));
+        warnLargeTravelAmountForElement($tr.find('input[name="amount[]"]'), val, paymentType);
         if (cost_type == 3) {
             $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(val * 2 / 100, paymentType));
         } else {
@@ -913,6 +914,7 @@ $(document).ready(function(){
              $row.find('input[name="id_detail[]"]').val('');
              $row.find('select[name="cost_type_id[]"]').val('');
              $row.find('input[name="destination[]"]').val('');
+             $row.find('input[name="remarks[]"]').val('');
              $row.find('select[name="currency[]"]').val('');
              $row.find('input[name="amount[]"]').val('');
              $row.find('input[name="idr_rate[]"]').val('');

@@ -310,7 +310,7 @@ if (!function_exists('travel_attachment_cache_bust')) {
                 <tr>
                     <td>{{$dt->costType->name}}</td>
                     <td>{{$dt->destination}}</td>
-                    <td>{{ $data->remark ?? '' }}</td>
+                    <td>{{ $dt->remarks ?? '' }}</td>
                     <td>{{$dt->no_invoice}}</td>
                     <td>{{$dt->currency}}</td>
                     <td>{{$dt->currency}} {{ travel_detail_idr($dt->amount) }}</td>
