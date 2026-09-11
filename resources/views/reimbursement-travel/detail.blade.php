@@ -220,7 +220,7 @@ if (!function_exists('travel_attachment_cache_bust')) {
                         </div>
                         <div class="form-row mt-2">
                             <div class="form-group col-md-12 mb-0">
-                                <label for="travel_detail_summary_remarks">Remarks</label>
+                                <label for="travel_detail_summary_remarks">Purpose Trip</label>
                                 <input type="text" id="travel_detail_summary_remarks" class="form-control" value="{{ $data->remark ?? '' }}" readonly>
                             </div>
                         </div>
@@ -604,7 +604,7 @@ if (!function_exists('travel_attachment_cache_bust')) {
 
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="remark">Remark</label>
+                                <label for="remark">Purpose Trip</label>
                                 <input type="text" class="form-control" name="remark_parent" id="remark" style="border-radius: 10px;" value="{{ $data->remark }}">
                             </div>
                         </div>

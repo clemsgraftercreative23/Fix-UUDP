@@ -195,7 +195,7 @@ function rate_input($angka){
                                 <input type="text" class="form-control" name="remark" value="{{ date('d F Y', strtotime($data['0']->created_at)) }}" readonly>
                             </div> 
                             <div class="col-md-3">
-                                <label for="">Remark</label>
+                                <label for="">Purpose Trip</label>
                                 <input type="text" class="form-control" name="remark" value="{{$data['0']->remark}}">
                             </div>   
                             <div class="col-md-3">

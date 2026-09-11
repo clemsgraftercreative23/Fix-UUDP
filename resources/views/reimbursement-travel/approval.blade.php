@@ -197,7 +197,7 @@
                   
                   <div class="col-md-6">
                     <div class="form-group">
-                      <label for="exampleFormControlInput1">Remark</label>
+                      <label for="exampleFormControlInput1">Purpose Trip</label>
                       <input type="text" class="form-control date-picker" name="remark_parent" id="exampleFormControlInput1" style="border-radius: 10px;" value="">
                     </div>
                   </div>

@@ -126,7 +126,7 @@
                         </div>
                         <div class="form-row mt-2">
                             <div class="form-group col-md-12 mb-0">
-                                <label for="travel_detail_summary_remarks">Remarks</label>
+                                <label for="travel_detail_summary_remarks">Purpose Trip</label>
                                 <input type="text" id="travel_detail_summary_remarks" class="form-control" value="{{ $data->remark ?? '' }}" readonly>
                             </div>
                         </div>

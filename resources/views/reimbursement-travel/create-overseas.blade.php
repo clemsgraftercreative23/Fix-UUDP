@@ -119,7 +119,7 @@
                                     <input type="text" class="form-control" readonly value="{{date('d F Y')}}" />
                                 </div>
                                 <div class="col-md-3">
-                                    <label for="">Remark</label>
+                                    <label for="">Purpose Trip</label>
                                     <input type="text" class="form-control" name="remark" value="" required />
                                 </div>
                                 <div class="col-md-3">
