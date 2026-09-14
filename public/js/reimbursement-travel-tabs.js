@@ -1099,7 +1099,7 @@
 
   function initMaskMoney($pane) {
     if (!$pane || !$pane.length || !$.fn.maskMoney) return;
-    // amount[]: integer tanpa pemisah ribuan; allowance: 2 desimal; lainnya: precision 0 dengan titik ribuan.
+    // amount[]: 2 desimal dengan titik ribuan (sesuai nominal di bukti/invoice); allowance: 2 desimal; lainnya: precision 0 dengan titik ribuan.
     var $allCurrency = $pane.find('.currency');
     var $excluded = $allCurrency.filter(
       'input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input.exchange-rate-input[name="rate[]"]'
@@ -1113,7 +1113,7 @@
       });
     } catch (e) { /* not initialized */ }
     var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
-    var optsAmountInt = { thousands: '', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
+    var optsAmountInt = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
     var opts0 = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
     var $allowanceOnly = $maskSrc.filter('input[name="allowance"]');
     var $amountOnly = $maskSrc.filter('input[name="amount[]"]');
