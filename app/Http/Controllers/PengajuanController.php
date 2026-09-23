@@ -554,34 +554,15 @@ class PengajuanController extends Controller
           ['status' => 1]
         );
         $user = \App\User::where('id',$dt->id_user)->first();
-        $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders([
-                        'Authorization: ' . config('services.fonnte.token')
-                    ])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima Head Department.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                    ])
-                    ->post();
+        FonnteMessenger::send($user->phoneNumber, "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima Head Department.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Finance.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_headdept_submitter']);
 
         $dirops = \App\User::where('jabatan','Finance')->get();
 
         foreach ($dirops as $value) {
-          
-          $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders([
-                      'Authorization: ' . config('services.fonnte.token')
-                  ])
-                  ->withData([
-                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
-                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                  ])
-                  ->post();
-
+          FonnteMessenger::send($value->phoneNumber, "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_headdept_finance']);
         }
-        
 
         return response()->json(['success' => 'Data is successfully updated']);
 
@@ -622,32 +603,14 @@ class PengajuanController extends Controller
           ['status' => 2]
         );
         $user = \App\User::where('id',$dt->id_user)->first();
-        $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders([
-                        'Authorization: ' . config('services.fonnte.token')
-                    ])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Supervisor.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                    ])
-                    ->post();
+        FonnteMessenger::send($user->phoneNumber, "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Supervisor.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_finance_submitter']);
 
         $dirops = $financeSupervisor;
 
         foreach ($dirops as $value) {
-          
-          $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders([
-                      'Authorization: ' . config('services.fonnte.token')
-                  ])
-                  ->withData([
-                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
-                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                  ])
-                  ->post();
-
+          FonnteMessenger::send($value->phoneNumber, "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh HR GA.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_finance_supervisor']);
         }
         return response()->json(['success' => 'Data is successfully updated']);
 
@@ -684,28 +647,12 @@ class PengajuanController extends Controller
           ['status' => 3]
         );
         $user = \App\User::where('id',$dt->id_user)->first();
-        $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders([
-                        'Authorization: ' . config('services.fonnte.token')
-                    ])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Manager.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                    ])
-                    ->post();
+        FonnteMessenger::send($user->phoneNumber, "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Finance Manager.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_financesupervisor_submitter']);
 
         foreach ($financeManager as $value) {
-          $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders([
-                      'Authorization: ' . config('services.fonnte.token')
-                  ])
-                  ->withData([
-                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
-                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                  ])
-                  ->post();
+          FonnteMessenger::send($value->phoneNumber, "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance Supervisor.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_financesupervisor_manager']);
         }
 
         return response()->json(['success' => 'Data is successfully updated']);
@@ -757,32 +704,14 @@ class PengajuanController extends Controller
           ['status' => 4]
         );
         $user = \App\User::where('id',$dt->id_user)->first();
-        $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders([
-                        'Authorization: ' . config('services.fonnte.token')
-                    ])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
-                        'message' => "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance.\n\nSaat ini sedang menunggu Proses Pencairan Finance.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                    ])
-                    ->post();
+        FonnteMessenger::send($user->phoneNumber, "Hai *".$user->name."*,\n\nPengajuan Anda dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima oleh Finance.\n\nSaat ini sedang menunggu Proses Pencairan Finance.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_owner_submitter']);
 
         $dirops = \App\User::where('jabatan','Finance')->get();
 
         foreach ($dirops as $value) {
-          
-          $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders([
-                      'Authorization: ' . config('services.fonnte.token')
-                  ])
-                  ->withData([
-                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
-                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima Direktur Utama.\n\nSilahkan lanjutkan proses pencairan.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                  ])
-                  ->post();
-
+          FonnteMessenger::send($value->phoneNumber, "Hai *".$value->name."*,\n\nPengajuan dengan *".$dt->no_pengajuan."* sebesar *Rp ".number_format($dt->nominal_pengajuan,0,',','.')."* telah diterima Direktur Utama.\n\nSilahkan lanjutkan proses pencairan.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_approve_owner_finance']);
         }
         return response()->json(['success' => 'Data is successfully updated']);
 
@@ -844,35 +773,16 @@ class PengajuanController extends Controller
           ['status' => 0]
         );
 
-        $curl = \Curl::to('https://api.fonnte.com/send')
-                    ->withHeaders([
-                        'Authorization: ' . config('services.fonnte.token')
-                    ])
-                    ->withData([
-                        'target' => FonnteMessenger::normalizePhone(auth()->user()->phoneNumber),
-                        'message' => "Hai *".auth()->user()->name."*,\n\nPengajuan Anda dengan *".$pengajuan->no_pengajuan."* sebesar *Rp ".number_format($pengajuan->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Head Department.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                        // 'message' => "Pengajuan ".$pengajuan->no_pengajuan." telah diterima dan sedang proses verifikasi Direktur Operasional"
-                    ])
-                    ->post();
-        
+        FonnteMessenger::send(auth()->user()->phoneNumber, "Hai *".auth()->user()->name."*,\n\nPengajuan Anda dengan *".$pengajuan->no_pengajuan."* sebesar *Rp ".number_format($pengajuan->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Head Department.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_store_submitter']);
+
         $dirops = \App\User::where('jabatan','Direktur Operasional')->get();
 
         foreach ($dirops as $value) {
-          
-          $curl = \Curl::to('https://api.fonnte.com/send')
-                  ->withHeaders([
-                      'Authorization: ' . config('services.fonnte.token')
-                  ])
-                  ->withData([
-                      'target' => FonnteMessenger::normalizePhone($value->phoneNumber),
-                      'message' => "Hai *".$value->name."*,\n\nPengajuan dengan *".$pengajuan->no_pengajuan."* sebesar *Rp ".number_format($pengajuan->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
-\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan')
-                  ])
-                  ->post();
-
+          FonnteMessenger::send($value->phoneNumber, "Hai *".$value->name."*,\n\nPengajuan dengan *".$pengajuan->no_pengajuan."* sebesar *Rp ".number_format($pengajuan->nominal_pengajuan,0,',','.')."* telah diterima.\n\nSaat ini sedang menunggu Proses Verifikasi Anda.\n\nTerima kasih.
+\n\nKlik untuk melihat detail pengajuan : ".url('/pengajuan'), ['channel' => 'pengajuan_store_dirops']);
         }
-        
+
         return response()->json(['success' => 'Data Added successfully.']);
 
       }
