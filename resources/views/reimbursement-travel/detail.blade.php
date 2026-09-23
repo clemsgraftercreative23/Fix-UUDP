@@ -83,7 +83,7 @@ if (!function_exists('travel_attachment_cache_bust')) {
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">DETAIL REIMBURSEMENT TRAVEL {{$data->travel_type}}</h5><hr>
-                        <p>Below is the reimbursement data submitted by <b>{{$data->user->name}}</b>.</p>
+                        <p>Below is the reimbursement data submitted by <b>{{ optional($data->user)->name ?? 'Unknown User' }}</b>.</p>
                         @php
                           $isOwnSubmission = (int) auth()->id() === (int) $data->id_user;
                           $isAssignedHeadDept = auth()->user()->isHeadDeptApproverForSubmitter((int) $data->id_user);
