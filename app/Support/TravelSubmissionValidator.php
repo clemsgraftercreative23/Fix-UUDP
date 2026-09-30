@@ -34,6 +34,9 @@ class TravelSubmissionValidator
 
         foreach ($legs as $legIndex => $leg) {
             $legNumber = $legIndex + 1;
+            if (self::isExpenseFreeLeg((array) $leg, $legIndex)) {
+                continue;
+            }
             $details = (array) ($leg['detail'] ?? []);
             $hasDetail = false;
 
@@ -56,5 +59,33 @@ class TravelSubmissionValidator
         }
 
         return $errors;
+    }
+
+    /**
+     * Days that legitimately claim no expense -- Travel Allowance only via a
+     * refer to an earlier day, the single-day allowance-only option, or a
+     * same-trip co-traveler reference -- are exempt from the "at least one
+     * complete detail row" requirement. An invalid refer (non-numeric or not
+     * pointing at an earlier day) is NOT exempt and falls through to the
+     * normal requirement. A same-trip reference_invoice is only exempted
+     * from THIS check; whether that invoice actually exists is still
+     * verified downstream by resolveReferencedRowInvoice().
+     */
+    private static function isExpenseFreeLeg(array $leg, $legIndex): bool
+    {
+        if (!empty($leg['allowance_only'])) {
+            return true;
+        }
+
+        $referDay = $leg['refer_day'] ?? null;
+        if ($referDay !== null && $referDay !== '' && is_numeric($referDay) && (int) $referDay < (int) $legIndex) {
+            return true;
+        }
+
+        if (trim((string) ($leg['reference_invoice'] ?? '')) !== '') {
+            return true;
+        }
+
+        return false;
     }
 }

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[SIMULASI] Travel Same-Trip — Legitimate Duplicate saat Upload Invoice</title>
+<link href="../assets/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<link href="../assets/plugins/font-awesome/css/all.min.css" rel="stylesheet">
+<link href="../assets/css/custom.css" rel="stylesheet">
+<style>
+    body { padding: 24px; background: #f4f6f8; }
+    .sim-banner {
+        background: #fff3cd; border: 1px solid #ffe08a; color: #7a5b00;
+        padding: 10px 16px; border-radius: 6px; margin-bottom: 18px; font-size: 13px;
+    }
+    .sim-banner b { color: #5c4400; }
+    .row { margin-left: -12px; margin-right: -12px; }
+    .row > [class*="col-"] { padding-left: 12px; padding-right: 12px; margin-bottom: 18px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    table td, table th { padding: 10px 8px !important; vertical-align: middle; }
+    table td > * + * { margin-top: 4px; }
+    .file-proof .btn { margin-right: 4px; }
+    .card { border: 1px solid #e2e5ea; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    .card-header { background: #eef3ff; border-bottom: 1px solid #dde3ea; font-weight: 700; color: #0a58ca; }
+
+    .context-card { background: #f8fafc; border-left: 4px solid #0a58ca; }
+    .ticket-badge {
+        display: inline-block; background: #0a58ca; color: #fff; font-size: 11px; font-weight: 700;
+        border-radius: 4px; padding: 2px 8px; margin-right: 6px;
+    }
+    .step-mini {
+        font-size: 12px; border: 1px solid #e2e5ea; border-radius: 6px; padding: 8px 12px;
+        margin-bottom: 8px; background: #fff;
+    }
+    .step-mini .day-tag { font-weight: 700; color: #0a58ca; }
+    .step-mini .ok-tag { color: #0e8a4b; font-weight: 700; }
+    .ref-badge {
+        background: #e6f7ef; border: 1px solid #bfe6c8; color: #0e8a4b;
+        border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700;
+    }
+    .inv-blue-tag { font-size: 11px; color: #2b4bd8; background: #e7ecff; border-radius: 4px; padding: 2px 7px; font-weight: 700; }
+
+    input[readonly] { background: #f1f3f5 !important; }
+    .uploaded-file {
+        margin-top: 6px; font-size: 11.5px; color: #14562b;
+        background: #e9f8ee; border: 1px solid #bfe6c8; border-radius: 4px;
+        padding: 3px 8px; display: inline-block; white-space: nowrap;
+    }
+    .uploaded-file .uploaded-badge { color: #1e7e34; font-weight: 700; }
+    .uploaded-file.referenced { background: #eef3ff; border-color: #c9d8ff; color: #0a58ca; }
+    .uploaded-file.referenced .uploaded-badge { color: #0a58ca; }
+
+    .multi-day-section { margin-top: 18px; display: none; }
+    .multi-day-section.show { display: block; }
+    .multi-day-heading { font-weight: 800; font-size: 15px; color: #0a58ca; margin-bottom: 12px; }
+    #multi-day-panels {
+        display: flex; flex-direction: row; gap: 16px;
+        overflow-x: auto; padding-bottom: 10px; align-items: flex-start;
+    }
+    .day-panel {
+        flex: 0 0 540px; background: #fff; border: 1px solid #e2e5ea; border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .day-panel-head {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 10px 14px; cursor: pointer; user-select: none;
+        background: #eef3ff; border-bottom: 1px solid #dde3ea; border-radius: 6px 6px 0 0;
+    }
+    .day-panel-head h6 { margin: 0; color: #0a58ca; }
+    .day-panel-head .day-date-label { font-size: 12px; color: #666; font-weight: 400; }
+    .day-panel-head .caret { color: #0a58ca; transition: transform .2s ease; }
+    .day-panel.collapsed .day-panel-head .caret { transform: rotate(-90deg); }
+    .day-panel-body { padding: 14px; }
+    .day-panel.collapsed .day-panel-body { display: none; }
+    .day-panel .ref-note { font-size: 11px; color: #888; margin-bottom: 10px; }
+    .inv-ref-badge {
+        background: #fff8e6; border: 1px solid #f2d98d; border-left: 4px solid #e0a800;
+        border-radius: 4px; padding: 8px 12px; font-size: 12px; margin-bottom: 10px; color: #6b4d00;
+    }
+    .inv-ref-badge .inv-arrow { color: #b8860b; margin: 0 4px; }
+    .expense-locked td { background: #f0f1f4 !important; }
+    .expense-locked .form-control[disabled], .expense-locked select[disabled] {
+        background: #e3e5ea !important; color: #9a9da5; cursor: not-allowed;
+    }
+    .allowance-locked td { background: #eef9f2 !important; }
+    .allowance-locked .form-control[disabled], .allowance-locked select[disabled] {
+        background: #e0ece2 !important; color: #7c8c80; cursor: not-allowed;
+    }
+
+    .sim-modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
+        z-index: 1000; align-items: center; justify-content: center;
+    }
+    .sim-modal-overlay.show { display: flex; }
+    .sim-modal-box {
+        background: #fff; border-radius: 8px; padding: 28px 30px; max-width: 520px;
+        text-align: center; box-shadow: 0 12px 34px rgba(0,0,0,.25);
+    }
+    .sim-modal-icon { font-size: 38px; margin-bottom: 6px; }
+    .sim-modal-box h5 { color: #0a58ca; margin-bottom: 10px; font-weight: 700; }
+    .sim-modal-box p { font-size: 13px; color: #333; }
+    .modal-src-detail {
+        background: #eef3ff; border: 1px solid #c9d8ff; border-radius: 6px;
+        text-align: left; padding: 10px 12px; font-size: 12.5px; margin: 10px 0;
+    }
+    .modal-src-detail table { margin: 0; width: 100%; }
+    .modal-src-detail td { padding: 3px 6px !important; border: none !important; }
+    .modal-src-detail td:first-child { color: #2b4bd8; width: 150px; }
+    .sim-modal-actions { margin-top: 16px; display: flex; justify-content: center; gap: 10px; }
+    .sim-modal-note {
+        font-size: 11.5px; color: #6b4d00; background: #fff8e6; border: 1px solid #f2d98d;
+        border-radius: 4px; padding: 8px 10px; margin-top: 14px; text-align: left;
+    }
+    .allowance-result-line {
+        margin-top: 10px; font-size: 13px; color: #0e8a4b; background: #eef9f2;
+        border: 1px solid #bfe6c8; border-radius: 6px; padding: 8px 12px;
+    }
+    .hint-empty { color: #888; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="sim-banner">
+        <b>SIMULASI / PROTOTIPE — bukan halaman produksi.</b>
+        Simulasi <b>Same Trip (Legitimate Duplicate)</b> — <b>TIDAK ada</b> input "Trip ID" atau kolom "ticket sendiri".
+        Alurnya persis seperti eksisting: User mengklaim seperti biasa (multi-day, refer ke Day 1 seperti sistem sekarang).
+        Yang baru: saat <b>upload invoice</b> yang ternyata sudah diajukan user lain pada trip/perjalanan yang sama,
+        muncul popup <b>legitimate duplicate</b> untuk konfirmasi pemakaian hanya untuk <b>Allowance Travel</b>.
+    </div>
+
+    <!-- ===== Konteks: User A sudah claim ===== -->
+    <div class="card context-card" style="margin-bottom:18px">
+        <div class="card-header"><i class="fa fa-check-circle"></i> Konteks — User A sudah mengajukan claim (eksisting)</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label>Ticket UUDP</label>
+                    <div><span class="ticket-badge">T-01220</span> <span class="inv-blue-tag">User A (Andi)</span></div>
+                </div>
+                <div class="col-md-8">
+                    <label>Isi claim User A (sudah approved)</label>
+<div class="step-mini">
+                <span class="day-tag">Day 1</span> — Travel Allowance IDR 500.000 +
+                Expense <b>Hotel</b> (invoice <span class="inv-blue-tag">INV-HTL-1001</span> — Rp 1.000.000; sudah diklaim &amp; approved)
+            </div>
+            <div class="step-mini">
+                <span class="day-tag">Day 2</span> — <span class="ref-badge"><i class="fa fa-link"></i> Refer ke Day 1</span>
+                <span class="ok-tag">(hanya dapat Allowance Travel — Rp 500.000, tanpa expense)</span>
+            </div>
+            <div class="step-mini">
+                <span class="day-tag">Day 3</span> — <span class="ref-badge"><i class="fa fa-link"></i> Refer ke Day 1</span>
+                <span class="ok-tag">(hanya dapat Allowance Travel — Rp 500.000, tanpa expense)</span>
+            </div>
+            <div class="step-mini" style="margin-top:6px">
+                <b>Total klaim User A:</b> Allowance 1.500.000 (3 hari) + Hotel 1.000.000 =
+                <b><span class="ok-tag">Rp 2.500.000</span></b>
+            </div>
+            <div class="hint-empty">Ini persis perilaku sistem multi-day yang sudah ada — alur berkelanjutan; User B juga memakai skema yang sama.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== User B: form persis eksisting ===== -->
+    <div class="card">
+        <div class="card-header"><i class="fa fa-user-circle"></i> User B — Klaim Travel (form sama persis eksisting)</div>
+        <div class="card-body">
+            <form onsubmit="return false;">
+            <div class="row">
+                <div class="col-md-3">
+                    <label>Transaction Date (From)</label>
+                    <input type="date" class="form-control" value="2026-09-18" id="tx-date-from">
+                </div>
+                <div class="col-md-3">
+                    <label>Transaction Date (To)</label>
+                    <input type="date" class="form-control" value="2026-09-20" id="tx-date-to">
+                    <div class="hint-empty" id="tx-range-hint">18 Sep 2026 → 20 Sep 2026 (3 hari)</div>
+                </div>
+                <div class="col-md-3">
+                    <label>Purpose</label>
+                    <input type="text" class="form-control" value="Client visit bersama - Surabaya">
+                </div>
+                <div class="col-md-3">
+                    <label>Trip Type</label>
+                    <select class="form-control" id="trip_type_select">
+                        <option value="Domestic" selected>Domestic</option>
+                        <option value="Overseas">Overseas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label>Hotel</label>
+                    <select class="form-control">
+                        <option value="1" selected>Provided</option>
+                        <option value="2">Not Provided</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label>Start</label>
+                    <input type="time" class="form-control" value="08:00">
+                </div>
+                <div class="col-md-3">
+                    <label>Arrival</label>
+                    <input type="time" class="form-control" value="17:00">
+                </div>
+                <div class="col-md-3">
+                    <label>Allowance (auto dari Trip Type)</label>
+                    <input type="text" class="form-control" value="500.000,00" readonly>
+                    <div class="hint-empty" style="margin-top:3px">× 3 hari = Rp 1.500.000 (bila trip 3 hari)</div>
+                </div>
+                <div class="col-md-3">
+                    <label>Travel Times</label>
+                    <input type="text" class="form-control" value="9 Hour and 0 Minutes" readonly>
+                </div>
+            </div>
+            <hr>
+
+            <h6>Day 1 <span class="day-date-label" id="day1-date-label"></span></h6>
+            <div style="overflow-x:auto">
+                <table class="table full-width" style="width:100%;white-space:nowrap;">
+                    <thead>
+                        <tr>
+                            <th width="200">Cost Type</th>
+                            <th width="200">Destination</th>
+                            <th width="220">Remarks</th>
+                            <th width="200">Currency</th>
+                            <th width="200">Amount</th>
+                            <th width="200">IDR Rate</th>
+                            <th width="200">Pph23</th>
+                            <th width="200">Payment</th>
+                            <th width="220">File / OCR</th>
+                            <th width="150">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="day1-tbody">
+                        <tr class="expense-row allowance-locked">
+                            <td>
+                                <select class="form-control cost-type-select" disabled>
+                                    <option value="">Select...</option>
+                                    <option value="1">Hotel</option>
+                                    <option value="2">Transport</option>
+                                    <option value="3">Meal</option>
+                                </select>
+                            </td>
+                            <td><input type="text" class="form-control destination-input" disabled placeholder="-" value=""></td>
+                            <td><input type="text" class="form-control remarks-input" disabled placeholder="-" value=""></td>
+                            <td>
+                                <select class="form-control currency-select" disabled style="width:130%">
+                                    <option value="IDR" selected>IDR</option>
+                                    <option value="USD">USD</option>
+                                </select>
+                            </td>
+                            <td><input type="text" class="form-control amount-input" disabled value="0,00"></td>
+                            <td><input type="text" class="form-control idr-rate-input" disabled value="1,00"></td>
+                            <td><input type="text" class="form-control" disabled value="0,00"></td>
+                            <td>
+                                <select class="form-control payment-select" disabled style="width:130%">
+                                    <option value="BDC" selected>BDC</option>
+                                    <option value="Cash">Cash</option>
+                                </select>
+                            </td>
+                            <td class="file-proof">
+                                <button type="button" class="btn btn-success btn-sm addFile" title="Upload invoice untuk klaim allowance (same-trip)"><i class="fa fa-upload"></i></button>
+                                <button type="button" class="btn btn-success btn-sm addCamera" title="Upload invoice untuk klaim allowance (same-trip)"><i class="fa fa-camera"></i></button>
+                                <input type="file" accept="image/*,.pdf,application/pdf" style="display:none;" class="file-input">
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-info addMoreDetail" disabled><i class="fa fa-plus"></i></button>
+                                <button type="button" class="btn btn-danger remove-detail" disabled style="margin-left:6px;"><i class="fa fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="hint-empty" style="margin-top:6px">
+                    <i class="fa fa-info-circle"></i> <b>User B hanya mengklaim Travel Allowance</b> — tidak ada expense detail
+                    (baris expense di atas terkunci, Rp 0,00). Invoice yang diupload hanya untuk keperluan allowance.
+                </div>
+            </div>
+
+            <div id="samtrip-banner"></div>
+
+            <div class="multi-day-section" id="multi-day-sections">
+                <div class="multi-day-heading">
+                    <i class="fa fa-calendar-plus"></i> Form Hari Ke-2 s.d. <span id="multi-day-head-end">Ke-3</span>
+                    <span class="day-date-label">(dihitung otomatis — perilaku eksisting)</span>
+                </div>
+                <div id="multi-day-panels"></div>
+            </div>
+
+            <hr>
+            <div class="row">
+                <div class="col-md-3">
+                    <label>Total</label>
+                    <input type="text" class="form-control" value="500.000,00" readonly>
+                </div>
+                <div class="col-md-9">
+                    <br><span class="hint-empty">User B hanya allowance travel (Rp 500.000/hari × 3 hari = Rp 1.500.000) — tidak ada expense. Day 2-3 allowance saja (refer Day 1).</span>
+                </div>
+            </div>
+            <div class="button-container" style="margin-top:8px">
+                <a href="#" class="btn btn-secondary text-right" onclick="return false;"><i class="fa fa-back"></i> Cancel</a>
+                <button type="submit" class="btn btn-primary" disabled>Submit (disabled in simulation)</button>
+            </div>
+            </form>
+        </div>
+    </div>
+
+    <div style="margin-top:14px">
+        <div class="hint-empty">
+            Coba klik tombol <b>upload</b> pada baris Hotel Day 1 (atau tombol demo di bawah) —
+            sistem mendeteksi invoice yang sama sudah dipakai User A pada ticket
+            <b>T-01220</b>, lalu memunculkan popup legitimate duplicate.
+        </div>
+        <button type="button" class="btn btn-outline-primary" id="btn-trigger-popup" style="margin-top:8px">
+            <i class="fa fa-link"></i> Simulasikan Upload INV-HTL-1001 (same-trip duplicate)
+        </button>
+        <span style="margin-left:8px">
+            <button type="button" class="btn btn-outline-secondary" id="btn-allow-only">
+                <i class="fa fa-check"></i> Langsung ke hasil "Allowance Only" (skip popup)
+            </button>
+        </span>
+    </div>
+</div>
+
+<!-- ===== Popup: Legitimate Duplicate / Same Trip ===== -->
+<div class="sim-modal-overlay" id="sim-modal-overlay">
+    <div class="sim-modal-box">
+        <div class="sim-modal-icon">🔗</div>
+        <h5 id="sim-modal-title">Legitimate Duplicate Terdeteksi</h5>
+        <p id="sim-modal-message"></p>
+        <div class="modal-src-detail">
+            <table>
+                <tr><td>No. Invoice</td><td id="dup-ctx-invoice"></td></tr>
+                <tr><td>Pemilik claim</td><td id="dup-ctx-owner"></td></tr>
+                <tr><td>Ticket UUDP</td><td id="dup-ctx-ticket"></td></tr>
+                <tr><td>Sudah diklaim untuk</td><td id="dup-ctx-usage"></td></tr>
+                <tr><td>Konteks</td><td id="dup-ctx-context"></td></tr>
+            </table>
+        </div>
+        <div class="sim-modal-actions">
+            <button type="button" class="btn btn-secondary" id="sim-modal-cancel">Batal</button>
+            <button type="button" class="btn btn-primary" id="sim-modal-continue">Ya, Lanjutkan</button>
+        </div>
+        <div class="sim-modal-note">
+            <i class="fa fa-info-circle"></i> Jika disetujui, invoice ini <b>HANYA</b> dipakai untuk klaim
+            <b>Allowance Travel</b> (bukan expense) dan <b>otomatis tertaut</b> ke claim User A (T-01220)
+            — persis mekanisme referensi yang sudah ada di produksi. Expense detail tetap TIDAK diisi.
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var SAME_TRIP_DUP = {
+        invoice: 'INV-HTL-1001',
+        fileName: 'INV-HTL-1001.pdf',
+        owner: 'User A (Andi)',
+        ticket: 'T-01220',
+        usage: 'Expense Hotel'
+    };
+
+    function addDays(isoDate, days) {
+        var d = new Date(isoDate + 'T00:00:00');
+        d.setDate(d.getDate() + days);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function fmtId(isoDate) {
+        var d = new Date(isoDate + 'T00:00:00');
+        var bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+        return d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear();
+    }
+
+    function dayDiff(fromIso, toIso) {
+        var a = new Date(fromIso + 'T00:00:00');
+        var b = new Date(toIso + 'T00:00:00');
+        return Math.round((b - a) / 86400000);
+    }
+
+    /* ---- Generate Day 2..N sesuai rentang From-To (eksisting: allowance only, refer day 1) ---- */
+    function generateDaySections() {
+        var fromVal = document.getElementById('tx-date-from').value;
+        var toVal = document.getElementById('tx-date-to').value;
+        var container = document.getElementById('multi-day-sections');
+        var panels = document.getElementById('multi-day-panels');
+        var hint = document.getElementById('tx-range-hint');
+        var headEnd = document.getElementById('multi-day-head-end');
+        document.getElementById('day1-date-label').textContent = fromVal ? '(' + fmtId(fromVal) + ')' : '';
+
+        var nDays = 1;
+        if (fromVal && toVal) {
+            nDays = dayDiff(fromVal, toVal) + 1;
+            if (nDays < 1) nDays = 1;
+        }
+        hint.textContent = fromVal && toVal && nDays > 1
+            ? fmtId(fromVal) + ' → ' + fmtId(toVal) + ' (' + nDays + ' hari)'
+            : (fromVal ? fmtId(fromVal) + ' (1 hari)' : '');
+        headEnd.textContent = 'Ke-' + (nDays > 1 ? nDays : 1);
+
+        panels.innerHTML = '';
+        if (!fromVal) { container.classList.remove('show'); return; }
+        container.classList.add('show');
+
+        for (var day = 2; day <= nDays; day++) {
+            var dayDate = addDays(fromVal, day - 1);
+            var panel = document.createElement('div');
+            panel.className = 'day-panel collapsed';
+            panel.setAttribute('data-day', day);
+            panel.innerHTML =
+                '<div class="day-panel-head">' +
+                    '<h6>Day ' + day + ' <span class="day-date-label">' + fmtId(dayDate) + '</span></h6>' +
+                    '<span class="caret"><i class="fa fa-chevron-down"></i></span>' +
+                '</div>' +
+                '<div class="day-panel-body">' +
+                    '<div class="ref-note">Merujuk ke Day 1 (' + fmtId(fromVal) + ') — hanya Allowance Travel.</div>' +
+                    '<div class="inv-ref-badge">' +
+                        '<i class="fa fa-link"></i> <b>Refer / Same with Day 1</b>' +
+                        '<div class="expense-locked" style="padding:8px;background:#f0f1f4;border-radius:4px;margin-top:6px;color:#9a9da5">' +
+                            '<i class="fa fa-lock"></i> Detail expense di hari ini terkunci (kebijakan eksisting).' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="row" style="margin-top:10px">' +
+                        '<div class="col-6"><label>Transaction Date</label><input type="date" class="form-control" value="' + dayDate + '" readonly></div>' +
+                        '<div class="col-6"><label>Purpose</label><input type="text" class="form-control" value="Allowance travel (refer Day 1)" readonly></div>' +
+                        '<div class="col-6"><label>Allowance</label><input type="text" class="form-control" value="500.000,00" readonly></div>' +
+                    '</div>' +
+                    '<div class="hint-empty" style="margin-top:8px">Skenario same-trip: hari ini juga otomatis tertaut ke claim User A (T-01220) bila popup disetujui.</div>' +
+                '</div>';
+            panels.appendChild(panel);
+        }
+    }
+
+    document.getElementById('tx-date-from').addEventListener('change', generateDaySections);
+    document.getElementById('tx-date-to').addEventListener('change', generateDaySections);
+
+    /* ---- Toggle panel Day 2+ (collapsible) ---- */
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.day-panel-head')) {
+            var panel = e.target.closest('.day-panel');
+            panel.classList.toggle('collapsed');
+        }
+    });
+
+    /* ---- State: apakah same-trip allowance sudah disetujui ---- */
+    function markAllowanceApproved(continueFlow) {
+        var banner = document.getElementById('samtrip-banner');
+        banner.innerHTML =
+            '<div class="allowance-result-line">' +
+                '<i class="fa fa-check-circle"></i> <b>Allowance Travel disetujui</b> — invoice ' +
+                '<b>' + SAME_TRIP_DUP.invoice + '</b> dipakai <b>hanya untuk allowance</b>, otomatis tertaut ke claim ' +
+                '<b>User A (T-01220)</b>. Expense detail tetap kosong (tidak boleh duplikasi).' +
+            '</div>';
+        var proof = document.querySelector('#day1-tbody .file-proof');
+        var badge = proof.querySelector('.uploaded-file');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'uploaded-file';
+            proof.appendChild(badge);
+        }
+        if (!badge.classList.contains('referenced')) {
+            badge.classList.add('referenced');
+            badge.innerHTML = '<i class="fa fa-file-pdf"></i> ' + SAME_TRIP_DUP.fileName +
+                ' <span class="uploaded-badge">refer User A · T-01220 · allowance only</span>';
+        }
+    }
+
+    /* ---- Popup isi ---- */
+    function openSameTripPopup() {
+        document.getElementById('dup-ctx-invoice').textContent = SAME_TRIP_DUP.invoice;
+        document.getElementById('dup-ctx-owner').textContent = SAME_TRIP_DUP.owner;
+        document.getElementById('dup-ctx-ticket').textContent = SAME_TRIP_DUP.ticket;
+        document.getElementById('dup-ctx-usage').textContent = SAME_TRIP_DUP.usage;
+        document.getElementById('dup-ctx-context').textContent = 'Legitimate duplicate — co-traveler pada perjalanan yang sama';
+        document.getElementById('sim-modal-message').innerHTML =
+            'Invoice <b>' + SAME_TRIP_DUP.invoice + '</b> ini sudah diajukan oleh <b>User A</b> untuk expensesnya pada ticket UUDP <b>T-01220</b>.' +
+            '<br><br>Apakah Anda melakukan perjalanan bersama namun akan menggunakan invoice tersebut untuk proses klaim <b>allowance travel saja</b>?';
+        document.getElementById('sim-modal-overlay').classList.add('show');
+    }
+
+    document.getElementById('sim-modal-cancel').addEventListener('click', function () {
+        document.getElementById('sim-modal-overlay').classList.remove('show');
+        document.getElementById('samtrip-banner').innerHTML =
+            '<div style="margin-top:10px;font-size:12.5px;color:#c23535;background:#fdf0f0;border:1px solid #f2c2c2;border-radius:6px;padding:8px 12px;">' +
+            '<i class="fa fa-times-circle"></i> Dibatalkan — file tidak dilampirkan, allowance tidak diproses. (Simulasi)</div>';
+    });
+    document.getElementById('sim-modal-continue').addEventListener('click', function () {
+        this.closest('.sim-modal-overlay').classList.remove('show');
+        markAllowanceApproved(true);
+    });
+    document.getElementById('sim-modal-overlay').addEventListener('click', function (e) {
+        if (e.target === this) { this.classList.remove('show'); }
+    });
+
+    /* ---- Upload pada Day 1 memicu deteksi same-trip ---- */
+    document.getElementById('day1-tbody').addEventListener('click', function (e) {
+        if (e.target.closest('.addFile') || e.target.closest('.addCamera')) {
+            e.preventDefault();
+            openSameTripPopup();
+        }
+    });
+
+    /* ---- Trigger manual ---- */
+    document.getElementById('btn-trigger-popup').addEventListener('click', openSameTripPopup);
+    document.getElementById('btn-allow-only').addEventListener('click', function () {
+        markAllowanceApproved(true);
+    });
+
+    /* ---- Demo autorun ---- */
+    var demo = new URLSearchParams(location.search).get('demo');
+    if (demo === 'popup') {
+        openSameTripPopup();
+    } else if (demo === 'allowonly') {
+        markAllowanceApproved(true);
+    }
+
+    generateDaySections();
+})();
+</script>
+</body>
+</html>

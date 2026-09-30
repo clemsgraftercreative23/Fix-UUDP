@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[SIMULASI] Travel Multi-Day — Form Hari 2-10 otomatis</title>
+<link href="../assets/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<link href="../assets/plugins/font-awesome/css/all.min.css" rel="stylesheet">
+<link href="../assets/css/custom.css" rel="stylesheet">
+<style>
+    body { padding: 24px; background: #f4f6f8; }
+    .sim-banner {
+        background: #fff3cd; border: 1px solid #ffe08a; color: #7a5b00;
+        padding: 10px 16px; border-radius: 6px; margin-bottom: 18px; font-size: 13px;
+    }
+    .sim-banner b { color: #5c4400; }
+    .row { margin-left: -12px; margin-right: -12px; }
+    .row > [class*="col-"] {
+        padding-left: 12px; padding-right: 12px;
+        margin-bottom: 18px;
+    }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    table td, table th { padding: 10px 8px !important; vertical-align: middle; }
+    table td > * + * { margin-top: 4px; }
+    .file-proof .btn { margin-right: 4px; }
+
+    .multi-day-section { margin-top: 22px; display: none; }
+    .multi-day-section.show { display: block; }
+    .multi-day-heading {
+        font-weight: 800; font-size: 15px; color: #0a58ca; margin-bottom: 12px;
+    }
+    #multi-day-panels {
+        display: flex; flex-direction: row; gap: 16px;
+        overflow-x: auto; padding-bottom: 10px; align-items: flex-start;
+    }
+    .day-panel {
+        flex: 0 0 540px;
+        background: #fff; border: 1px solid #e2e5ea; border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .day-panel-head {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 10px 14px; cursor: pointer; user-select: none;
+        background: #eef3ff; border-bottom: 1px solid #dde3ea;
+        border-radius: 6px 6px 0 0;
+    }
+    .day-panel-head h6 { margin: 0; color: #0a58ca; }
+    .day-panel-head .day-date-label { font-size: 12px; color: #666; font-weight: 400; }
+    .day-panel-head .caret { color: #0a58ca; transition: transform .2s ease; }
+    .day-panel-head .head-actions { display: inline-flex; align-items: center; gap: 8px; }
+    .day-ref-btn { font-size: 11px; padding: 2px 8px; }
+    .day-ref-btn::after { content: none !important; }
+    .day-panel.collapsed .day-panel-head .caret { transform: rotate(-90deg); }
+    .day-panel-body { padding: 14px; }
+    .day-panel.collapsed .day-panel-body { display: none; }
+    .day-panel .ref-note { font-size: 11px; color: #888; margin-bottom: 10px; }
+    .inv-ref-badge {
+        background: #fff8e6; border: 1px solid #f2d98d; border-left: 4px solid #e0a800;
+        border-radius: 4px; padding: 8px 12px; font-size: 12px; margin-bottom: 10px;
+        color: #6b4d00;
+    }
+    .inv-ref-badge .inv-arrow { color: #b8860b; margin: 0 4px; }
+    .inv-ref-line { font-size: 11px; color: #8a6d1a; margin-top: 4px; }
+    .expense-locked td { background: #f0f1f4 !important; }
+    .expense-locked .form-control[disabled], .expense-locked select[disabled] {
+        background: #e3e5ea !important; color: #9a9da5; cursor: not-allowed;
+    }
+    .expense-locked .file-proof .btn[disabled] { opacity: .4; }
+    .day-panel .table-wrap { overflow-x: auto; margin-top: 10px; }
+    .day-panel .table-wrap table { margin: 0; min-width: 1000px; }
+    .day-panel-body .row > [class*="col-"] { margin-bottom: 12px; }
+    input[readonly] { background: #f1f3f5 !important; }
+    .uploaded-file {
+        margin-top: 6px; font-size: 11.5px; color: #14562b;
+        background: #e9f8ee; border: 1px solid #bfe6c8; border-radius: 4px;
+        padding: 3px 8px; display: inline-block;
+    }
+    .uploaded-file .uploaded-badge { color: #1e7e34; font-weight: 700; }
+    .sim-modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
+        z-index: 1000; align-items: center; justify-content: center;
+    }
+    .sim-modal-overlay.show { display: flex; }
+    .sim-modal-box {
+        background: #fff; border-radius: 8px; padding: 28px 30px; max-width: 480px;
+        text-align: center; box-shadow: 0 12px 34px rgba(0,0,0,.25);
+    }
+    .sim-modal-icon { font-size: 38px; margin-bottom: 6px; }
+    .sim-modal-box h5 { color: #0a58ca; margin-bottom: 10px; font-weight: 700; }
+    .sim-modal-box p { font-size: 13px; color: #333; }
+    .sim-modal-box .modal-day1-chip {
+        background: #eef3ff; border: 1px solid #c9d8ff; border-radius: 6px;
+        padding: 8px 12px; font-size: 12px; text-align: left; margin: 8px 0;
+    }
+    .sim-modal-actions { margin-top: 16px; display: flex; justify-content: center; gap: 10px; }
+    .sim-modal-note {
+        font-size: 11.5px; color: #6b4d00; background: #fff8e6;
+        border: 1px solid #f2d98d; border-radius: 4px; padding: 8px 10px;
+        margin-top: 14px; text-align: left;
+    }
+    .toggle-multiday {
+        display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
+    }
+    .hint-empty { color: #888; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="sim-banner">
+        <b>SIMULASI / PROTOTIPE — bukan halaman produksi.</b>
+        Halaman khusus <b>Travel Multi-Day</b>: form utamanya sama persis dengan <code>reimbursement-travel</code>
+        (partial <code>travel-item-pane.blade.php</code>). Saat <b>Trip Type</b> dipilih dan <b>Transaction Date</b> sudah diisi,
+        sistem otomatis memunculkan form tambahan untuk <b>hari ke-2 sampai ke-10</b>. Form per hari-selanjutnya memakai
+        struktur yang sama dengan hari-1. Semuanya jalan di browser (JS) saja.
+    </div>
+
+    <form onsubmit="return false;">
+    <div class="row">
+        <input type="hidden" name="active_travel_id" value="1">
+        <div class="col-md-3">
+            <label for="">Transaction Date</label>
+            <input type="date" name="date" id="sim-date" class="form-control" required value="2026-09-18">
+            <div id="sim-date-feedback" class="hint-empty">Tanggal akan dipakai sebagai hari-1; hari ke-N otomatis dihitung +N-1 hari.</div>
+        </div>
+        <div class="col-md-3">
+            <label for="">Purpose</label>
+            <input type="text" name="purpose" class="form-control" required value="Client visit - Surabaya">
+        </div>
+        <div class="col-md-3">
+            <label for="">Trip Type</label>
+            <select id="trip_type_id" class="form-control change-type" name="trip_type_id">
+                <option value="">None</option>
+                <option value="1" selected>Domestic</option>
+                <option value="2">Overseas</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Hotel</label>
+            <select id="hotel_condition_id" class="form-control" name="hotel_condition_id" required>
+                <option value="" disabled>Pilih...</option>
+                <option value="1" selected>Provided</option>
+                <option value="2">Not Provided</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Start</label>
+            <input type="time" class="form-control" name="start_time" value="08:00" id="start_time" required>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Arrival</label>
+            <input type="time" class="form-control" name="end_time" value="17:00" id="end_time" required>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Original Allowance</label>
+            <input type="text" class="form-control number-format allowance change-rate currency" name="allowance" value="500.000,00" readonly required>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Travel Times</label>
+            <input type="text" readonly class="form-control" value="9 Hour and 0 Minutes" id="result_time">
+        </div>
+    </div>
+    <hr>
+
+    <div class="row">
+        <div class="col-xl">
+            <h6>Day 1 <span class="day-date-label" id="day1-date-label">(Transaction Date)</span></h6>
+            <table class="table full-width" style="width: 100%;overflow-x: auto;white-space: nowrap;display:block">
+                <thead style="width: 100%">
+                    <tr>
+                        <th width="200">Cost Type</th>
+                        <th width="200">Destination</th>
+                        <th width="220">Remarks</th>
+                        <th width="200">Currency</th>
+                        <th width="200">Amount</th>
+                        <th width="200">IDR Rate</th>
+                        <th width="200">Pph23</th>
+                        <th width="200">Payment</th>
+                        <th width="220">File / OCR</th>
+                        <th width="200">Preview</th>
+                        <th width="150">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="day1-tbody">
+                    <tr class="fieldGroupDetail">
+                        <td>
+                            <select class="form-control cost-type-select" name="cost_type_id[]">
+                                <option value="">Select...</option>
+                                <option value="1" selected>Hotel</option>
+                                <option value="2">Transport</option>
+                                <option value="3">Meal</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control destination-input" name="destination[]" value="Surabaya">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control remarks-input" name="remarks[]" placeholder="mis. Hotel for 18-20 Sep 2026" value="">
+                        </td>
+                        <td>
+                            <select class="form-control currency-select" name="currency[]" style="width:130%">
+                                <option value="IDR" selected>IDR</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control currency amount-input change-amount" value="1.500.000,00" name="amount[]">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control currency number-format idr-rate-input" value="1,00" name="idr_rate[]" readonly>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control currency number-format" readonly value="0,00" name="tax[]">
+                        </td>
+                        <td>
+                            <select class="form-control payment-select" name="payment_type[]" style="width:130%">
+                                <option value="BDC" selected>BDC</option>
+                                <option value="Cash">Cash</option>
+                            </select>
+                        </td>
+                        <td class="file-proof">
+                            <button type="button" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button>
+                            <button type="button" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button>
+                            <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display:none;" class="file-input">
+                            <div class="uploaded-file"><i class="fa fa-file-pdf"></i> INV-88213.pdf <span class="uploaded-badge">terupload</span></div>
+                        </td>
+                        <td>
+                            <span style="color:#999;font-size:12px;">(preview)</span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button>
+                            <button type="button" class="btn btn-danger remove-detail" style="margin-left:6px;"><i class="fa fa-trash"></i></button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="multi-day-section" id="multi-day-sections">
+        <div class="multi-day-heading">
+            <i class="fa fa-calendar-plus"></i> Form Hari Ke-2 s.d. Ke-10
+            <span class="day-date-label">(dihitung otomatis dari Transaction Date)</span>
+        </div>
+        <div id="multi-day-panels"><!-- Di-generate oleh JavaScript --></div>
+    </div>
+
+    <hr>
+    <div class="row">
+        <div class="col-md-3">
+            <label for="">Total</label>
+            <input type="text" readonly class="form-control total-nominal" name="nominal_pengajuan" value="1.850.000,00">
+        </div>
+        <div class="col-md-9">
+            <br><span style="color:#62d49e; float: right; display: none;" class="warning-upload">
+            The button is disabled until a file is uploaded.</span>
+        </div>
+    </div>
+
+    <div class="button-container">
+        <a class="btn btn-secondary text-right" href="#" onclick="return false;"><i class="fa fa-back"></i>Cancel</a>&nbsp;
+        <button class="btn btn-primary" type="submit" id="action_button_submit" disabled>Submit (disabled in simulation)</button>
+    </div>
+    </form>
+</div>
+
+<div class="sim-modal-overlay" id="sim-modal-overlay">
+    <div class="sim-modal-box">
+        <div class="sim-modal-icon">🔗</div>
+        <h5 id="sim-modal-title">Konfirmasi Penggunaan Dokumen</h5>
+        <p id="sim-modal-message"></p>
+        <div class="sim-modal-actions">
+            <button type="button" class="btn btn-secondary" id="sim-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-primary" id="sim-modal-continue">Yes, Continue</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var MAX_DAYS = 10;
+    var activeRefDay = null;
+
+    function addDays(isoDate, days) {
+        var d = new Date(isoDate + 'T00:00:00');
+        d.setDate(d.getDate() + days);
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var dd = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + dd;
+    }
+
+    function fmtId(isoDate) {
+        var d = new Date(isoDate + 'T00:00:00');
+        var bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+        return d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear();
+    }
+
+    function tripTypeText() {
+        var sel = document.getElementById('trip_type_id');
+        return sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+    }
+
+    function dayRowHtml(day) {
+        var locked = day > 1;
+        var disTip = locked ? ' disabled title="Expense hanya berlaku untuk Hari ke-1 — hari ini hanya claim Travel Allowance."' : '';
+        var disSel = locked ? ' disabled' : '';
+        var amountVal = locked ? '0,00' : '150.000,00';
+        var remarkPh = locked ? 'Khusus klaim di Hari ke-1' : 'mis. Meal allowance day ' + day;
+        var rowClass = locked ? 'fieldGroupDetail expense-locked' : 'fieldGroupDetail';
+
+        return '' +
+            '<tr class="' + rowClass + '">' +
+                '<td><select class="form-control cost-type-select" name="cost_type_id[]"' + disSel + '>' +
+                    '<option value="">Select...</option>' +
+                    '<option value="2">Transport</option>' +
+                    (locked ? '' : '<option value="3" selected>Meal</option>') +
+                '</select></td>' +
+                '<td><input type="text" class="form-control destination-input" name="destination[]" value="Surabaya"' + disTip + '></td>' +
+                '<td><input type="text" class="form-control remarks-input" name="remarks[]" placeholder="' + remarkPh + '" value=""' + disTip + '></td>' +
+                '<td><select class="form-control currency-select" name="currency[]" style="width:130%"' + disSel + '>' +
+                    '<option value="IDR" selected>IDR</option>' +
+                    '<option value="USD">USD</option>' +
+                '</select></td>' +
+                '<td><input type="text" class="form-control currency amount-input change-amount" name="amount[]" value="' + amountVal + '"' + disTip + '></td>' +
+                '<td><input type="text" class="form-control currency number-format idr-rate-input" name="idr_rate[]" value="1,00" readonly' + disSel + '></td>' +
+                '<td><input type="text" class="form-control currency number-format" readonly value="0,00" name="tax[]"' + disSel + '></td>' +
+                '<td><select class="form-control payment-select" name="payment_type[]" style="width:130%"' + disSel + '>' +
+                    '<option value="BDC">BDC</option>' +
+                    '<option value="Cash" selected>Cash</option>' +
+                '</select></td>' +
+                '<td class="file-proof">' +
+                    '<button type="button" class="btn btn-success btn-sm addFile"' + (locked ? ' title="Gunakan dokumen Hari ke-1 untuk Travel Allowance"' : '') + '><i class="fa fa-upload"></i></button>' +
+                    '<button type="button" class="btn btn-success btn-sm addCamera"' + (locked ? ' title="Gunakan dokumen Hari ke-1 untuk Travel Allowance"' : '') + '><i class="fa fa-camera"></i></button>' +
+                    '<input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display:none;" class="file-input"' + disSel + '>' +
+                '</td>' +
+                '<td><button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button> ' +
+                    '<button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td>' +
+            '</tr>';
+    }
+
+    function generateDaySections() {
+        var tripVal = document.getElementById('trip_type_id').value;
+        var dateVal = document.getElementById('sim-date').value;
+        var container = document.getElementById('multi-day-sections');
+        var panels = document.getElementById('multi-day-panels');
+
+        document.getElementById('day1-date-label').textContent = dateVal ? '(' + fmtId(dateVal) + ')' : '(Transaction Date)';
+
+        panels.innerHTML = '';
+        if (!tripVal || !dateVal) {
+            container.classList.remove('show');
+            return;
+        }
+        container.classList.add('show');
+
+        for (var day = 2; day <= MAX_DAYS; day++) {
+            var dayDate = addDays(dateVal, day - 1);
+            var panel = document.createElement('div');
+            panel.className = 'day-panel collapsed';
+            panel.setAttribute('data-day', day);
+            panel.setAttribute('data-ref-date', dateVal);
+
+            panel.innerHTML =
+                '<div class="day-panel-head">' +
+                    '<h6>Day ' + day + ' <span class="day-date-label">' + fmtId(dayDate) + '</span></h6>' +
+                    '<span class="head-actions">' +
+                        (day === 2 || day === 3
+                            ? '<button type="button" class="btn btn-sm btn-outline-primary day-ref-btn" data-ref="' + dateVal + '"><i class="fa fa-link"></i> Refer Day 1</button>'
+                            : '') +
+                        '<span class="caret"><i class="fa fa-chevron-down"></i></span>' +
+                    '</span>' +
+                '</div>' +
+                '<div class="day-panel-body">' +
+                    '<div class="ref-note">Merujuk ke hari-1 (' + fmtId(dateVal) + ').</div>' +
+                    (day === 2 || day === 3
+                        ? '<div class="inv-ref-badge">' +
+                            '<i class="fa fa-file-pdf"></i> <b>INV-88213.pdf</b> <span class="inv-arrow">→</span> ' +
+                            '<b>Refer to / Same with Day 1</b>' +
+                            '<div class="inv-ref-line">Hanya untuk klaim <b>Travel Allowance</b> — dokumen tidak bisa dipakai ulang untuk expense yang sama dengan Hari ke-1.</div>' +
+                        '</div>'
+                        : '') +
+                    '<div class="row">' +
+                        '<div class="col-6">' +
+                            '<label>Transaction Date</label>' +
+                            '<input type="date" class="form-control" value="' + dayDate + '" readonly>' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label>Purpose</label>' +
+                            '<input type="text" class="form-control" value="Client visit - Surabaya (Day ' + day + ')" readonly>' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label>Trip Type</label>' +
+                            '<input type="text" class="form-control" value="' + tripTypeText() + '" readonly>' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label>Hotel</label>' +
+                            '<select class="form-control" name="hotel_condition_id[]">' +
+                                '<option value="1">Provided</option>' +
+                                '<option value="2" selected>Not Provided</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label>Start</label>' +
+                            '<input type="time" class="form-control" name="start_time[]" value="08:00">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label>Arrival</label>' +
+                            '<input type="time" class="form-control" name="end_time[]" value="17:00">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label>Allowance</label>' +
+                            '<input type="text" class="form-control currency number-format" name="allowance[]" value="500.000,00" readonly>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="table-wrap">' +
+                        '<table class="table full-width" style="width:100%;white-space:nowrap;">' +
+                            '<thead><tr>' +
+                                '<th width="200">Cost Type</th>' +
+                                '<th width="200">Destination</th>' +
+                                '<th width="220">Remarks</th>' +
+                                '<th width="200">Currency</th>' +
+                                '<th width="200">Amount</th>' +
+                                '<th width="200">IDR Rate</th>' +
+                                '<th width="200">Pph23</th>' +
+                                '<th width="200">Payment</th>' +
+                                '<th width="220">File / OCR</th>' +
+                                '<th width="150">Action</th>' +
+                            '</tr></thead>' +
+                            '<tbody>' + dayRowHtml(day) + '</tbody>' +
+                        '</table>' +
+                    '</div>' +
+                '</div>';
+
+            panels.appendChild(panel);
+        }
+    }
+
+    document.getElementById('trip_type_id').addEventListener('change', generateDaySections);
+    document.getElementById('sim-date').addEventListener('change', generateDaySections);
+
+    // Add / remove detail rows (delegated, works for day-1 & generated panels)
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.day-ref-btn')) {
+            e.stopPropagation();
+            var day = e.target.closest('.day-panel').getAttribute('data-day');
+            var refDate = e.target.closest('.day-ref-btn').getAttribute('data-ref');
+            showDayRefPopup(day, refDate);
+        } else if (e.target.closest('.day-panel-head')) {
+            var panel = e.target.closest('.day-panel');
+            panel.classList.toggle('collapsed');
+        } else if (e.target.closest('.addMoreDetail')) {
+            var tbl = e.target.closest('table');
+            var tbody = tbl.querySelector('tbody');
+            var day = tbl.closest('.day-panel') ? tbl.closest('.day-panel').getAttribute('data-day') : '1';
+            tbody.insertAdjacentHTML('beforeend', dayRowHtml(day));
+        } else if (e.target.closest('.remove-detail')) {
+            var row = e.target.closest('tr');
+            var tbody = row.closest('tbody');
+            if (tbody.querySelectorAll('tr').length > 1) {
+                row.remove();
+            }
+        } else if (e.target.closest('.addFile') || e.target.closest('.addCamera')) {
+            var proofTd = e.target.closest('td');
+            var rowEl = e.target.closest('tr');
+            var dayPanelEl = rowEl.closest('.day-panel');
+            var rowDay = dayPanelEl ? dayPanelEl.getAttribute('data-day') : '1';
+            if (rowDay > 1) {
+                showDayRefPopup(rowDay, dayPanelEl.getAttribute('data-ref-date'));
+            } else {
+                var fileInput = proofTd.querySelector('input[type="file"]');
+                if (fileInput) { fileInput.click(); }
+            }
+        }
+    });
+
+    // Popup "refer ke hari pertama" (Day 2 & Day 3)
+    function showDayRefPopup(day, refIsoDate) {
+        activeRefDay = day;
+        document.getElementById('sim-modal-title').textContent = 'Dokumen Sudah Digunakan';
+        document.getElementById('sim-modal-message').innerHTML =
+            'Dokumen ini sudah digunakan sebelumnya.<br><br>' +
+            '<b>Apakah Anda ingin menggunakan dokumen yang sama untuk Travel Allowance Hari ke-' + day + '?</b>' +
+            '<div class="sim-modal-note">Catatan: Dokumen yang sama tidak dapat digunakan untuk mengklaim expense yang sama lebih dari satu kali.</div>';
+        document.getElementById('sim-modal-overlay').classList.add('show');
+    }
+    document.getElementById('sim-modal-cancel').addEventListener('click', function () {
+        document.getElementById('sim-modal-overlay').classList.remove('show');
+        activeRefDay = null;
+    });
+    document.getElementById('sim-modal-continue').addEventListener('click', function () {
+        document.getElementById('sim-modal-overlay').classList.remove('show');
+        if (activeRefDay) {
+            var p = document.querySelector('.day-panel[data-day="' + activeRefDay + '"]');
+            var cell = p ? p.querySelector('.file-proof') : null;
+            if (cell && !cell.querySelector('.uploaded-file')) {
+                cell.insertAdjacentHTML('beforeend',
+                    '<div class="uploaded-file"><i class="fa fa-file-pdf"></i> INV-88213.pdf <span class="uploaded-badge">refer Hari 1</span></div>');
+            }
+        }
+        activeRefDay = null;
+    });
+    document.getElementById('sim-modal-overlay').addEventListener('click', function (e) {
+        if (e.target === this) { this.classList.remove('show'); }
+    });
+
+    // Initial render
+    generateDaySections();
+
+    // Autorun for screenshots: ?demo=refday (popup Day 2/3 terbuka) | ?demo=refday3
+    var demo = new URLSearchParams(location.search).get('demo');
+    if (demo === 'refday3' || demo === 'refday2') {
+        var day = demo === 'refday3' ? '3' : '2';
+        var panelsEl = document.getElementById('multi-day-panels');
+        var panel = panelsEl.querySelector('.day-panel[data-day="' + day + '"]');
+        panel.classList.remove('collapsed');
+        showDayRefPopup(day, panel.getAttribute('data-ref-date'));
+    }
+})();
+</script>
+</body>
+</html>

@@ -10,6 +10,10 @@ window.TravelUpload = (function () {
   var ACCEPT_TYPES = 'image/*,.pdf,application/pdf';
   var PANE = '#rt-travel-item-pane';
   var OCR_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_submit', '#edit_finance', '#edit_owner'];
+  var REFERENCE_ENDPOINT = '/reimbursement/check-evidence-reference';
+  var REFERENCE_DEBOUNCE_MS = 500;
+  var DATE_WINDOW_ENDPOINT = '/reimbursement/check-travel-date-window';
+  var DATE_WINDOW_DEBOUNCE_MS = 400;
 
   function scaleDimensions(width, height) {
     var w = width;
@@ -164,6 +168,29 @@ window.TravelUpload = (function () {
     return uid;
   }
 
+  function ensurePreviewCardStyles() {
+    if (document.getElementById('travel-preview-card-styles')) {
+      return;
+    }
+    var style = document.createElement('style');
+    style.id = 'travel-preview-card-styles';
+    style.textContent =
+      '.preview-card{position:relative;display:flex;flex-direction:column;align-items:center;' +
+      'width:96px;box-sizing:border-box;margin-top:6px;padding:8px 6px 6px;gap:4px;' +
+      'border:1px solid #d9d9d9;border-radius:8px;background:#fff;}' +
+      '.preview-card-thumb{width:70px;height:70px;object-fit:cover;border:1px solid #28a745;' +
+      'border-radius:6px;cursor:pointer;background:#f7f7f7;}' +
+      '.preview-card-thumb-icon{object-fit:contain;border-color:#007bff;padding:8px;}' +
+      '.preview-card-name{display:block;max-width:88px;font-size:11px;color:#495057;' +
+      'text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      '.preview-card-error{font-size:11px;color:#c0392b;text-align:center;}' +
+      '.preview-card-remove{position:absolute;top:-6px;right:-6px;width:18px;height:18px;padding:0;' +
+      'line-height:16px;font-size:13px;border-radius:50%;border:1px solid #dc3545;background:#fff;' +
+      'color:#dc3545;}' +
+      '.preview-card-remove:hover{background:#dc3545;color:#fff;}';
+    document.head.appendChild(style);
+  }
+
   function isPdfFile(file) {
     if (!file) {
       return false;
@@ -177,34 +204,28 @@ window.TravelUpload = (function () {
 
   function renderFilePreview(file, uid) {
     return new Promise(function (resolve) {
-      var $wrap = $('<div class="pending-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">')
+      var $wrap = $('<div class="pending-attachment-item preview-card">')
         .attr('data-uid', uid);
-      var $inner = $('<div style="display:flex; gap:6px; align-items:center;">');
-      var $remove = $('<button type="button" class="btn btn-sm btn-danger remove-pending-attachment" style="margin-left:auto;">x</button>');
+      var $remove = $('<button type="button" class="btn remove-pending-attachment preview-card-remove">&times;</button>');
 
       if (file.type && file.type.indexOf('image/') === 0) {
         var reader = new FileReader();
         reader.onload = function (e) {
-          $inner.append(
+          $wrap.append($remove);
+          $wrap.append(
             $('<img>').attr({
               src: e.target.result,
               'data-preview-src': e.target.result
-            }).addClass('preview-thumbnail').css({
-              maxWidth: '55px',
-              maxHeight: '55px',
-              border: '2px solid #28a745',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            })
+            }).addClass('preview-thumbnail preview-card-thumb')
           );
-          $inner.append($remove);
-          $wrap.append($inner);
+          $wrap.append($('<span class="preview-card-name">').text(file.name || 'Gambar').attr('title', file.name || ''));
           resolve($wrap);
         };
         reader.readAsDataURL(file);
       } else if (isPdfFile(file)) {
         var fileURL = URL.createObjectURL(file);
-        $inner.append(
+        $wrap.append($remove);
+        $wrap.append(
           $('<a>').attr({
             href: fileURL,
             target: '_blank',
@@ -213,29 +234,14 @@ window.TravelUpload = (function () {
             $('<img>').attr({
               src: PDF_ICON,
               alt: 'PDF File'
-            }).css({
-              maxWidth: '40px',
-              maxHeight: '40px',
-              border: '2px solid #007bff',
-              borderRadius: '5px'
-            })
+            }).addClass('preview-card-thumb preview-card-thumb-icon')
           )
         );
-        $inner.append($('<span>').text(file.name || 'PDF').css({
-          fontSize: '12px',
-          maxWidth: '100px',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          display: 'inline-block'
-        }));
-        $inner.append($remove);
-        $wrap.append($inner);
+        $wrap.append($('<span class="preview-card-name">').text(file.name || 'PDF').attr('title', file.name || 'PDF'));
         resolve($wrap);
       } else {
-        $inner.append($('<p style="color:red;">File tidak didukung</p>'));
-        $inner.append($remove);
-        $wrap.append($inner);
+        $wrap.append($remove);
+        $wrap.append($('<span class="preview-card-error">').text('File tidak didukung'));
         resolve($wrap);
       }
     });
@@ -260,6 +266,7 @@ window.TravelUpload = (function () {
     // its status/badge rather than leaving a stale block on an empty row.
     $row.removeAttr(window.ReimbursementOcrCheck ? window.ReimbursementOcrCheck.STATUS_ATTR : 'data-ocr-status');
     $row.find('.ocr-check-badge').remove();
+    clearMessRelation($row);
     syncUploadWarning();
   }
 
@@ -283,23 +290,201 @@ window.TravelUpload = (function () {
     applyOcrBlockState();
   }
 
-  function ocrCheckOptions($row, previewDiv) {
+  function ocrCheckOptions($row, previewDiv, uid) {
     return {
       row: $row,
       badgeContainer: previewDiv,
       submitSelectors: OCR_SUBMIT_SELECTORS,
       formScope: $(PANE),
-      excludeId: $(PANE).attr('data-main-id')
+      excludeId: $(PANE).attr('data-main-id'),
+      reimbursementType: 'travel',
+      travelDate: $.trim($(PANE).find('input[name="date"]').first().val() || ''),
+      onSameTripOffer: function (offer) {
+        handleSameTripOffer($row, uid, previewDiv, offer);
+      },
+      onMessRelation: function (relation) {
+        applyMessRelation($row, relation);
+      }
     };
   }
 
-  function runOcrCheckForRow(row, file, previewDiv) {
+  var SAME_TRIP_MODAL_ID = 'rtSameTripDuplicateModal';
+
+  /** Built once, on first use, so no parent view needs its own markup for this. */
+  function ensureSameTripModal() {
+    if ($('#' + SAME_TRIP_MODAL_ID).length) {
+      return;
+    }
+    if (!document.getElementById('rt-same-trip-modal-styles')) {
+      var style = document.createElement('style');
+      style.id = 'rt-same-trip-modal-styles';
+      style.textContent =
+        '#' + SAME_TRIP_MODAL_ID + ' .modal-content{border-radius:10px;border:none;overflow:hidden;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .modal-header{flex-direction:column;align-items:center;border-bottom:none;padding:24px 24px 0;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-icon{width:46px;height:46px;border-radius:50%;background:#eef2ff;' +
+        'color:#3b5bdb;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .modal-title{width:100%;text-align:center;font-weight:700;color:#2b3a55;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .modal-body{padding:14px 24px 4px;text-align:center;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-message{color:#495057;font-size:14px;margin-bottom:16px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-details{text-align:left;background:#f8f9fb;border-radius:8px;' +
+        'padding:12px 14px;margin-bottom:14px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-details dl{display:grid;grid-template-columns:auto 1fr;' +
+        'row-gap:6px;column-gap:14px;margin:0;font-size:13px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-details dt{color:#7a8699;font-weight:600;white-space:nowrap;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-details dd{color:#2b3a55;margin:0;word-break:break-word;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-note{display:flex;gap:8px;text-align:left;background:#fff7e6;' +
+        'border:1px solid #ffe1a8;border-radius:8px;padding:10px 12px;font-size:12px;color:#8a6416;margin-bottom:18px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .rt-same-trip-note i{flex:none;margin-top:1px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .modal-footer{border-top:none;padding:0 24px 24px;justify-content:center;gap:10px;}' +
+        '#' + SAME_TRIP_MODAL_ID + ' .modal-footer .btn{min-width:120px;border-radius:6px;}';
+      document.head.appendChild(style);
+    }
+    $('body').append(
+      '<div class="modal fade" id="' + SAME_TRIP_MODAL_ID + '" data-backdrop="static" data-keyboard="false" tabindex="-1" role="dialog" aria-hidden="true">' +
+        '<div class="modal-dialog modal-dialog-centered" role="document">' +
+          '<div class="modal-content">' +
+            '<div class="modal-header">' +
+              '<div class="rt-same-trip-icon"><i class="fa fa-link"></i></div>' +
+              '<h5 class="modal-title">Legitimate Duplicate Terdeteksi</h5>' +
+            '</div>' +
+            '<div class="modal-body">' +
+              '<p class="rt-same-trip-message"></p>' +
+              '<div class="rt-same-trip-details">' +
+                '<dl>' +
+                  '<dt>No. Invoice</dt><dd class="rt-same-trip-no-invoice"></dd>' +
+                  '<dt>Pemilik claim</dt><dd class="rt-same-trip-owner"></dd>' +
+                  '<dt>Ticket UUDP</dt><dd class="rt-same-trip-ticket"></dd>' +
+                  '<dt>Konteks</dt><dd>Legitimate duplicate — co-traveler pada perjalanan yang sama</dd>' +
+                '</dl>' +
+              '</div>' +
+              '<div class="rt-same-trip-note">' +
+                '<i class="fa fa-info-circle"></i>' +
+                '<span>Jika disetujui, invoice ini HANYA dipakai untuk klaim Allowance Travel (bukan expense) ' +
+                'dan otomatis tertaut ke claim pemilik di atas — persis mekanisme referensi yang sudah ada di produksi. ' +
+                'Expense detail invoice tetap TIDAK diisi.</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="modal-footer">' +
+              '<button type="button" class="btn btn-light rt-same-trip-cancel">Batal</button>' +
+              '<button type="button" class="btn btn-primary rt-same-trip-confirm">Ya, Lanjutkan</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * Same-trip legitimate duplicate (co-traveler already claimed this exact
+   * invoice as an expense): offer to drop this row's own upload and link it
+   * to that claim for Allowance-only instead of hard-blocking. "Batal" and
+   * "Ya, Lanjutkan" both remove the just-attached file -- the only
+   * difference is whether the reference-invoice input gets populated so the
+   * row resolves via resolveReferencedRowInvoice() on save instead.
+   */
+  function handleSameTripOffer($row, uid, previewDiv, offer) {
+    ensureSameTripModal();
+    var $modal = $('#' + SAME_TRIP_MODAL_ID);
+    $modal.find('.rt-same-trip-message').text(offer.message);
+    $modal.find('.rt-same-trip-no-invoice').text(offer.no_invoice || '-');
+    $modal.find('.rt-same-trip-owner').text(offer.owner_name || '-');
+    $modal.find('.rt-same-trip-ticket').text(offer.ticket_number || '-');
+
+    function removeUploadedFile() {
+      var $item = previewDiv.find('.pending-attachment-item[data-uid="' + uid + '"]');
+      if ($item.length) {
+        removePendingPreview($item);
+      }
+    }
+
+    $modal.find('.rt-same-trip-confirm, .rt-same-trip-cancel').off('click.rtSameTrip');
+    $modal.find('.rt-same-trip-confirm').on('click.rtSameTrip', function () {
+      removeUploadedFile();
+      var $refInput = $row.find('.reference-invoice-input').first();
+      if ($refInput.length) {
+        $refInput.val(offer.no_invoice);
+        checkReferenceInvoice($refInput);
+      }
+      $modal.modal('hide');
+    });
+    $modal.find('.rt-same-trip-cancel').on('click.rtSameTrip', function () {
+      removeUploadedFile();
+      $modal.modal('hide');
+    });
+
+    $modal.modal('show');
+  }
+
+  var MESS_RELATION_ATTR = 'data-mess-relation-invoice';
+
+  /**
+   * Trip Type is one field per day, shared by every cost-line row in that
+   * day's table -- so the lock isn't "this row's problem", it's "does ANY
+   * row in this pane currently have an active Mess relation". Re-evaluated
+   * from scratch every time a relation is applied or cleared, so removing
+   * the one row that triggered the lock correctly unlocks the field again
+   * even if other rows exist.
+   */
+  function syncMessLockState($scope) {
+    $scope = ($scope && $scope.length) ? $scope : $(PANE);
+    var $tripType = $scope.find('#trip_type_id').first();
+    if (!$tripType.length) {
+      return;
+    }
+    var $lockedRow = $scope.find('tbody tr.fieldGroupDetail[' + MESS_RELATION_ATTR + ']').first();
+    var $note = $scope.find('.mess-relation-note');
+    if (!$note.length) {
+      $note = $('<div class="mess-relation-note date-block-feedback" style="margin-top:4px;"></div>');
+      $tripType.after($note);
+    }
+
+    if ($lockedRow.length) {
+      var tripTypeId = $lockedRow.attr('data-mess-relation-trip-type');
+      if (tripTypeId) {
+        $tripType.val(tripTypeId);
+      }
+      $tripType.prop('disabled', true);
+      $note.attr('class', 'mess-relation-note date-block-feedback is-ok');
+      $note.text('✔ Trip Type otomatis: Stay(MESS) -- invoice Mess/Hotel sama dengan ' + $lockedRow.attr('data-mess-relation-owner') + ' pada tanggal yang sama. Field dikunci.');
+    } else {
+      $tripType.prop('disabled', false);
+      $note.attr('class', 'mess-relation-note date-block-feedback');
+      $note.text('');
+    }
+  }
+
+  /** Called when the OCR-check endpoint returns `mess_relation` for this row's uploaded file. */
+  function applyMessRelation($row, relation) {
+    if (!relation || !relation.trip_type_id) {
+      return;
+    }
+    $row.attr(MESS_RELATION_ATTR, relation.no_invoice || '1');
+    $row.attr('data-mess-relation-owner', relation.owner_name || '');
+    $row.attr('data-mess-relation-trip-type', relation.trip_type_id);
+    syncMessLockState($row.closest(PANE).length ? $row.closest(PANE) : $(PANE));
+  }
+
+  /** Called whenever this row's file is removed, or a fresh OCR check no longer returns a relation -- keeps the lock from outliving the invoice that justified it. */
+  function clearMessRelation($row) {
+    if (!$row || !$row.attr(MESS_RELATION_ATTR)) {
+      return;
+    }
+    $row.removeAttr(MESS_RELATION_ATTR);
+    $row.removeAttr('data-mess-relation-owner');
+    $row.removeAttr('data-mess-relation-trip-type');
+    syncMessLockState($row.closest(PANE).length ? $row.closest(PANE) : $(PANE));
+  }
+
+  function runOcrCheckForRow(row, file, previewDiv, uid) {
     if (!window.ReimbursementOcrCheck) {
       return;
     }
     var $row = $(row);
+    // A fresh check supersedes whatever this row previously triggered --
+    // re-applied by onMessRelation below only if the new result still matches.
+    clearMessRelation($row);
     window.ReimbursementOcrCheck.verifyAndRender(
-      Object.assign({ file: file }, ocrCheckOptions($row, previewDiv))
+      Object.assign({ file: file }, ocrCheckOptions($row, previewDiv, uid))
     );
   }
 
@@ -311,7 +496,7 @@ window.TravelUpload = (function () {
       return renderFilePreview(processed, uid).then(function ($el) {
         previewDiv.append($el);
         enableSubmitButtons();
-        runOcrCheckForRow(row, processed, previewDiv);
+        runOcrCheckForRow(row, processed, previewDiv, uid);
         return processed;
       });
     });
@@ -328,6 +513,152 @@ window.TravelUpload = (function () {
     if (event && event.originalEvent) {
       event.originalEvent.__rtTravelUploadHandled = true;
     }
+  }
+
+  function csrfToken() {
+    return $('meta[name="csrf-token"]').attr('content') || '';
+  }
+
+  /**
+   * A row that references another traveler's evidence (instead of
+   * uploading its own) counts the same as an uploaded file for the pane-
+   * wide "you haven't uploaded anything at all" gate.
+   */
+  function setReferenceStatus($row, status) {
+    if (status) {
+      $row.attr('data-reference-status', status);
+    } else {
+      $row.removeAttr('data-reference-status');
+    }
+    syncUploadWarning();
+  }
+
+  function renderReferenceFeedback($feedback, variant, message) {
+    var colors = { found: '#1e7e42', checking: '#6c757d', error: '#c0392b', muted: '#6c757d' };
+    $feedback.css('color', colors[variant] || colors.muted).text(message || '');
+  }
+
+  function checkReferenceInvoice($input) {
+    var $row = $input.closest('tr');
+    var $feedback = $input.closest('.reference-invoice-wrap').find('.reference-invoice-feedback');
+    var value = $.trim($input.val());
+
+    if (value === '') {
+      renderReferenceFeedback($feedback, 'muted', '');
+      setReferenceStatus($row, null);
+      return;
+    }
+
+    renderReferenceFeedback($feedback, 'checking', 'Memeriksa…');
+
+    $.ajax({
+      url: REFERENCE_ENDPOINT,
+      method: 'POST',
+      dataType: 'json',
+      data: {
+        _token: csrfToken(),
+        no_invoice: value,
+        exclude_id: $(PANE).attr('data-main-id')
+      }
+    }).then(function (res) {
+      res = res || {};
+      if (res.found) {
+        renderReferenceFeedback($feedback, 'found', res.message || 'Ditemukan.');
+        setReferenceStatus($row, 'found');
+      } else {
+        renderReferenceFeedback($feedback, 'error', res.message || 'Tidak ditemukan.');
+        setReferenceStatus($row, null);
+      }
+    }).catch(function () {
+      renderReferenceFeedback($feedback, 'error', 'Tidak dapat memeriksa saat ini.');
+      setReferenceStatus($row, null);
+    });
+  }
+
+  function bindReferenceInvoiceHandlers() {
+    if (window.__travelReferenceInvoiceBound) {
+      return;
+    }
+    window.__travelReferenceInvoiceBound = true;
+
+    var timers = {};
+    $('body').on('input', PANE + ' .reference-invoice-input', function () {
+      var input = this;
+      var uid = $(input).data('rt-ref-uid');
+      if (!uid) {
+        uid = 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        $(input).data('rt-ref-uid', uid);
+      }
+      clearTimeout(timers[uid]);
+      timers[uid] = setTimeout(function () {
+        checkReferenceInvoice($(input));
+      }, REFERENCE_DEBOUNCE_MS);
+    });
+  }
+
+  /**
+   * Advisory only (see checkTravelDateWindow() on the backend) -- doesn't
+   * disable submit, just flags a likely duplicate/overlapping date entry
+   * for the SAME user before they finish filling out the rest of the form.
+   */
+  function renderDateWindowFeedback($input, blocked, message) {
+    var $feedback = $input.next('.travel-date-window-feedback');
+    if (!$feedback.length) {
+      $feedback = $('<div class="travel-date-window-feedback date-block-feedback" style="margin-top:4px;"></div>');
+      $input.after($feedback);
+    }
+    if (!message) {
+      $feedback.attr('class', 'travel-date-window-feedback date-block-feedback');
+      $feedback.text('');
+      return;
+    }
+    $feedback.attr('class', 'travel-date-window-feedback date-block-feedback ' + (blocked ? 'is-blocked' : 'is-ok'));
+    $feedback.text((blocked ? '⚠ ' : '✔ ') + message);
+  }
+
+  function checkTravelDateWindow($input) {
+    var value = $.trim($input.val());
+    if (value === '') {
+      renderDateWindowFeedback($input, false, null);
+      return;
+    }
+
+    $.ajax({
+      url: DATE_WINDOW_ENDPOINT,
+      method: 'POST',
+      dataType: 'json',
+      data: {
+        _token: csrfToken(),
+        date: value,
+        exclude_id: $(PANE).attr('data-main-id')
+      }
+    }).then(function (res) {
+      res = res || {};
+      if (res.blocked) {
+        renderDateWindowFeedback($input, true, res.message || 'Tanggal ini berdekatan dengan pengajuan Travel Anda yang lain.');
+      } else {
+        renderDateWindowFeedback($input, false, null);
+      }
+    }).catch(function () {
+      // fail-open: an unreachable check never blocks the form, it just skips the heads-up
+      renderDateWindowFeedback($input, false, null);
+    });
+  }
+
+  function bindTravelDateWindowHandler() {
+    if (window.__travelDateWindowBound) {
+      return;
+    }
+    window.__travelDateWindowBound = true;
+
+    var timer = null;
+    $('body').on('input change', PANE + ' input[name="date"]', function () {
+      var input = this;
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        checkTravelDateWindow($(input));
+      }, DATE_WINDOW_DEBOUNCE_MS);
+    });
   }
 
   function bindAttachmentHandlers() {
@@ -411,7 +742,10 @@ window.TravelUpload = (function () {
 
   if (typeof jQuery !== 'undefined') {
     $(function () {
+      ensurePreviewCardStyles();
       bindAttachmentHandlers();
+      bindReferenceInvoiceHandlers();
+      bindTravelDateWindowHandler();
     });
   }
 
@@ -429,6 +763,8 @@ window.TravelUpload = (function () {
     removePendingPreview: removePendingPreview,
     processAndAppendFile: processAndAppendFile,
     enableSubmitButtons: enableSubmitButtons,
-    bindAttachmentHandlers: bindAttachmentHandlers
+    bindAttachmentHandlers: bindAttachmentHandlers,
+    bindReferenceInvoiceHandlers: bindReferenceInvoiceHandlers,
+    bindTravelDateWindowHandler: bindTravelDateWindowHandler
   };
 })();

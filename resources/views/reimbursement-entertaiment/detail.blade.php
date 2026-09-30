@@ -9,7 +9,37 @@
 
 <?php function entertainment_amount_idr($angka)
 {
-    return number_format((float) \App\Support\ExchangeRateParser::parseFloat($angka), 2, ',', '.');
+    $s = number_format((float) \App\Support\ExchangeRateParser::parseFloat($angka), 2, ',', '.');
+    // User tidak mau ada ",00": 1.000,00 -> 1.000 ; 1.000,50 tetap.
+    if (substr($s, -3) === ',00') {
+        $s = substr($s, 0, -3);
+    }
+    return $s;
+}
+
+/**
+ * Amount column in the EDIT form: blank stays blank and zero renders as a
+ * plain "0", never "0,00" (mirrors Travel's formatTravelAmountForEditForm).
+ * "0,00" meant clearing the field took four backspaces and left the caret
+ * mid-number, so typing a new amount needed the cursor moved first (Sep 2026
+ * feedback). Both "" and "0" still parse back to 0 everywhere.
+ * Tambahan: user tidak mau ada ",00" sama sekali -> 1.000,00 tampil "1.000",
+ * desimal non-nol seperti ",50" tetap ditampilkan.
+ */
+function entertainment_amount_edit($angka)
+{
+    if ($angka === null || (is_string($angka) && trim($angka) === '')) {
+        return '';
+    }
+    $value = (float) \App\Support\ExchangeRateParser::parseFloat($angka);
+    if (abs($value) < 0.00001) {
+        return '0';
+    }
+    $s = number_format($value, 2, ',', '.');
+    if (substr($s, -3) === ',00') {
+        $s = substr($s, 0, -3);
+    }
+    return $s;
 } ?>
 
 @php
@@ -130,6 +160,52 @@ if (!function_exists('ent_attachment_rows')) {
     .preview-thumbnail {
         cursor: pointer !important;
     }
+
+  /* ---- Step 1 Upload Evidence: same layout as the create form
+     (Sep 2026: "tampilan edit sesuaikan dengan form create"). Uploading
+     happens once at the top; the per-row buttons are hidden and the
+     Preview column shows file numbers with an eye button. ---- */
+  .et-evidence-cell { display: none; }
+  .et-col-evidence, td.file-proof { display: none; }
+  .et-top-dropzone {
+    border: 2px dashed #cfd8e3; border-radius: 8px; padding: 22px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .et-top-dropzone:hover, .et-top-dropzone.is-dragover { border-color: #28a745; background: #f4fff7; }
+  .et-top-dropzone i { font-size: 22px; color: #8a94a6; display: block; margin-bottom: 6px; }
+  .et-top-dropzone span { font-size: 12.5px; color: #495057; }
+  .et-top-dropzone small { display: block; font-size: 10.5px; color: #8a94a6; margin-top: 4px; }
+  .et-top-evidence-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .et-top-evidence-item {
+    display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d9d9d9;
+    border-radius: 6px; padding: 6px 10px; font-size: 11.5px; max-width: 220px;
+  }
+  .et-top-evidence-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: none; }
+  .et-top-evidence-item .et-top-evidence-text { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .et-top-evidence-item .et-top-evidence-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .et-top-evidence-item .et-top-evidence-row { display: block; font-size: 10px; color: #1e7e34; font-weight: 600; }
+  .et-top-evidence-item .et-top-evidence-num { flex: none; font-weight: 700; color: #6c757d; margin-right: 2px; }
+  .et-top-evidence-remove {
+    flex: none; width: 20px; height: 20px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; color: #c0392b;
+    font-size: 16px; line-height: 1; cursor: pointer; border-radius: 50%;
+  }
+  .et-top-evidence-remove:hover { background: #fdecea; }
+  .et-preview .pending-attachment-item { display: none; }
+  /* Saved attachments are listed as chips in Step 1 now, so their old card in
+     the Preview column is hidden -- the hidden keep_attachment_ids input that
+     sits beside it stays in the DOM and is still submitted. */
+  .et-preview .existing-attachment-item { display: none; }
+  .et-preview-num {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    height: 30px; padding: 0 11px; margin: 2px;
+    background: #e8f7ee; color: #1e7e34; border: 1px solid #b7e2c6;
+    border-radius: 15px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .et-preview-num:hover { background: #d4f0de; }
+  .et-preview-num i { font-size: 15px; line-height: 1; }
+
 </style>
 
 <div class="page-content" id="app">   
@@ -482,6 +558,23 @@ if (!function_exists('ent_attachment_rows')) {
               </div>
 
               <div class="modal-body py-3">
+
+              <!-- Step 1: Upload Evidence -- same single upload point as the
+                   create form. Files land in the rows below in order (file 1 ->
+                   row 1, file 2 -> row 2 ...); the per-row upload buttons are
+                   hidden by CSS and the Preview column shows numbers. -->
+              <div style="border:1px solid #e6e9ef;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+                  <h5 style="font-weight:700;font-size:15px;margin-bottom:4px;">Upload Evidence (Invoice / Receipt)</h5>
+                  <p class="text-muted" style="margin-bottom:12px;font-size:12.5px;">Semua bukti diupload di sini. Urutan file mengikuti urutan baris pada Detail Reimbursement.</p>
+                  <div class="et-top-dropzone" id="etTopDropzone" title="Klik atau drag &amp; drop file di sini">
+                      <i class="fa fa-cloud-upload-alt"></i>
+                      <span>Drag &amp; drop file di sini atau <b>klik untuk pilih file</b></span>
+                      <small>JPG, PNG, PDF -- bisa lebih dari satu file sekaligus</small>
+                  </div>
+                  <input type="file" id="etTopFileInput" accept="image/*,.pdf,application/pdf" multiple style="display:none">
+                  <div id="etTopEvidenceList" class="et-top-evidence-list"></div>
+              </div>
+
               <div class="row my-3"> 
                 
                   <div class="col-md-3">
@@ -545,7 +638,7 @@ if (!function_exists('ent_attachment_rows')) {
                               <td>Type</td>
                               <td>Payment</td>
                               <td>Amount</td>
-                              <td width="100">Evidence</td>
+                              <td width="100" class="et-col-evidence">Evidence</td>
                               <td>Preview</td>
                               <td>Remark</td>
                               <td align="center" >Action</td>
@@ -586,7 +679,7 @@ if (!function_exists('ent_attachment_rows')) {
                                     </select>
                                 </td>
                                 <td>
-                                <input type="text" class="form-control amount-input amount1 currency change-amount" name="amount[]" placeholder="Amount" required value="{{ entertainment_amount_idr($detail[0]->amount ?? 0) }}">
+                                <input type="text" class="form-control amount-input amount1 currency change-amount" name="amount[]" placeholder="Amount" required value="{{ entertainment_amount_edit($detail[0]->amount ?? null) }}">
                                 </td>
                                 <td class="file-proof">
                                     <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
@@ -599,7 +692,7 @@ if (!function_exists('ent_attachment_rows')) {
                                     <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                                 </td>
                                 <td>
-                                    <div id="preview_1">
+                                    <div id="preview_1" class="et-preview">
                                         @foreach(ent_attachment_rows($detail[0]->id ?? 0, $detail[0]->evidence ?? '') as $att)
                                         @php
                                             $attId = (int) ($att['id'] ?? 0);
@@ -669,7 +762,7 @@ if (!function_exists('ent_attachment_rows')) {
                                         </select>
                                   </td>
                                   <td>
-                                    <input type="text" class="form-control amount{{$numb}} currency change-amount" name="amount[]" placeholder="Amount" required value="{{entertainment_amount_idr($row->amount)}}">
+                                    <input type="text" class="form-control amount{{$numb}} currency change-amount" name="amount[]" placeholder="Amount" required value="{{entertainment_amount_edit($row->amount)}}">
                                   </td>
                                   <td class="file-proof">
                                         <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
@@ -682,7 +775,7 @@ if (!function_exists('ent_attachment_rows')) {
                                         <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                                     </td>
                                     <td>
-                                        <div id="preview_{{$numb}}">
+                                        <div id="preview_{{$numb}}" class="et-preview">
                                             @foreach(ent_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
                                             @php
                                                 $attId = (int) ($att['id'] ?? 0);
@@ -876,8 +969,380 @@ if (!function_exists('ent_attachment_rows')) {
         $('.currency').not('input[name="amount[]"]').mask("#.##0", {
           reverse: true
         });
-        $('input[name="amount[]"]').maskMoney({ thousands: '.', decimal: ',', precision: 2, allowZero: true, allowNegative: false });
-        $('input[name="amount[]"]').maskMoney('mask');
+        // Amount entertainment TANPA maskMoney: maskMoney precision:2 membaca
+        // string display sebagai digit sen, sehingga nilai bulat tanpa desimal
+        // rusak 100x saat mask/blur (500.000 -> 5.000). Format sendiri:
+        // kosong tetap kosong, 0 -> "0", bulat -> titik ribuan tanpa ",00",
+        // desimal non-nol (",50") dipertahankan.
+        function parseEntAmount(s) {
+            s = (s || '').trim();
+            if (s === '') return NaN;
+            var t = s.split('.').join('').replace(',', '.').replace(/[^0-9.\-]/g, '');
+            return parseFloat(t);
+        }
+        function formatEntAmount(n) {
+            if (isNaN(n)) return '';
+            if (Math.abs(n) < 0.00001) return '0';
+            var neg = n < 0;
+            var a = Math.abs(Math.round(n * 100) / 100);
+            var intPart = Math.floor(a);
+            var frac = Math.round((a - intPart) * 100);
+            if (frac === 100) { intPart += 1; frac = 0; }
+            var intStr = String(intPart).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            if (frac === 0) return (neg ? '-' : '') + intStr;
+            return (neg ? '-' : '') + intStr + ',' + (frac < 10 ? '0' : '') + frac;
+        }
+        function normalizeEntAmountZero(el) {
+            var raw = ($(el).val() || '').trim();
+            if (raw === '') return;
+            var n = parseEntAmount(raw);
+            if (isNaN(n)) return;
+            $(el).val(formatEntAmount(n));
+        }
+        $(document).off('blur.entZero').on('blur.entZero', 'input[name="amount[]"]', function () {
+            normalizeEntAmountZero(this);
+        });
+
+    /**
+     * Edit-only: files already saved on this submission are rendered by Blade
+     * as .existing-attachment-item cards inside each row's Preview cell. Lift
+     * them into the Step 1 list as chips so saved and newly-added files look
+     * and behave the same. Their hidden keep_attachment_ids input is left
+     * untouched in the row, so removing a chip must also remove that input --
+     * otherwise the server would keep a file the user just deleted.
+     */
+    function etSeedChipsFromSaved() {
+        $('#dynamic_field tbody tr.fieldGroup').each(function () {
+            var $row = $(this);
+            $row.find('.existing-attachment-item').each(function () {
+                var $card = $(this);
+                var $img = $card.find('img').first();
+                var $link = $card.find('a[target="_blank"]').last();
+                var attId = $card.find('.remove-existing-attachment').attr('data-attachment-id') || '';
+                var src = $img.attr('src') || $card.find('.preview-link').attr('data-preview-src') || '';
+                var name = ($link.text() || '').trim() || 'Lampiran';
+
+                var $item = $('<div class="et-top-evidence-item">')
+                    .attr('data-existing-id', attId)
+                    .attr('data-src', src)
+                    .attr('data-kind', 'image');
+
+                if (src) {
+                    $item.append($('<img>').attr('src', src));
+                } else {
+                    $item.append($('<i class="fa fa-file-pdf" style="color:#dc3545;font-size:22px;">'));
+                }
+                $item.append(
+                    $('<div class="et-top-evidence-text">').append(
+                        $('<span class="et-top-evidence-num">').text('0.'),
+                        $('<span class="et-top-evidence-name">').text(name)
+                    )
+                );
+                $item.append($('<button type="button" class="et-top-evidence-remove" title="Hapus file ini">&times;</button>'));
+                $('#etTopEvidenceList').append($item);
+            });
+        });
+        etRefreshTopEvidenceChips();
+    }
+
+    /* ===== Step 1 Upload Evidence -- ported from the create form so both
+       screens behave identically (Sep 2026). Files are uploaded once at the
+       top; chip order decides the row (file 1 -> row 1), the Preview column
+       shows numbers with an eye button, and the per-row upload buttons are
+       hidden by CSS. ===== */
+    /**
+     * Where the next Step 1 file should land: the FIRST row that has no file
+     * yet, whichever it is -- only adding a new row when every existing one is
+     * already taken.
+     *
+     * It used to reuse a row only when there was exactly one and it was empty,
+     * so pressing (+) first, or deleting a photo and re-uploading, always
+     * appended yet another row (Sep 2026 feedback: "saya pencet (+) ... trus
+     * upload foto, fotonya jadi no 3 dan line nya nambah jadi 3" and "saya
+     * hapus dari dua-duanya, lalu upload ulang tapi malah nambah line 3").
+     */
+    function etTopDropzoneTargetRow() {
+        var $rows = $('#dynamic_field tbody tr.fieldGroup');
+        var $free = $rows.filter(function () {
+            return $(this).find('.et-preview').children().length === 0;
+        }).first();
+
+        if ($free.length) {
+            return $free;
+        }
+
+        $('.addMore').trigger('click');
+        return $('#dynamic_field tbody tr.fieldGroup').last();
+    }
+
+    /**
+     * Renumbers every chip (1., 2., 3. ...) and re-binds each file to the row
+     * at the SAME position: file 1 -> row 1, file 2 -> row 2, and so on. There
+     * is no row picker any more (Sep 2026: "gausah ada baris 1 atau sejenisnya
+     * langsung sesuai urutan aja") -- order is the whole rule, so deleting a
+     * file shifts everything after it up automatically.
+     */
+    function etRefreshTopEvidenceChips() {
+        $('#etTopEvidenceList .et-top-evidence-item').each(function (i) {
+            var $chip = $(this);
+            $chip.find('.et-top-evidence-num').text((i + 1) + '.');
+            etBindChipToRow($chip, i + 1);
+        });
+        etSyncPreviewNumbers();
+    }
+
+    /**
+     * Moves the chip's real <input type="file"> into row `rowNo` and renames it
+     * to that row's index. The server binds a file to its row purely by the
+     * index in the input name (attachments[<rowIndex>][]) -- see
+     * EntertaimentReimbursementController -- so this is what actually makes
+     * "file N belongs to row N" true on save, not just on screen.
+     */
+    function etBindChipToRow($chip, rowNo) {
+        $chip.attr('data-row', String(rowNo));
+
+        // Saved file: its binding lives in keep_attachment_ids[<rowIndex>][],
+        // so re-key that input instead of moving a file input.
+        var existingId = $chip.attr('data-existing-id');
+        if (existingId) {
+            $('.keep-attachment-input[value="' + existingId + '"]')
+                .attr('name', 'keep_attachment_ids[' + (rowNo - 1) + '][]');
+            return;
+        }
+
+        var uid = $chip.attr('data-uid');
+        if (!uid) {
+            return;
+        }
+        var $target = $('#dynamic_field tbody tr.fieldGroup').eq(rowNo - 1);
+        var $input = $('.pending-attachment-input[data-uid="' + uid + '"]');
+        if (!$target.length || !$input.length) {
+            return;
+        }
+        var $box = $target.find('.attachment-inputs').first();
+        if (!$box.length) {
+            $box = $('<div class="attachment-inputs" style="display:none;"></div>');
+            $target.find('.file-proof').first().append($box);
+        }
+        $input.attr('name', 'attachments[' + (rowNo - 1) + '][]').appendTo($box);
+    }
+
+    /**
+     * The Detail table's Preview column shows the NUMBER of each file attached
+     * to that row (Sep 2026: "preview nya nggk perlu gambar foto lagi tapi
+     * angka aja"), so the table stays compact and the pictures live in Step 1.
+     */
+    function etSyncPreviewNumbers() {
+        $('#dynamic_field tbody tr.fieldGroup').each(function (idx) {
+            var rowNo = idx + 1;
+            var nums = [];
+            $('#etTopEvidenceList .et-top-evidence-item').each(function (i) {
+                if (String($(this).attr('data-row')) === String(rowNo)) {
+                    nums.push(i + 1);
+                }
+            });
+            var $cell = $(this).find('.et-preview').first();
+            // Only the number badges are rebuilt -- NOT .empty(), which would
+            // also destroy the hidden .pending-attachment-item cards that carry
+            // the real file inputs and OCR hooks.
+            $cell.find('.et-preview-num').remove();
+            nums.forEach(function (n) {
+                // Eye icon so it reads as clickable (Sep 2026: "harusnya
+                // preview nya ada icon mata gitu biar user tau bisa dipencet").
+                $('<button type="button" class="et-preview-num" title="Lihat file ' + n + '">')
+                    .attr('data-file-no', n)
+                    .append($('<i class="fa fa-eye">'))
+                    .append($('<span>').text(n))
+                    .appendTo($cell);
+            });
+        });
+    }
+
+    /**
+     * @param {string} uid ties this chip to the row's real hidden file input,
+     *   so the X button can delete the actual attachment and not just the chip.
+     */
+    function etAddTopEvidenceChip(file, $row, uid) {
+        var $item = $('<div class="et-top-evidence-item">');
+        if (uid) {
+            $item.attr('data-uid', uid);
+        }
+        if (file.type && file.type.indexOf('image/') === 0) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                $item.prepend($('<img>').attr('src', e.target.result));
+                // Kept on the chip so the Preview eye button can open this
+                // exact file without re-reading it.
+                $item.attr('data-src', e.target.result).attr('data-kind', 'image');
+            };
+            reader.readAsDataURL(file);
+        } else {
+            $item.prepend($('<i class="fa fa-file-pdf" style="color:#dc3545;font-size:22px;">'));
+            try {
+                $item.attr('data-src', URL.createObjectURL(file)).attr('data-kind', 'pdf');
+            } catch (e) { /* preview simply unavailable */ }
+        }
+        $item.append(
+            $('<div class="et-top-evidence-text">').append(
+                $('<span class="et-top-evidence-num">').text('0.'),
+                $('<span class="et-top-evidence-name">').text(file.name)
+            )
+        );
+        // Delete control (Sep 2026 feedback: "nggk ada tombol x (silang) yg
+        // biasa digunakan untuk hapus foto"). Removes the real attachment on
+        // the row too, not just this chip -- see the handler below.
+        $item.append(
+            $('<button type="button" class="et-top-evidence-remove" title="Hapus file ini">&times;</button>')
+        );
+        $('#etTopEvidenceList').append($item);
+        etRefreshTopEvidenceChips();
+        return $item;
+    }
+
+function etHandleTopEvidenceFiles(fileList) {
+        if (!fileList || !fileList.length || !window.DriverUpload) {
+            return;
+        }
+        Array.prototype.forEach.call(fileList, function (file) {
+            var $row = etTopDropzoneTargetRow();
+            // The chip goes up right away (so the file is visible while it is
+            // still being compressed/OCR'd) and is tied to its attachment once
+            // processAndAppendFile resolves with the uid.
+            var $chip = etAddTopEvidenceChip(file, $row);
+            window.DriverUpload.processAndAppendFile($row, file).then(function (processed) {
+                if ($chip && processed && processed.attachmentUid) {
+                    $chip.attr('data-uid', processed.attachmentUid);
+                }
+            });
+        });
+    }
+
+    // X on a Step 1 chip deletes the real attachment as well: the chip is only
+    // a receipt for a file that actually lives in its row's Evidence cell, so
+    // removing the chip alone would leave the file silently attached.
+    $('body').on('click', '.et-top-evidence-remove', function () {
+        var $chip = $(this).closest('.et-top-evidence-item');
+        // Saved file: drop its keep_attachment_ids input so the server stops
+        // keeping it, and remove the (hidden) card it came from.
+        var existingId = $chip.attr('data-existing-id');
+        if (existingId) {
+            $('.keep-attachment-input[value="' + existingId + '"]').remove();
+            $('.remove-existing-attachment[data-attachment-id="' + existingId + '"]')
+                .closest('.existing-attachment-item').remove();
+            $chip.remove();
+            etRefreshTopEvidenceChips();
+            return;
+        }
+        var uid = $chip.attr('data-uid');
+        if (uid && window.DriverUpload && window.DriverUpload.removePendingPreview) {
+            var $item = $('.pending-attachment-item[data-uid="' + uid + '"]');
+            if ($item.length) {
+                window.DriverUpload.removePendingPreview($item);
+            } else {
+                // Preview not rendered (yet): drop the hidden input directly so
+                // the file still doesn't get submitted.
+                $('.pending-attachment-input[data-uid="' + uid + '"]').remove();
+            }
+        }
+        $chip.remove();
+        etRefreshTopEvidenceChips();
+    });
+
+    /** Opens file number N (the chip at that position) full size. */
+    $('body').on('click', '.et-preview-num', function () {
+        var n = parseInt($(this).attr('data-file-no'), 10);
+        var $chip = $('#etTopEvidenceList .et-top-evidence-item').eq(n - 1);
+        var src = $chip.attr('data-src');
+        if (!src) {
+            return;
+        }
+        if ($chip.attr('data-kind') === 'pdf') {
+            window.open(src, '_blank');
+            return;
+        }
+        if (!$('#etImageLightbox').length) {
+            $('body').append(
+                '<div id="etImageLightbox" style="display:none;position:fixed;inset:0;z-index:2000;' +
+                     'background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">' +
+                  '<img style="max-width:100%;max-height:100%;border-radius:6px;">' +
+                '</div>'
+            );
+            $('body').on('click', '#etImageLightbox', function () { $(this).hide(); });
+        }
+        $('#etImageLightbox img').attr('src', src);
+        $('#etImageLightbox').css('display', 'flex');
+    });
+
+    // Lift already-saved attachments into Step 1 before anything else runs.
+    etSeedChipsFromSaved();
+
+    // Close the edit modal as soon as a valid submit starts, so the page is
+    // not left staring at the form while the request is in flight (Sep 2026:
+    // "ketika pencet submit atau draft modal edit nya ke tutup juga").
+    // Bound to 'submit', NOT to the buttons: submit only fires once the
+    // browser's own required-field validation has passed, so an incomplete
+    // form still shows its errors with the modal open.
+    $('#sample_form').on('submit', function () {
+        $('#formModal').modal('hide');
+        // The backdrop is removed manually because the page navigates away
+        // before Bootstrap's hide transition finishes, which would otherwise
+        // leave a grey overlay over the list for a moment.
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open').css('padding-right', '');
+    });
+
+    $('#etTopDropzone').on('click', function () {
+        $('#etTopFileInput').trigger('click');
+    });
+    $('#etTopFileInput').on('change', function (e) {
+        etHandleTopEvidenceFiles(e.target.files);
+        e.target.value = '';
+    });
+    $('#etTopDropzone').on('dragover', function (e) {
+        e.preventDefault();
+        $(this).addClass('is-dragover');
+    });
+    $('#etTopDropzone').on('dragleave', function () {
+        $(this).removeClass('is-dragover');
+    });
+    $('#etTopDropzone').on('drop', function (e) {
+        e.preventDefault();
+        $(this).removeClass('is-dragover');
+        var files = e.originalEvent.dataTransfer && e.originalEvent.dataTransfer.files;
+        etHandleTopEvidenceFiles(files);
+    });
+
+        $('input[name="amount[]"]').each(function () {
+            normalizeEntAmountZero(this);
+        });
+        // Fokus ke Amount nol ("0"/"0,00") langsung jadi blank agar ngetik
+        // seenak form buat-baru (tanpa geser kursor dulu). Hanya untuk
+        // field yang bisa diketik; readonly dibiarkan "0". Dihapus semua
+        // tetap blank, bukan refill "0,00".
+        // Delegated sehingga berlaku juga untuk row tambah-baru.
+        $(document).off('focusin.entAmountBlank click.entAmountBlank').on('focusin.entAmountBlank click.entAmountBlank', 'input[name="amount[]"]', function (event) {
+            var $el = $(event.target).closest('input[name="amount[]"]');
+            if (!$el.length || $el.prop('readonly') || $el.prop('disabled')) {
+                return;
+            }
+            var v = ($el.val() || '').trim();
+            if (v === '') {
+                return;
+            }
+            var n = parseEntAmount(v);
+            if (!isNaN(n) && Math.abs(n) < 0.00001) {
+                $el.val('');
+            }
+        });
+        // Batasi ketikan amount ke angka/titik/koma saja.
+        // Delegated sehingga berlaku juga untuk row tambah-baru.
+        $(document).off('keypress.entAmount').on('keypress.entAmount', 'input[name="amount[]"]', function (e) {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            var k = e.key;
+            if (typeof k === 'string' && k.length === 1 && /[^0-9.,]/.test(k)) {
+                e.preventDefault();
+            }
+        });
 
         function numberWithCommas(x) {
             var num = Math.round((parseFloat(x) || 0) * 100) / 100;
@@ -900,7 +1365,7 @@ if (!function_exists('ent_attachment_rows')) {
             );
             if($('body').find('.fieldGroup').length < maxGroup){
 
-              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select class="form-control" name="payment_type[]" style="width:100%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+count+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
+              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select class="form-control" name="payment_type[]" style="width:100%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+count+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+count+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+count+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+count+'" class="et-preview"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
 
               $('body').find('.fieldGroup:last').after(fieldHTML);
               
@@ -965,8 +1430,9 @@ if (!function_exists('ent_attachment_rows')) {
               $('.currency').not('input[name="amount[]"]').mask("#.##0", {
                   reverse: true
               });
-              $('body').find('.fieldGroup:last').find('input[name="amount[]"]').maskMoney({ thousands: '.', decimal: ',', precision: 2, allowZero: true, allowNegative: false });
-              $('body').find('.fieldGroup:last').find('input[name="amount[]"]').maskMoney('mask');
+              // Row baru Amount-nya kosong: tidak perlu init mask (format
+              // sendiri via blur handler delegated di atas), biarkan blank
+              // agar langsung enak diketik.
 
               $(".change-amount").change(function(){
                 if ($(".amount1").val()) {

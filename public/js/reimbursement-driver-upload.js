@@ -163,17 +163,23 @@ window.DriverUpload = (function () {
       if (file.type && file.type.indexOf('image/') === 0) {
         var reader = new FileReader();
         reader.onload = function (e) {
+          var $img = $('<img>').attr({
+            src: e.target.result,
+            'data-preview-src': e.target.result
+          }).addClass('preview-thumbnail').css({
+            maxWidth: '55px',
+            maxHeight: '55px',
+            border: '2px solid #28a745',
+            borderRadius: '5px',
+            cursor: 'pointer'
+          });
+          // Thumbnail already had cursor:pointer styling but nothing was ever
+          // bound to a click -- wrapped in a blob: URL link (same pattern the
+          // PDF branch below already uses) so it actually opens full-size in
+          // a new tab, exactly like clicking the PDF icon already does.
+          var imageFullUrl = URL.createObjectURL(file);
           $inner.append(
-            $('<img>').attr({
-              src: e.target.result,
-              'data-preview-src': e.target.result
-            }).addClass('preview-thumbnail').css({
-              maxWidth: '55px',
-              maxHeight: '55px',
-              border: '2px solid #28a745',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            })
+            $('<a>').attr({ href: imageFullUrl, target: '_blank', title: 'Lihat gambar ukuran penuh' }).append($img)
           );
           $inner.append($remove);
           $wrap.append($inner);
@@ -234,6 +240,13 @@ window.DriverUpload = (function () {
       } catch (e) { /* ignore */ }
     });
     $item.remove();
+    // Any chip rendered for this same file elsewhere (Entertainment's Step 1
+    // list) must go too -- otherwise deleting the preview leaves the file
+    // still listed up top, looking like it is still attached (Sep 2026
+    // feedback: "saya apus preview, yg diatas masih ada").
+    if (uid) {
+      $('.et-top-evidence-item[data-uid="' + uid + '"]').remove();
+    }
     if (window.ReimbursementOcrCheck) {
       $row.removeAttr(window.ReimbursementOcrCheck.STATUS_ATTR);
       $row.find('.ocr-check-badge').remove();
@@ -331,6 +344,10 @@ window.DriverUpload = (function () {
         previewDiv.append($el);
         enableSubmitButtons();
         runOcrCheckForRow(row, processed);
+        // uid exposed so a caller that renders its own chip elsewhere (e.g.
+        // Entertainment's Step 1 list) can tie it to this exact attachment
+        // and remove both together. Callers that ignore it are unaffected.
+        processed.attachmentUid = uid;
         return processed;
       });
     });

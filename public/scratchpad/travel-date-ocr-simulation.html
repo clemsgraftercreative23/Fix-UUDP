@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[SIMULASI] Travel - Blok Tanggal 3 Hari + OCR Notifikasi</title>
+<link href="../assets/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<link href="../assets/plugins/font-awesome/css/all.min.css" rel="stylesheet">
+<link href="../assets/css/custom.css" rel="stylesheet">
+<style>
+    body { padding: 24px; background: #f4f6f8; }
+    .sim-banner {
+        background: #fff3cd; border: 1px solid #ffe08a; color: #7a5b00;
+        padding: 10px 16px; border-radius: 6px; margin-bottom: 18px; font-size: 13px;
+    }
+    .sim-banner b { color: #5c4400; }
+    .sim-refclaims {
+        background: #eef3ff; border: 1px solid #c9d8ff; border-radius: 6px;
+        padding: 10px 14px; margin-bottom: 18px; font-size: 12.5px;
+    }
+    .sim-refclaims code { background: #dde7ff; padding: 1px 5px; border-radius: 3px; }
+    .row { margin-left: -12px; margin-right: -12px; }
+    .row > [class*="col-"] {
+        padding-left: 12px; padding-right: 12px;
+        margin-bottom: 18px;
+    }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    table td, table th { padding: 10px 8px !important; vertical-align: middle; }
+    table td > * + * { margin-top: 4px; }
+    .file-proof .btn { margin-right: 4px; }
+    .date-block-feedback {
+        font-size: 12px; margin-top: 4px; display: none;
+    }
+    .date-block-feedback.is-blocked {
+        display: block; color: #b02a37; font-weight: 600;
+    }
+    .date-block-feedback.is-ok {
+        display: block; color: #1e7e34; font-weight: 600;
+    }
+    input.date-blocked { border-color: #dc3545 !important; background: #fff5f5; }
+    .ocr-simulate-btn { margin-top: 6px; }
+    .ocr-status-card {
+        margin-top: 6px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px 8px;
+        font-size: 11px; max-width: 220px; display: none;
+    }
+    .ocr-status-card.show { display: block; }
+    .ocr-status-card.pending { border-color: #ffc107; background: #fffbea; color: #7a5b00; }
+    .ocr-status-card.found { border-color: #28a745; background: #f1fff5; color: #14562b; }
+    .ocr-status-card .spinner-border { width: 0.8rem; height: 0.8rem; margin-right: 4px; }
+    textarea.remarks-input-sim { min-height: 34px; }
+    .remarks-ocr-flag { color: #d9822b; font-weight: 600; }
+
+    .sim-case-card { margin-top: 6px; }
+    .sim-case-card h5 { margin-bottom: 6px; font-weight: 700; }
+    .sim-case-desc { font-size: 12.5px; color: #555; margin-bottom: 14px; }
+    .sim-subpanel { background: #f8f9fb; border: 1px solid #e2e5ea; border-radius: 6px; padding: 12px 16px; font-size: 13px; }
+    .sim-note {
+        margin-top: 12px; font-size: 12px; background: #fff3cd; border: 1px solid #ffe08a;
+        color: #7a5b00; padding: 8px 12px; border-radius: 6px;
+    }
+    .sim-modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
+        z-index: 1000; align-items: center; justify-content: center;
+    }
+    .sim-modal-overlay.show { display: flex; }
+    .sim-modal-box {
+        background: #fff; border-radius: 8px; padding: 28px 30px; max-width: 440px;
+        text-align: center; box-shadow: 0 12px 34px rgba(0,0,0,.25);
+    }
+    .sim-modal-icon { font-size: 38px; margin-bottom: 6px; }
+    .sim-modal-box h5 { color: #b02a37; margin-bottom: 10px; font-weight: 700; }
+    .sim-modal-box p { font-size: 13px; color: #333; }
+
+    .multi-day-section { margin-top: 18px; display: none; }
+    .multi-day-section.show { display: block; }
+    .day-panel {
+        background: #f8f9fb; border: 1px solid #e2e5ea; border-radius: 6px;
+        padding: 14px 18px; margin-bottom: 14px;
+    }
+    .day-panel h6 {
+        font-weight: 700; margin-bottom: 10px; color: #0a58ca;
+        border-bottom: 1px solid #dde3ea; padding-bottom: 6px;
+    }
+    .day-panel .day-date-label { font-size: 12px; color: #666; font-weight: 400; }
+</style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="sim-banner">
+        <b>SIMULASI / PROTOTIPE — bukan halaman produksi.</b>
+        Form di bawah ini diambil persis dari struktur <code>reimbursement-travel</code> (partial <code>travel-item-pane.blade.php</code>),
+        dipakai untuk memperagakan beberapa ide fitur: blok tanggal 3 hari, notifikasi OCR di Remarks, multi-day travel
+        (form hari 2–10 muncul otomatis saat Trip Type dipilih, tanpa kolom PPh 23), dan 3 test case duplikasi invoice
+        (Case 1–3 di bagian bawah halaman). Tidak ada data yang dikirim/disimpan — semuanya jalan di browser (JS) saja.
+    </div>
+
+    <div class="sim-refclaims">
+        <b>Data pembanding (simulasi klaim lain yang sudah ada di sistem — dipakai di semua bagian halaman ini):</b><br>
+        1) <code>18 Sep 2026</code> — No. Invoice <code>INV-88213</code> — a.n. Andi Wijaya (memblokir 18–20 Sep 2026)<br>
+        2) <code>25 Sep 2026</code> — No. Invoice <code>INV-90044</code> — a.n. Siti Rahma (memblokir 25–27 Sep 2026)<br>
+        Coba isi <b>Transaction Date</b> di bawah dengan salah satu tanggal terblokir di atas untuk melihat peringatannya.
+    </div>
+
+    <form onsubmit="return false;">
+    <div class="row">
+        <input type="hidden" name="active_travel_id" value="1">
+        <div class="col-md-3">
+            <label for="">Transaction Date</label>
+            <input type="date" name="date" id="sim-date" class="form-control" required value="">
+            <div id="sim-date-feedback" class="date-block-feedback"></div>
+        </div>
+        <div class="col-md-3">
+            <label for="">Purpose</label>
+            <input type="text" name="purpose" class="form-control" required value="Client visit - Surabaya">
+        </div>
+        <div class="col-md-3">
+            <label for="">Trip Type</label>
+            <select id="trip_type_id" class="form-control change-type" name="trip_type_id">
+                <option value="">None</option>
+                <option value="1" selected>Domestic</option>
+                <option value="2">Overseas</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Hotel </label>
+            <select id="hotel_condition_id" class="form-control" name="hotel_condition_id" required>
+                <option value="" disabled>Pilih...</option>
+                <option value="1" selected>Provided</option>
+                <option value="2">Not Provided</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Start</label>
+            <input type="time" class="form-control" name="start_time" value="08:00" id="start_time" required>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Arrival</label>
+            <input type="time" class="form-control" name="end_time" value="17:00" id="end_time" required>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Original Allowance</label>
+            <input type="text" class="form-control number-format allowance change-rate currency" name="allowance" value="500.000,00" readonly required>
+        </div>
+
+        <div class="col-md-3">
+            <label for="">Travel Times</label>
+            <input type="text" readonly class="form-control" value="9 Hour and 0 Minutes" id="result_time">
+        </div>
+    </div>
+    <hr>
+    <div class="row">
+        <div class="col-xl">
+            <table class="table full-width" style="width: 100%;overflow-x: auto;white-space: nowrap;display:block">
+                <thead style="width: 100%">
+                    <tr>
+                        <th width="200">Cost Type</th>
+                        <th width="200">Destination</th>
+                        <th width="220">Remarks</th>
+                        <th width="200">Currency</th>
+                        <th width="200">Amount</th>
+                        <th width="200">IDR Rate</th>
+                        <th width="200">Pph23</th>
+                        <th width="200">Payment</th>
+                        <th width="220">File / OCR</th>
+                        <th width="200">Preview</th>
+                        <th width="150">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="fieldGroupDetail" data-row-index="0">
+                        <td>
+                            <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
+                                <option value="">Select...</option>
+                                <option value="1" selected>Hotel</option>
+                                <option value="2">Transport</option>
+                                <option value="3">Meal</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control destination-input" name="destination[]" value="Surabaya">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control remarks-input" name="remarks[]" placeholder="mis. Hotel for 18-20 Aug 2026" value="" data-row="0">
+                        </td>
+                        <td>
+                            <select class="form-control currency0 currency-select" name="currency[]" style="width:130%">
+                                <option value="IDR" selected>IDR</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control currency amount0 change-amount" value="1.500.000,00" name="amount[]">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" value="1,00" name="idr_rate[]" readonly>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control currency number-format tax0" readonly value="0,00" name="tax[]">
+                        </td>
+                        <td>
+                            <select class="form-control payment-select" name="payment_type[]" style="width:130%">
+                                <option value="BDC" selected>BDC</option>
+                                <option value="Cash">Cash</option>
+                            </select>
+                        </td>
+                        <td class="file-proof">
+                            <button type="button" class="btn btn-success btn-sm addFile">
+                                <i class="fa fa-upload"></i>
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm addCamera">
+                                <i class="fa fa-camera"></i>
+                            </button>
+                            <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
+                            <br>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ocr-simulate-btn" data-row="0" data-sim-checkin="2026-09-18" data-sim-checkout="2026-09-20">
+                                <i class="fa fa-magic"></i> Simulasikan OCR
+                            </button>
+                            <div class="ocr-status-card" data-row-status="0"></div>
+                        </td>
+                        <td>
+                            <span style="color:#999;font-size:12px;">(preview)</span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button>
+                            <button type="button" class="btn btn-danger remove-detail" style="margin-left:6px;"><i class="fa fa-trash"></i></button>
+                        </td>
+                    </tr>
+
+                    <tr class="fieldGroupDetail" data-row-index="1">
+                        <td>
+                            <select class="form-control cost_type_id1 cost-type-select" name="cost_type_id[]">
+                                <option value="">Select...</option>
+                                <option value="1">Hotel</option>
+                                <option value="2" selected>Transport</option>
+                                <option value="3">Meal</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control destination-input" name="destination[]" value="Surabaya">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control remarks-input" name="remarks[]" placeholder="mis. Hotel for 18-20 Aug 2026" value="" data-row="1">
+                        </td>
+                        <td>
+                            <select class="form-control currency1 currency-select" name="currency[]" style="width:130%">
+                                <option value="IDR" selected>IDR</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control amount1 amount-input currency change-amount" value="350.000,00" name="amount[]">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control number-format currency idr_rate_1 change-rate idr-rate-input" value="1,00" name="idr_rate[]" readonly>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control number-format currency tax1" readonly value="0,00" name="tax[]">
+                        </td>
+                        <td>
+                            <select class="form-control payment-select" name="payment_type[]" style="width:130%">
+                                <option value="BDC">BDC</option>
+                                <option value="Cash" selected>Cash</option>
+                            </select>
+                        </td>
+                        <td class="file-proof">
+                            <button type="button" class="btn btn-success btn-sm addFile">
+                                <i class="fa fa-upload"></i>
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm addCamera">
+                                <i class="fa fa-camera"></i>
+                            </button>
+                            <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file2">
+                            <br>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ocr-simulate-btn" data-row="1" data-sim-checkin="2026-09-25" data-sim-checkout="2026-09-27">
+                                <i class="fa fa-magic"></i> Simulasikan OCR
+                            </button>
+                            <div class="ocr-status-card" data-row-status="1"></div>
+                        </td>
+                        <td>
+                            <span style="color:#999;font-size:12px;">(preview)</span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="multi-day-sections" class="multi-day-section">
+        <!-- Di-generate oleh JavaScript saat Trip Type dipilih -->
+    </div>
+
+    <hr>
+    <div class="row">
+        <div class="col-md-3">
+            <label for="">Total</label>
+            <input type="text" readonly class="form-control total-nominal" name="nominal_pengajuan" value="1.850.000,00">
+        </div>
+        <div class="col-md-9">
+            <br><span style="color:#62d49e; float: right; display: none;" class="warning-upload">
+            The button is disabled until a file is uploaded.</span>
+        </div>
+    </div>
+
+    <div class="button-container">
+        <a class="btn btn-secondary text-right" href="#" onclick="return false;"><i class="fa fa-back"></i>Cancel</a>&nbsp;
+        <button class="btn btn-primary" type="submit" id="action_button_submit" disabled>Submit (disabled in simulation)</button>
+    </div>
+    </form>
+
+    <hr>
+    <div class="sim-case-card">
+        <h5>Case 1 — Popup Duplikasi Invoice</h5>
+        <p class="sim-case-desc">
+            Validasi ketika No. Invoice yang diajukan sama dengan invoice yang sudah pernah dipakai.
+            Jika duplikat → tampil <b>popup</b> dengan pesan "Invoice ini sama dengan invoice yang sebelumnya."
+        </p>
+        <div class="row">
+            <div class="col-md-3">
+                <label>No. Invoice</label>
+                <input type="text" id="case1-invoice" class="form-control" placeholder="mis. INV-88213" value="">
+            </div>
+            <div class="col-md-3">
+                <label>Tanggal Pengajuan</label>
+                <input type="date" id="case1-date" class="form-control" value="">
+            </div>
+            <div class="col-md-3">
+                <label>&nbsp;</label>
+                <button type="button" class="btn btn-primary form-control" id="case1-submit-btn">Ajukan</button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-link btn-sm" id="case1-fill-dup">Isi contoh: invoice DUPLIKAT (tanggal beda)</button>
+        <button type="button" class="btn btn-link btn-sm" id="case1-fill-new">Isi contoh: invoice BARU</button>
+        <div id="case1-feedback" class="date-block-feedback"></div>
+    </div>
+
+    <hr>
+    <div class="sim-case-card">
+        <h5>Case 2 — Invoice Sama, Tanggal Berbeda</h5>
+        <p class="sim-case-desc">
+            Invoice yang sama harus tetap terdeteksi meskipun tanggal pengajuan berbeda dari klaim pertama —
+            pengajuan wajib ditolak dengan pesan <b>"Pengajuan Anda tidak bisa diajukan."</b>
+        </p>
+        <div class="sim-subpanel">
+            <b>1. Pengajuan pertama (sudah ada di sistem)</b><br>
+            No. Invoice <code>INV-88213</code> — a.n. Andi Wijaya — tanggal <code>18 Sep 2026</code>
+        </div>
+        <div class="sim-subpanel" style="margin-top:10px;">
+            <b>2. Pengajuan kedua (Siti Rahma) — pakai invoice yang sama, tanggal beda</b>
+            <div class="row" style="margin-top:10px;">
+                <div class="col-md-3">
+                    <label>Nama Pemohon</label>
+                    <input type="text" class="form-control" value="Siti Rahma" readonly>
+                </div>
+                <div class="col-md-3">
+                    <label>No. Invoice</label>
+                    <input type="text" id="case2-invoice" class="form-control" value="INV-88213">
+                </div>
+                <div class="col-md-3">
+                    <label>Tanggal Pengajuan</label>
+                    <input type="date" id="case2-date" class="form-control" value="2026-09-30">
+                </div>
+                <div class="col-md-3">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-primary form-control" id="case2-submit-btn">Ajukan</button>
+                </div>
+            </div>
+        </div>
+        <div id="case2-feedback" class="date-block-feedback"></div>
+        <div class="sim-note">
+            Catatan produk: aturan yang sudah berjalan saat ini (commit <code>c0fa7a9</code>) baru menandai duplikat kalau
+            <b>tanggal + No Invoice + Nominal</b> ketiganya sama sekaligus. Case 2 ini minta invoice sama saja sudah cukup
+            untuk ditolak walau tanggalnya beda — ini perubahan aturan dari yang berjalan sekarang, mohon dikonfirmasi
+            dulu sebelum ini diterapkan ke kode aslinya.
+        </div>
+    </div>
+
+    <hr>
+    <div class="sim-case-card">
+        <h5>Case 3 &mdash; Dua/Lebih User Dinas Bersamaan (Trip Type otomatis dari Mess)</h5>
+        <p class="sim-case-desc">
+            Jika &ge;2 user dinas dengan periode tumpang tindih memakai 1 invoice Mess/Hotel yang sama, sistem harus
+            mengenali relasi pengajuan tsb dari <b>seluruh pengajuan lain yang sudah ada di sistem</b> (bukan cuma 1
+            lawan 1 yang diketik manual), lalu <b>Trip Type dihitung otomatis</b> dan field-nya menjadi <b>disabled</b>.
+            Pengecekan berjalan <b>reaktif</b> (setiap invoice/tanggal berubah) &mdash; bukan cuma sekali klik tombol &mdash;
+            dan akan <b>membatalkan</b> auto-set kalau relasinya sudah tidak berlaku lagi (invoice/tanggal diubah lagi).
+        </p>
+
+        <div class="sim-subpanel">
+            <b>Data pembanding &mdash; pengajuan lain yang sudah ada di sistem (selain "Anda"):</b>
+            <table class="table table-sm" style="margin-top:8px;margin-bottom:0;font-size:12.5px;">
+                <thead><tr><th>Pemilik</th><th>No. Invoice</th><th>Mulai Dinas</th><th>Selesai Dinas</th></tr></thead>
+                <tbody id="case3-existing-table"></tbody>
+            </table>
+        </div>
+
+        <div class="sim-subpanel" style="margin-top:12px;">
+            <b>Pengajuan Anda (sedang dibuat)</b>
+            <div class="row" style="margin-top:10px;">
+                <div class="col-md-4">
+                    <label>Tanggal Mulai Dinas</label>
+                    <input type="date" id="case3-a-start" class="form-control" value="2026-09-19">
+                </div>
+                <div class="col-md-4">
+                    <label>Tanggal Selesai Dinas</label>
+                    <input type="date" id="case3-a-end" class="form-control" value="2026-09-21">
+                </div>
+                <div class="col-md-4">
+                    <label>No. Invoice (Mess/Hotel)</label>
+                    <input type="text" id="case3-a-invoice" class="form-control" value="INV-77001">
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-link btn-sm" id="case3-fill-overlap" style="margin-top:10px;">Isi contoh: invoice sama + tanggal overlap (harus auto-set)</button>
+        <button type="button" class="btn btn-link btn-sm" id="case3-fill-no-overlap">Isi contoh: invoice sama, TIDAK overlap (tidak boleh auto-set)</button>
+        <button type="button" class="btn btn-link btn-sm" id="case3-fill-three-way">Isi contoh: 3 user berbagi 1 invoice</button>
+        <button type="button" class="btn btn-link btn-sm" id="case3-fill-different">Isi contoh: invoice beda (tidak ada relasi)</button>
+
+        <div id="case3-relation-feedback" class="date-block-feedback" style="margin-top:10px;"></div>
+
+        <div class="row" style="margin-top:16px;">
+            <div class="col-md-4">
+                <label>Trip Type (Anda)</label>
+                <select id="case3-trip-type" class="form-control">
+                    <option value="">Pilih...</option>
+                    <option value="15">PP(60Km+6H)</option>
+                    <option value="16">PP(&gt;10Hours)</option>
+                    <option value="17">Stay(Hotel)</option>
+                    <option value="18">Stay(MESS)</option>
+                    <option value="19">Return(&lt;18)</option>
+                    <option value="20">Return(18-22)</option>
+                    <option value="21">Return(&gt;22)</option>
+                </select>
+                <div id="case3-trip-type-note" class="date-block-feedback"></div>
+            </div>
+        </div>
+
+        <div class="sim-note">
+            Catatan: ini masih murni prototype client-side (data pembanding hardcode di JS). Belum ada query relasi
+            di database asli (<code>reimbursement_travel</code>), belum ada lookup <code>TravelTripType</code> untuk
+            "Stay(MESS)" yang sesungguhnya, dan belum dicoba lintas 4 form produksi (create/edit-inquiry domestic &amp;
+            overseas). Tujuannya cuma memvalidasi konsep overlap-detection + reactive auto-set/undo sebelum masuk kode asli.
+        </div>
+    </div>
+
+    <hr>
+    <div class="sim-case-card">
+        <h5>Case 4 — Pengajuan Berhasil (OCR Tidak Mendeteksi Invoice yang Sama)</h5>
+        <p class="sim-case-desc">
+            Kebalikan dari Case 1: kalau hasil baca OCR atas No. Invoice <b>belum pernah dipakai</b>, pengajuan boleh lanjut.
+            Wording-nya dibedakan dari status "sedang membaca" biasa — jadi "Invoice baru terdeteksi" / "tidak mendeteksi invoice yang sama".
+        </p>
+        <div class="row">
+            <div class="col-md-4">
+                <label>No. Invoice (hasil OCR)</label>
+                <input type="text" id="case4-invoice" class="form-control" placeholder="mis. INV-99871" value="INV-99871">
+            </div>
+            <div class="col-md-3">
+                <label>&nbsp;</label>
+                <button type="button" class="btn btn-outline-secondary form-control" id="case4-ocr-btn">
+                    <i class="fa fa-magic"></i> Simulasikan OCR
+                </button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-link btn-sm" id="case4-fill-new">Isi contoh: invoice BARU</button>
+        <button type="button" class="btn btn-link btn-sm" id="case4-fill-dup">Isi contoh: invoice SAMA (untuk banding)</button>
+        <div class="ocr-status-card" id="case4-status" style="max-width:420px;"></div>
+    </div>
+</div>
+
+<div class="sim-modal-overlay" id="sim-modal-overlay">
+    <div class="sim-modal-box">
+        <div class="sim-modal-icon">⚠️</div>
+        <h5 id="sim-modal-title">Invoice Duplikat</h5>
+        <p id="sim-modal-message"></p>
+        <button type="button" class="btn btn-primary" id="sim-modal-close">Tutup</button>
+    </div>
+</div>
+
+<script>
+(function () {
+    // ---- Simulated "existing claims already in the system" ----
+    // Each blocks a 3-day window starting at its own date (date, date+1, date+2).
+    var EXISTING_CLAIMS = [
+        { date: '2026-09-18', invoice: 'INV-88213', owner: 'Andi Wijaya' },
+        { date: '2026-09-25', invoice: 'INV-90044', owner: 'Siti Rahma' }
+    ];
+
+    function addDays(isoDate, days) {
+        var d = new Date(isoDate + 'T00:00:00');
+        d.setDate(d.getDate() + days);
+        return d.toISOString().slice(0, 10);
+    }
+
+    function fmtId(isoDate) {
+        var d = new Date(isoDate + 'T00:00:00');
+        var bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+        return d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear();
+    }
+
+    function findBlockingClaim(isoDate) {
+        for (var i = 0; i < EXISTING_CLAIMS.length; i++) {
+            var c = EXISTING_CLAIMS[i];
+            var windowStart = c.date;
+            var windowEnd = addDays(c.date, 2);
+            if (isoDate >= windowStart && isoDate <= windowEnd) {
+                return { claim: c, windowStart: windowStart, windowEnd: windowEnd };
+            }
+        }
+        return null;
+    }
+
+    // ---- 1) Date-blocking on Transaction Date ----
+    var dateInput = document.getElementById('sim-date');
+    var dateFeedback = document.getElementById('sim-date-feedback');
+    var submitBtn = document.getElementById('action_button_submit');
+
+    dateInput.addEventListener('change', function () {
+        var val = dateInput.value;
+        dateFeedback.className = 'date-block-feedback';
+        dateInput.classList.remove('date-blocked');
+        if (!val) { return; }
+
+        var hit = findBlockingClaim(val);
+        if (hit) {
+            dateInput.classList.add('date-blocked');
+            dateFeedback.className = 'date-block-feedback is-blocked';
+            dateFeedback.innerHTML = '🚫 Tanggal ini berada dalam rentang 3 hari (' + fmtId(hit.windowStart) + ' – ' + fmtId(hit.windowEnd) + ')'
+                + ' milik klaim lain <b>' + hit.claim.invoice + '</b> (a.n. ' + hit.claim.owner + '). Tanggal diblokir, silakan pilih tanggal lain.';
+            submitBtn.setAttribute('disabled', 'disabled');
+        } else {
+            dateFeedback.className = 'date-block-feedback is-ok';
+            dateFeedback.textContent = '✔ Tanggal aman, tidak bentrok dengan klaim manapun.';
+        }
+    });
+
+    // ---- 2) OCR simulation on a row -> writes a date-range notice into Remarks ----
+    document.querySelectorAll('.ocr-simulate-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var row = btn.getAttribute('data-row');
+            var checkin = btn.getAttribute('data-sim-checkin');
+            var checkout = btn.getAttribute('data-sim-checkout');
+            var statusCard = document.querySelector('.ocr-status-card[data-row-status="' + row + '"]');
+            var remarksInput = document.querySelector('.remarks-input[data-row="' + row + '"]');
+
+            statusCard.className = 'ocr-status-card show pending';
+            statusCard.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Membaca struk (OCR)...';
+            btn.setAttribute('disabled', 'disabled');
+
+            setTimeout(function () {
+                var msStart = new Date(checkin + 'T00:00:00');
+                var msEnd = new Date(checkout + 'T00:00:00');
+                var nights = Math.round((msEnd - msStart) / 86400000);
+
+                var hit = findBlockingClaim(checkin) || findBlockingClaim(checkout);
+
+                statusCard.className = 'ocr-status-card show found';
+                statusCard.innerHTML = '✔ OCR terbaca: ' + fmtId(checkin) + ' – ' + fmtId(checkout) + ' (' + nights + ' hari)'
+                    + (hit ? '<br><span style="color:#b02a37;">⚠ bentrok dgn ' + hit.claim.invoice + '</span>' : '');
+
+                var notice = '📌 OCR mendeteksi durasi ' + nights + ' hari (' + fmtId(checkin) + '-' + fmtId(checkout) + ') dari bukti.';
+                if (hit) {
+                    notice += ' ⚠ Rentang ini bentrok dengan klaim ' + hit.claim.invoice + ' (a.n. ' + hit.claim.owner + ').';
+                }
+
+                if (remarksInput.value.trim() === '') {
+                    remarksInput.value = notice;
+                } else if (remarksInput.value.indexOf('OCR mendeteksi') === -1) {
+                    remarksInput.value = remarksInput.value + '  ' + notice;
+                }
+                remarksInput.classList.add('remarks-ocr-flag');
+                btn.removeAttribute('disabled');
+            }, 700);
+        });
+    });
+
+    // ---- Shared popup helper (Case 1) ----
+    function showModal(title, message) {
+        document.getElementById('sim-modal-title').textContent = title;
+        document.getElementById('sim-modal-message').innerHTML = message;
+        document.getElementById('sim-modal-overlay').classList.add('show');
+    }
+    document.getElementById('sim-modal-close').addEventListener('click', function () {
+        document.getElementById('sim-modal-overlay').classList.remove('show');
+    });
+
+    function findClaimByInvoice(invoice) {
+        invoice = (invoice || '').trim().toLowerCase();
+        if (!invoice) { return null; }
+        for (var i = 0; i < EXISTING_CLAIMS.length; i++) {
+            if (EXISTING_CLAIMS[i].invoice.toLowerCase() === invoice) {
+                return EXISTING_CLAIMS[i];
+            }
+        }
+        return null;
+    }
+
+    // ---- Case 1: popup on duplicate invoice ----
+    document.getElementById('case1-fill-dup').addEventListener('click', function () {
+        document.getElementById('case1-invoice').value = 'INV-88213';
+        document.getElementById('case1-date').value = '2026-09-30';
+    });
+    document.getElementById('case1-fill-new').addEventListener('click', function () {
+        document.getElementById('case1-invoice').value = 'INV-55501';
+        document.getElementById('case1-date').value = '2026-09-19';
+    });
+    document.getElementById('case1-submit-btn').addEventListener('click', function () {
+        var invoice = document.getElementById('case1-invoice').value.trim();
+        var dateVal = document.getElementById('case1-date').value;
+        var fb = document.getElementById('case1-feedback');
+        if (!invoice) {
+            fb.className = 'date-block-feedback is-blocked';
+            fb.textContent = 'Isi No. Invoice dulu.';
+            return;
+        }
+        var match = findClaimByInvoice(invoice);
+        if (match) {
+            showModal('Invoice ini sama dengan invoice yang sebelumnya.',
+                'No. Invoice <b>' + invoice + '</b> sudah diajukan sebelumnya oleh <b>' + match.owner + '</b> pada tanggal ' + fmtId(match.date) + '.'
+                + (dateVal ? ' (Tanggal pengajuan Anda sekarang: ' + fmtId(dateVal) + ')' : ''));
+            fb.className = 'date-block-feedback is-blocked';
+            fb.textContent = '🚫 Duplikat terdeteksi — lihat popup.';
+        } else {
+            fb.className = 'date-block-feedback is-ok';
+            fb.textContent = '✔ Invoice belum pernah dipakai, aman diajukan.';
+        }
+    });
+
+    // ---- Case 2: same invoice, different date -> still rejected ----
+    document.getElementById('case2-submit-btn').addEventListener('click', function () {
+        var invoice = document.getElementById('case2-invoice').value.trim();
+        var dateVal = document.getElementById('case2-date').value;
+        var fb = document.getElementById('case2-feedback');
+        var match = findClaimByInvoice(invoice);
+        if (match) {
+            showModal('Pengajuan Anda tidak bisa diajukan.',
+                'Invoice <b>' + invoice + '</b> sudah digunakan oleh <b>' + match.owner + '</b> pada tanggal ' + fmtId(match.date)
+                + ', meskipun tanggal pengajuan Anda sekarang (' + (dateVal ? fmtId(dateVal) : '-') + ') berbeda.');
+            fb.className = 'date-block-feedback is-blocked';
+            fb.textContent = '🚫 Ditolak — lihat popup.';
+        } else {
+            fb.className = 'date-block-feedback is-ok';
+            fb.textContent = '✔ Invoice belum pernah dipakai, pengajuan bisa dilanjutkan.';
+        }
+    });
+
+    // ---- Case 3: N users same time + same invoice -> Trip Type auto/disabled from Mess ----
+    // Dataset pembanding: beberapa pengajuan lain yang "sudah ada di sistem", dipakai untuk
+    // cari SEMUA relasi (bukan cuma 1 lawan 1) -- termasuk skenario 3 user berbagi 1 invoice
+    // lewat dua rentang tanggal yang saling overlap secara berantai (Siti 19-21, Budi 20-22).
+    var EXISTING_TRIPS = [
+        { owner: 'Siti Rahma', invoice: 'INV-77001', start: '2026-09-19', end: '2026-09-21' },
+        { owner: 'Budi Santoso', invoice: 'INV-77001', start: '2026-09-20', end: '2026-09-22' },
+        { owner: 'Dewi Lestari', invoice: 'INV-90500', start: '2026-09-19', end: '2026-09-21' }
+    ];
+
+    function renderExistingTripsTable() {
+        var tbody = document.getElementById('case3-existing-table');
+        tbody.innerHTML = EXISTING_TRIPS.map(function (t) {
+            return '<tr><td>' + t.owner + '</td><td><code>' + t.invoice + '</code></td>'
+                + '<td>' + fmtId(t.start) + '</td><td>' + fmtId(t.end) + '</td></tr>';
+        }).join('');
+    }
+    renderExistingTripsTable();
+
+    function rangesOverlap(aStart, aEnd, bStart, bEnd) {
+        return !!(aStart && aEnd && bStart && bEnd && aStart <= bEnd && bStart <= aEnd);
+    }
+
+    /** Reactive check -- runs on every change to invoice/tanggal, not just a button click, so a stale relation is un-set as soon as it stops matching. */
+    function checkCase3Relation() {
+        var aStart = document.getElementById('case3-a-start').value;
+        var aEnd = document.getElementById('case3-a-end').value;
+        var aInv = document.getElementById('case3-a-invoice').value.trim();
+        var fb = document.getElementById('case3-relation-feedback');
+        var tripType = document.getElementById('case3-trip-type');
+        var tripNote = document.getElementById('case3-trip-type-note');
+
+        var sameInvoiceTrips = aInv === '' ? [] : EXISTING_TRIPS.filter(function (t) {
+            return t.invoice.toLowerCase() === aInv.toLowerCase();
+        });
+        var overlappingTrips = sameInvoiceTrips.filter(function (t) {
+            return rangesOverlap(aStart, aEnd, t.start, t.end);
+        });
+
+        if (overlappingTrips.length > 0) {
+            var names = overlappingTrips.map(function (t) { return '<b>' + t.owner + '</b>'; }).join(', ');
+            fb.className = 'date-block-feedback is-blocked';
+            fb.style.color = '#0a58ca';
+            fb.innerHTML = '🔗 Terdeteksi relasi (' + overlappingTrips.length + ' pengajuan): invoice <b>' + aInv
+                + '</b> dan periode dinas tumpang tindih dengan ' + names + '.';
+
+            tripType.value = '18';
+            tripType.setAttribute('disabled', 'disabled');
+            tripNote.className = 'date-block-feedback is-ok';
+            tripNote.textContent = '✔ Trip Type otomatis = Stay(MESS). Field dikunci karena allowance memakai invoice yang sama dengan user lain.';
+        } else if (sameInvoiceTrips.length > 0) {
+            // Same invoice exists somewhere, but this trip's own dates don't actually overlap
+            // it -- must NOT auto-set (that would wrongly lock a legitimately separate trip
+            // that just happens to reuse an old Mess invoice number weeks apart).
+            fb.className = 'date-block-feedback is-ok';
+            fb.style.color = '#7a5b00';
+            fb.innerHTML = 'ℹ Invoice <b>' + aInv + '</b> ditemukan di sistem (a.n. ' + sameInvoiceTrips.map(function (t) { return t.owner; }).join(', ')
+                + '), tapi periode dinas Anda TIDAK tumpang tindih dengannya -- dianggap trip terpisah, tidak di-auto-set.';
+
+            tripType.removeAttribute('disabled');
+            tripNote.className = 'date-block-feedback';
+            tripNote.textContent = '';
+        } else {
+            fb.className = 'date-block-feedback is-ok';
+            fb.style.color = '';
+            fb.textContent = 'Tidak ada relasi terdeteksi (invoice tidak ditemukan di pengajuan lain). Trip Type tetap bisa diisi manual.';
+
+            tripType.removeAttribute('disabled');
+            tripNote.className = 'date-block-feedback';
+            tripNote.textContent = '';
+        }
+    }
+
+    ['case3-a-start', 'case3-a-end', 'case3-a-invoice'].forEach(function (id) {
+        var el = document.getElementById(id);
+        el.addEventListener('input', checkCase3Relation);
+        el.addEventListener('change', checkCase3Relation);
+    });
+
+    function fillCase3(start, end, invoice) {
+        document.getElementById('case3-a-start').value = start;
+        document.getElementById('case3-a-end').value = end;
+        document.getElementById('case3-a-invoice').value = invoice;
+        checkCase3Relation();
+    }
+    document.getElementById('case3-fill-overlap').addEventListener('click', function () {
+        fillCase3('2026-09-19', '2026-09-21', 'INV-77001');
+    });
+    document.getElementById('case3-fill-no-overlap').addEventListener('click', function () {
+        fillCase3('2026-09-25', '2026-09-27', 'INV-77001');
+    });
+    document.getElementById('case3-fill-three-way').addEventListener('click', function () {
+        fillCase3('2026-09-20', '2026-09-22', 'INV-77001');
+    });
+    document.getElementById('case3-fill-different').addEventListener('click', function () {
+        fillCase3('2026-09-19', '2026-09-21', 'INV-00000');
+    });
+
+    checkCase3Relation();
+
+    // ---- Case 4: OCR result on a NEW (non-duplicate) invoice -> success wording, not just "membaca..." ----
+    document.getElementById('case4-fill-new').addEventListener('click', function () {
+        document.getElementById('case4-invoice').value = 'INV-99871';
+    });
+    document.getElementById('case4-fill-dup').addEventListener('click', function () {
+        document.getElementById('case4-invoice').value = 'INV-88213';
+    });
+    document.getElementById('case4-ocr-btn').addEventListener('click', function () {
+        var invoice = document.getElementById('case4-invoice').value.trim();
+        var status = document.getElementById('case4-status');
+        var btn = this;
+
+        if (!invoice) {
+            status.className = 'ocr-status-card show';
+            status.style.borderColor = '#dc3545';
+            status.style.background = '#fff5f5';
+            status.style.color = '#b02a37';
+            status.textContent = 'Isi No. Invoice dulu.';
+            return;
+        }
+
+        status.className = 'ocr-status-card show pending';
+        status.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Membaca struk (OCR)...';
+        btn.setAttribute('disabled', 'disabled');
+
+        setTimeout(function () {
+            var match = findClaimByInvoice(invoice);
+            if (match) {
+                showModal('Invoice ini sama dengan invoice yang sebelumnya.',
+                    'No. Invoice <b>' + invoice + '</b> sudah diajukan sebelumnya oleh <b>' + match.owner + '</b> pada tanggal ' + fmtId(match.date) + '.');
+                status.className = 'ocr-status-card show';
+                status.style.borderColor = '#dc3545';
+                status.style.background = '#fff5f5';
+                status.style.color = '#b02a37';
+                status.innerHTML = '🚫 OCR: invoice yang sama terdeteksi — lihat popup.';
+            } else {
+                status.className = 'ocr-status-card show found';
+                status.style.borderColor = '';
+                status.style.background = '';
+                status.style.color = '';
+                status.innerHTML = '✔ OCR: Invoice baru terdeteksi (<b>' + invoice + '</b>) — tidak mendeteksi invoice yang sama. Pengajuan bisa dilanjutkan.';
+            }
+            btn.removeAttribute('disabled');
+        }, 700);
+    });
+
+    // ---- Multi-Day Travel: pop-up form hari 2-10 saat Trip Type dipilih ----
+    var tripTypeSelect = document.getElementById('trip_type_id');
+    var dateInputMain = document.getElementById('sim-date');
+    var multiDayContainer = document.getElementById('multi-day-sections');
+    var MAX_DAYS = 10;
+
+    function generateDaySections() {
+        var tripVal = tripTypeSelect.value;
+        var dateVal = dateInputMain.value;
+        multiDayContainer.innerHTML = '';
+
+        if (!tripVal || !dateVal) {
+            multiDayContainer.classList.remove('show');
+            return;
+        }
+
+        multiDayContainer.classList.add('show');
+
+        for (var day = 2; day <= MAX_DAYS; day++) {
+            var dayDate = addDays(dateVal, day - 1);
+            var panel = document.createElement('div');
+            panel.className = 'day-panel';
+            panel.setAttribute('data-day', day);
+            panel.setAttribute('data-ref-date', dateVal);
+
+            panel.innerHTML =
+                '<h6>Day ' + day + ' <span class="day-date-label">' + fmtId(dayDate) + '</span></h6>' +
+                '<div class="row">' +
+                    '<div class="col-md-3">' +
+                        '<label>Transaction Date</label>' +
+                        '<input type="date" class="form-control" value="' + dayDate + '" readonly>' +
+                    '</div>' +
+                    '<div class="col-md-3">' +
+                        '<label>Purpose</label>' +
+                        '<input type="text" class="form-control" value="Client visit - Surabaya (Day ' + day + ')" readonly>' +
+                    '</div>' +
+                    '<div class="col-md-3">' +
+                        '<label>Trip Type</label>' +
+                        '<input type="text" class="form-control" value="' + tripTypeSelect.options[tripTypeSelect.selectedIndex].text + '" readonly>' +
+                    '</div>' +
+                    '<div class="col-md-3">' +
+                        '<label>Hotel</label>' +
+                        '<select class="form-control" name="hotel_condition_id[]">' +
+                            '<option value="1">Provided</option>' +
+                            '<option value="2" selected>Not Provided</option>' +
+                        '</select>' +
+                    '</div>' +
+                    '<div class="col-md-3">' +
+                        '<label>Start</label>' +
+                        '<input type="time" class="form-control" name="start_time[]" value="08:00">' +
+                    '</div>' +
+                    '<div class="col-md-3">' +
+                        '<label>Arrival</label>' +
+                        '<input type="time" class="form-control" name="end_time[]" value="17:00">' +
+                    '</div>' +
+                    '<div class="col-md-3">' +
+                        '<label>Allowance</label>' +
+                        '<input type="text" class="form-control currency number-format" name="allowance[]" value="500.000,00" readonly>' +
+                    '</div>' +
+                '</div>' +
+                '<table class="table full-width" style="width:100%;margin-top:10px;">' +
+                    '<thead><tr>' +
+                        '<th width="200">Cost Type</th>' +
+                        '<th width="200">Destination</th>' +
+                        '<th width="220">Remarks</th>' +
+                        '<th width="200">Currency</th>' +
+                        '<th width="200">Amount</th>' +
+                        '<th width="200">IDR Rate</th>' +
+                        '<th width="200">Payment</th>' +
+                        '<th width="220">File / OCR</th>' +
+                        '<th width="150">Action</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' +
+                        '<tr class="fieldGroupDetail">' +
+                            '<td><select class="form-control" name="cost_type_id[]">' +
+                                '<option value="">Select...</option>' +
+                                '<option value="3" selected>Meal</option>' +
+                                '<option value="2">Transport</option>' +
+                            '</select></td>' +
+                            '<td><input type="text" class="form-control" name="destination[]" value="Surabaya"></td>' +
+                            '<td><input type="text" class="form-control" name="remarks[]" placeholder="mis. Meal allowance day ' + day + '"></td>' +
+                            '<td><select class="form-control" name="currency[]">' +
+                                '<option value="IDR" selected>IDR</option>' +
+                                '<option value="USD">USD</option>' +
+                            '</select></td>' +
+                            '<td><input type="text" class="form-control currency" name="amount[]" value="150.000,00"></td>' +
+                            '<td><input type="text" class="form-control currency number-format" name="idr_rate[]" value="1,00" readonly></td>' +
+                            '<td><select class="form-control" name="payment_type[]">' +
+                                '<option value="BDC">BDC</option>' +
+                                '<option value="Cash" selected>Cash</option>' +
+                            '</select></td>' +
+                            '<td class="file-proof">' +
+                                '<button type="button" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button>' +
+                                '<button type="button" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button>' +
+                                '<input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display:none;">' +
+                            '</td>' +
+                            '<td><button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button> ' +
+                                '<button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td>' +
+                        '</tr>' +
+                    '</tbody>' +
+                '</table>';
+
+            multiDayContainer.appendChild(panel);
+        }
+    }
+
+    tripTypeSelect.addEventListener('change', generateDaySections);
+    dateInputMain.addEventListener('change', function () {
+        if (tripTypeSelect.value) {
+            generateDaySections();
+        }
+    });
+
+    // ---- Optional autorun for documentation screenshots: ?demo=case1-duplicate|case1-new|case2-blocked|case4-new|case4-duplicate|multiday ----
+    var demo = new URLSearchParams(location.search).get('demo');
+    if (demo) {
+        setTimeout(function () {
+            if (demo === 'case1-duplicate') {
+                document.getElementById('case1-invoice').value = 'INV-88213';
+                document.getElementById('case1-date').value = '2026-09-30';
+                document.getElementById('case1-submit-btn').click();
+            } else if (demo === 'case1-new') {
+                document.getElementById('case1-invoice').value = 'INV-55501';
+                document.getElementById('case1-date').value = '2026-09-19';
+                document.getElementById('case1-submit-btn').click();
+            } else if (demo === 'case2-blocked') {
+                document.getElementById('case2-invoice').value = 'INV-88213';
+                document.getElementById('case2-date').value = '2026-09-30';
+                document.getElementById('case2-submit-btn').click();
+            } else if (demo === 'case4-new') {
+                document.getElementById('case4-invoice').value = 'INV-99871';
+                document.getElementById('case4-ocr-btn').click();
+            } else if (demo === 'case4-duplicate') {
+                document.getElementById('case4-invoice').value = 'INV-88213';
+                document.getElementById('case4-ocr-btn').click();
+            } else if (demo === 'multiday') {
+                document.getElementById('sim-date').value = '2026-09-18';
+                document.getElementById('trip_type_id').value = '1';
+                document.getElementById('trip_type_id').dispatchEvent(new Event('change'));
+            }
+        }, 50);
+    }
+})();
+</script>
+</body>
+</html>

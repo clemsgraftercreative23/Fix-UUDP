@@ -126,9 +126,26 @@
                 </div>
                 
                 @if(session()->has('success'))
-                    <div class="alert alert-success">
-                        {{ session()->get('success') }}
+                    {{-- Popup (not just an inline banner) so a create/update never finishes silently. --}}
+                    <div class="modal fade" id="rtSuccessModal" tabindex="-1" role="dialog" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered" role="document">
+                            <div class="modal-content" style="border-radius:10px;border:none;">
+                                <div class="modal-body text-center" style="padding:28px 24px 8px;">
+                                    <div style="width:46px;height:46px;border-radius:50%;background:#e6f6ec;color:#28a745;display:inline-flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:10px;"><i class="fa fa-check-circle"></i></div>
+                                    <h5 style="font-weight:700;color:#2b3a55;">Success</h5>
+                                    <p style="color:#495057;font-size:14px;white-space:pre-line;">{{ session()->get('success') }}</p>
+                                </div>
+                                <div class="modal-footer" style="border-top:none;justify-content:center;padding:0 24px 24px;">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal" style="min-width:120px;">OK</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+                    <script>
+                        window.addEventListener('load', function () {
+                            if (window.jQuery && jQuery.fn.modal) { jQuery('#rtSuccessModal').modal('show'); }
+                        });
+                    </script>
                 @endif
                 @if ($errors->any())
                     @foreach ($errors->all() as $error)

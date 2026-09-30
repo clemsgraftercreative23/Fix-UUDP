@@ -47,4 +47,22 @@ class AppSetting extends Model
     {
         return static::get('travel_entertainment_ocr_check_enabled', '0') === '1';
     }
+
+    /**
+     * Travel-only OCR switch. Travel and Entertainment used to share one
+     * toggle; they are separate now (Sep 2026 request) so one module can run
+     * OCR while the other doesn't. The old combined key is the default for
+     * both, so an installation that already had it on keeps working until an
+     * admin saves the settings page and writes the per-module keys.
+     */
+    public static function isTravelOcrCheckEnabled(): bool
+    {
+        return static::get('travel_ocr_check_enabled', static::get('travel_entertainment_ocr_check_enabled', '0')) === '1';
+    }
+
+    /** Entertainment-only OCR switch -- see isTravelOcrCheckEnabled(). */
+    public static function isEntertainmentOcrCheckEnabled(): bool
+    {
+        return static::get('entertainment_ocr_check_enabled', static::get('travel_entertainment_ocr_check_enabled', '0')) === '1';
+    }
 }

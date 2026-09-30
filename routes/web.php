@@ -158,6 +158,9 @@ Route::post('pencairan-reimbursement/{id}/reverse-accurate', 'PencairanReimburse
   Route::post('reimbursement/check-duplicate-invoice', 'ReimbursementController@checkDuplicateInvoice');
   Route::post('reimbursement/check-duplicate-invoice-line', 'ReimbursementController@checkDuplicateInvoiceLine');
   Route::post('reimbursement/verify-receipt-ocr', 'ReimbursementController@verifyReceiptOcr');
+  Route::post('reimbursement/verify-day-evidence-ocr', 'ReimbursementController@verifyDayEvidenceOcr');
+  Route::post('reimbursement/check-evidence-reference', 'ReimbursementController@checkEvidenceReference');
+  Route::post('reimbursement/check-travel-date-window', 'ReimbursementController@checkTravelDateWindow');
 
   Route::get('reimbursement-user','ReimbursementController@listUser');
   Route::get('settlement-user','ReimbursementController@listSettlement');
@@ -189,10 +192,13 @@ Route::post('pencairan-reimbursement/{id}/reverse-accurate', 'PencairanReimburse
   Route::get('get-trip-type-overseas/{id}', 'TravelReimbursementController@getTripTypeOverseas');
   Route::get('get-travel-trip-rates/{id}', 'TravelReimbursementController@getTravelTripRates');
   Route::get('reimbursement-travel/approve_multiple/{id}', 'TravelReimbursementController@approveMultiple');
+  Route::get('reimbursement-travel/add-days/{id_main}', 'TravelReimbursementController@addDaysForm')->name('reimbursement-travel.add-days');
+  Route::post('reimbursement-travel/add-days/{id_main}', 'TravelReimbursementController@storeDays')->name('reimbursement-travel.store-days');
   Route::get('reimbursement-travel/add-item/{id_main}', 'TravelReimbursementController@addNewItem');
   Route::get('reimbursement-travel/add-item/{id_main}/{id_travel}', 'TravelReimbursementController@addItem');
   Route::get('reimbursement-travel/delete-item/{id_main}/{id_travel}', 'TravelReimbursementController@deleteItem')->name('reimbursement-travel.delete-item');
   Route::post('reimbursement-travel/update-item/{id_main}/{id_travel}', 'TravelReimbursementController@updateItem');
+  Route::post('reimbursement-travel/update-all/{id_main}', 'TravelReimbursementController@updateAllItems')->name('reimbursement-travel.update-all');
   Route::post('reimbursement-travel/update-item-reject/{id_main}/{id_travel}', 'TravelReimbursementController@updateItemReject');
   Route::post('reimbursement-travel/update-item-approval/{id_main}/{id_travel}', 'TravelReimbursementController@updateItemApproval');
   Route::post('reimbursement-travel/save-item/{id_main}', 'TravelReimbursementController@saveItem');

@@ -5,7 +5,7 @@
 <?php
 function rupiah($angka)
 {
-    return number_format((float) $angka, 0, ',', '.');
+    return number_format((float) $angka, 2, ',', '.');
 }
 if (!function_exists('travel_detail_idr')) {
     /** Format IDR sama seperti edit: 2 desimal, titik ribuan, koma desimal. */
@@ -19,7 +19,7 @@ if (!function_exists('travel_detail_round')) {
     /** Format IDR bulat tanpa desimal (tanpa koma). */
     function travel_detail_round($angka)
     {
-        return number_format((float) round($angka), 0, ',', '.');
+        return number_format((float) round($angka), 2, ',', '.');
     }
 }
 ?>
@@ -34,6 +34,11 @@ if (!function_exists('travel_attachment_rows')) {
             (string) $destination,
             (int) $costTypeId
         );
+    }
+}
+if (!function_exists('travel_day_attachment_rows')) {
+    function travel_day_attachment_rows($travelDayId) {
+        return \App\Support\TravelAttachmentResolver::rowsForDay((int) $travelDayId);
     }
 }
 if (!function_exists('travel_attachment_cache_bust')) {
@@ -318,7 +323,15 @@ if (!function_exists('travel_attachment_cache_bust')) {
                     
                     <td>{{$dt->payment_type}}</td>
                     <td>
-                        @foreach(travel_attachment_rows($data->id, $dt->id ?? 0, $dt->evidence ?? '', $dt->destination ?? '', $dt->cost_type_id ?? 0) as $att)
+                        @php
+                            $attachmentRows = travel_attachment_rows($data->id, $dt->id ?? 0, $dt->evidence ?? '', $dt->destination ?? '', $dt->cost_type_id ?? 0);
+                            // Day-level evidence (uploaded against the whole day, not a
+                            // specific row) is shown once, on the first detail row.
+                            if ($loop->first) {
+                                $attachmentRows = array_merge(travel_day_attachment_rows($item->id ?? 0), $attachmentRows);
+                            }
+                        @endphp
+                        @foreach($attachmentRows as $att)
                             @php
                                 $fileName = $att['file_name'] ?? '';
                                 $display = $att['original_name'] ?? $fileName;

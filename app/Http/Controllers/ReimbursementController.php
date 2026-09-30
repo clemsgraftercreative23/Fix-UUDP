@@ -49,7 +49,7 @@ class ReimbursementController extends Controller
             return response()->json([
                 'duplicate' => false,
                 'code' => 'INVALID_REQUEST',
-                'message' => 'Jenis reimbursement dan tanggal pengajuan wajib diisi.',
+                'message' => 'Reimbursement type and submission date are required.',
             ], 422);
         }
 
@@ -74,7 +74,14 @@ class ReimbursementController extends Controller
             ]);
         }
 
-        $existingDates = \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), $type, $dates, $excludeId);
+        // Travel: the real trip dates are one row per day in
+        // reimbursement_travel, not the header's reimbursement.date (which is
+        // only the first leg), so it needs its own lookup. Still scoped to this
+        // one applicant -- two people travelling on the same date is normal;
+        // only re-claiming a day you already claimed yourself is worth a warning.
+        $existingDates = $type === 2
+            ? \App\Support\ReimbursementDuplicateGuard::findDuplicateTravelTripDates(auth()->id(), $dates, $excludeId)
+            : \App\Support\ReimbursementDuplicateGuard::findDuplicateDates(auth()->id(), $type, $dates, $excludeId);
 
         return response()->json(\App\Support\DuplicateDateChecker::buildResponse($dates, $existingDates));
     }
@@ -98,6 +105,79 @@ class ReimbursementController extends Controller
         $usedNumbers = \App\Support\ReimbursementDuplicateGuard::findDuplicateInvoiceNumbers($numbers, $excludeId);
 
         return response()->json(\App\Support\DuplicateInvoiceChecker::buildBatchResponse($numbers, $usedNumbers));
+    }
+
+    /**
+     * Fast-feedback mirror of TravelReimbursementController::resolveReferencedRowInvoice():
+     * given a typed No. Invoice/Receipt number, look up who already claimed
+     * it (a co-traveler's row) so the UI can show found/not-found before the
+     * form is actually submitted. Stateless -- no DB write. The real,
+     * unbypassable resolution happens server-side when the item is saved.
+     */
+    public function checkEvidenceReference(Request $request)
+    {
+        $number = \App\Support\DuplicateInvoiceChecker::normalizeNumber($request->input('no_invoice'));
+        if ($number === '') {
+            return response()->json(['found' => false, 'message' => 'Enter the Invoice/Receipt No. you want to reference.']);
+        }
+
+        $excludeId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $owner = \App\Support\ReimbursementDuplicateGuard::findClaimOwnerByInvoiceNumber($number, $excludeId);
+
+        if (!$owner) {
+            return response()->json([
+                'found' => false,
+                'message' => "No. Invoice/Receipt \"{$number}\" was not found in any other reimbursement submission.",
+            ]);
+        }
+
+        if ($owner['user_id'] === (int) auth()->id()) {
+            return response()->json([
+                'found' => false,
+                'self' => true,
+                'message' => 'This number is your own claim in another submission -- references are only for proof that belongs to a different co-traveler.',
+            ]);
+        }
+
+        return response()->json([
+            'found' => true,
+            'owner_name' => $owner['user_name'],
+            'reimbursement_id' => $owner['reimbursement_id'],
+            'message' => 'Found -- the proof of ' . $owner['user_name'] . ' will be referenced for this row.',
+        ]);
+    }
+
+    /**
+     * Travel-only, self only: warns as soon as a Transaction Date is typed/changed
+     * if it falls within 3 days of a date the SAME user already has on a DIFFERENT
+     * Travel reimbursement (see ReimbursementDuplicateGuard::findOwnTravelDateWindowConflict()
+     * for why "different reimbursement" matters -- a multi-day trip's own consecutive
+     * days must never trip this). Advisory only: nothing here blocks store()/update(),
+     * this is a fast heads-up so a mistaken/duplicate date entry gets caught before
+     * the user finishes filling the whole form.
+     */
+    public function checkTravelDateWindow(Request $request)
+    {
+        $date = trim((string) $request->input('date'));
+        if ($date === '') {
+            return response()->json(['blocked' => false, 'message' => null]);
+        }
+
+        $excludeId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $conflict = \App\Support\ReimbursementDuplicateGuard::findOwnTravelDateWindowConflict((int) auth()->id(), $date, $excludeId);
+
+        if (!$conflict) {
+            return response()->json(['blocked' => false, 'message' => null]);
+        }
+
+        return response()->json([
+            'blocked' => true,
+            'conflicting_date' => $conflict['date'],
+            'reimbursement_id' => $conflict['reimbursement_id'],
+            'message' => 'This date is close (within 3 days) to your other Travel submission dated '
+                . \Carbon\Carbon::parse($conflict['date'])->translatedFormat('d M Y')
+                . '. Make sure this is not a duplicate entry of the same trip.',
+        ]);
     }
 
     /**
@@ -128,8 +208,116 @@ class ReimbursementController extends Controller
         return response()->json([
             'duplicate' => $message !== null,
             'code' => $message !== null ? 'DUPLICATE_INVOICE_LINE' : 'OK',
-            'message' => $message ?? 'Tanggal, No Invoice, dan Nominal ini belum pernah diajukan sebelumnya.',
+            'message' => $message ?? 'This date, Invoice No., and amount have not been submitted before.',
         ]);
+    }
+
+    /**
+     * Travel-only: fast-feedback endpoint for the single "Step 1: Upload
+     * Evidence" upload per day (see the Sep 2026 redesign moving evidence
+     * from per expense-line row to once per day). OCRs the photo for the
+     * "OCR Result (Auto-filled)" summary panel (Transaction Date, Merchant/
+     * Hotel Name, Amount, Currency, plus the not-shown-but-still-checked No.
+     * Invoice/Receipt), and runs the same same_trip_offer/mess_relation/
+     * plain-duplicate checks verifyReceiptOcr() runs per row -- now scoped to
+     * the whole day instead of a single cost line. Stateless -- no DB write.
+     * The real, unbypassable block happens server-side at store()/updateInquiry()
+     * time (see TravelReimbursementController).
+     *
+     * $request->date is the Transaction Date field's current value; it may
+     * still be empty when the user uploads before picking a date, in which
+     * case the OCR-extracted transaction_date (if any) is used instead for
+     * the duplicate/relation checks below -- the invoice's own date is the
+     * one that actually matters for those, not whatever the field happens to
+     * show yet.
+     */
+    public function verifyDayEvidenceOcr(Request $request)
+    {
+        if (!$request->hasFile('receipt')) {
+            return response()->json([
+                'status' => 'skipped',
+                'extracted_no_invoice' => null,
+                'extracted_amount' => null,
+                'extracted_transaction_date' => null,
+                'extracted_merchant_name' => null,
+                'extracted_currency' => null,
+                'message' => 'There is no file to verify.',
+                'duplicate' => false,
+                'duplicate_message' => null,
+            ], 422);
+        }
+
+        $verifier = new \App\Support\ReceiptOcrVerifier();
+        $result = $verifier->read($request->file('receipt'));
+        $result['status'] = $result['status'] ?? 'unavailable';
+        // Map the verifier's extracted_* keys onto the same top-level result array
+        // verifyReceiptOcr() uses, so the frontend's existing buildBadgeMessage()/
+        // renderBadge() helpers (reimbursement-ocr-check.js) keep working unmodified.
+        $result['extracted_no_invoice'] = $result['extracted_no_invoice'] ?? null;
+        $result['extracted_amount'] = $result['extracted_amount'] ?? null;
+
+        $excludeReimbursementId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
+        $duplicateMessage = null;
+        $sameTripBlocked = null;
+        $sameTripOffer = null;
+
+        $effectiveDate = trim((string) $request->input('date'));
+        if ($effectiveDate === '') {
+            $effectiveDate = (string) ($result['extracted_transaction_date'] ?? '');
+        }
+
+        if (!empty($result['extracted_no_invoice'])) {
+            $normalized = \App\Support\DuplicateInvoiceChecker::normalizeNumber($result['extracted_no_invoice']);
+            $duplicateMessage = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalized], $excludeReimbursementId);
+
+            // NOTE: a different user's invoice NEVER auto-links here (no
+            // silent Stay(MESS) trip override). It always flows into the
+            // standard pipeline below so the user gets a red popup
+            // (same-trip offer / blocked info / plain duplicate) and, on
+            // Yes, links allowance-only with Request Information left
+            // fully editable -- only Expense Details lock.
+            if ($duplicateMessage !== null) {
+                $owner = \App\Support\ReimbursementDuplicateGuard::findClaimOwnerByInvoiceNumber($normalized, $excludeReimbursementId);
+                // Only a genuine same-trip co-traveler gets the offer: owner's expense
+                // approved AND the trip dates overlap; otherwise it stays a real duplicate.
+                $tripFrom = trim((string) $request->input('range_from')) ?: $effectiveDate;
+                $tripTo = trim((string) $request->input('range_to')) ?: $tripFrom;
+                $blockReason = ($owner && $owner['user_id'] !== (int) auth()->id())
+                    ? \App\Support\ReimbursementDuplicateGuard::sameTripBlockReason($owner, $tripFrom, $tripTo)
+                    : 'own_or_unknown';
+                if ($owner && in_array($blockReason, ['not_approved', 'no_overlap'], true)) {
+                    // Same-trip candidate that is not eligible yet: same modal look as the
+                    // offer, but info-only, with the reason in the yellow note.
+                    $sameTripBlocked = [
+                        'no_invoice' => $normalized,
+                        'owner_name' => $owner['user_name'],
+                        'ticket_number' => $owner['ticket_number'],
+                        'message' => "Invoice {$normalized} has already been submitted by {$owner['user_name']} for their expenses on UUDP ticket {$owner['ticket_number']}. Are you traveling together and only using that invoice to claim the travel allowance?",
+                        'note' => $blockReason === 'not_approved'
+                            ? 'The claim of this invoice owner has not been approved yet, so it cannot be used as a Travel Allowance reference. Please remove this attachment and use your own invoice/receipt, or try again after that claim is approved.'
+                            : "Your trip dates do not overlap with the invoice owner's trip ({$owner['date_from']} to {$owner['date_to']}), so it cannot be used as a Travel Allowance reference. Check the Business Trip Date Range/the day date, or use your own invoice/receipt.",
+                    ];
+                }
+                if ($owner && $blockReason === null) {
+                    $sameTripOffer = [
+                        'no_invoice' => $normalized,
+                        'owner_name' => $owner['user_name'],
+                        'ticket_number' => $owner['ticket_number'],
+                        'message' => "Invoice {$normalized} has already been submitted by {$owner['user_name']} for their expenses on UUDP ticket {$owner['ticket_number']}. Are you traveling together and only using that invoice to claim the travel allowance?",
+                    ];
+                }
+            }
+        }
+
+        $result['duplicate'] = $duplicateMessage !== null;
+        $result['duplicate_message'] = $duplicateMessage;
+        $result['same_trip_offer'] = $sameTripOffer;
+        $result['same_trip_blocked'] = $sameTripBlocked;
+        // Kept (always null here) so the response shape stays stable; the
+        // day-level travel flow no longer auto-links Mess/Hotel invoices.
+        $result['mess_relation'] = null;
+
+        return response()->json($result);
     }
 
     /**
@@ -149,7 +337,7 @@ class ReimbursementController extends Controller
                 'status' => 'skipped',
                 'extracted_no_invoice' => null,
                 'extracted_amount' => null,
-                'message' => 'Tidak ada file untuk diverifikasi.',
+                'message' => 'There is no file to verify.',
                 'duplicate' => false,
                 'duplicate_message' => null,
             ], 422);
@@ -160,13 +348,65 @@ class ReimbursementController extends Controller
 
         $excludeReimbursementId = $request->filled('exclude_id') ? (int) $request->input('exclude_id') : null;
         $duplicateMessage = null;
+        $sameTripOffer = null;
+        $messRelation = null;
         if (!empty($result['extracted_no_invoice'])) {
             $normalized = \App\Support\DuplicateInvoiceChecker::normalizeNumber($result['extracted_no_invoice']);
             $duplicateMessage = \App\Support\ReimbursementDuplicateGuard::rejectionMessageForInvoiceNumbers([$normalized], $excludeReimbursementId);
+
+            if ($duplicateMessage !== null && $request->input('reimbursement_type') === 'travel') {
+                // Shared Mess/Hotel invoice (most specific, checked first): the
+                // co-traveler's row is on the EXACT SAME calendar date -- this is
+                // the expected shape of one bill split between two travelers, not
+                // a fraud-shaped duplicate. Auto-select Trip Type = Stay(MESS) on
+                // this row instead of just offering a reference-conversion.
+                $travelDate = trim((string) $request->input('travel_date'));
+                if ($travelDate !== '') {
+                    $messOwner = \App\Support\ReimbursementDuplicateGuard::findSameDayMessRelation(
+                        $normalized,
+                        $travelDate,
+                        (int) auth()->id(),
+                        $excludeReimbursementId
+                    );
+                    if ($messOwner) {
+                        $messTripTypeId = \App\TravelTripType::where('name', 'Stay(MESS)')->value('id');
+                        $messRelation = [
+                            'no_invoice' => $normalized,
+                            'owner_name' => $messOwner['user_name'],
+                            'date' => $messOwner['date'],
+                            'trip_type_id' => $messTripTypeId,
+                            'message' => "Invoice {$normalized} dated {$messOwner['date']} is the same as the Mess/Hotel invoice of {$messOwner['user_name']} -- a shared trip was detected. Trip Type is automatically set to Stay(MESS).",
+                        ];
+                    }
+                }
+
+                // Same-trip legitimate duplicate (Travel only, general case): the
+                // invoice is already claimed by a co-traveler on a DIFFERENT date
+                // (e.g. multi-day trip), but the current user may just be after
+                // Allowance on this row, not re-billing the same expense. Offer to
+                // convert this row to a reference instead of hard-blocking -- the
+                // frontend shows a confirm dialog and, on "Ya, Lanjutkan",
+                // resubmits the row without the file so it goes through
+                // resolveReferencedRowInvoice() (see TravelReimbursementController)
+                // instead of this OCR path.
+                if ($messRelation === null) {
+                    $owner = \App\Support\ReimbursementDuplicateGuard::findClaimOwnerByInvoiceNumber($normalized, $excludeReimbursementId);
+                    if ($owner && $owner['user_id'] !== (int) auth()->id()) {
+                        $sameTripOffer = [
+                            'no_invoice' => $normalized,
+                            'owner_name' => $owner['user_name'],
+                            'ticket_number' => $owner['ticket_number'],
+                            'message' => "Invoice {$normalized} has already been submitted by {$owner['user_name']} for their expenses on UUDP ticket {$owner['ticket_number']}. Are you traveling together and only using that invoice to claim the travel allowance?",
+                        ];
+                    }
+                }
+            }
         }
 
-        $result['duplicate'] = $duplicateMessage !== null;
-        $result['duplicate_message'] = $duplicateMessage;
+        $result['duplicate'] = $duplicateMessage !== null && $messRelation === null;
+        $result['duplicate_message'] = $messRelation === null ? $duplicateMessage : null;
+        $result['same_trip_offer'] = $sameTripOffer;
+        $result['mess_relation'] = $messRelation;
 
         return response()->json($result);
     }

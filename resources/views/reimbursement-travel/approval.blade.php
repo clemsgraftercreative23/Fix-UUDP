@@ -71,6 +71,7 @@
                               @change="searchDriver" 
                               v-model="user_id"
                             >
+                              <option :value="null">-Select Employee-</option>
                               <option v-for="item in employees" :value="item.id">
                                 @{{ item.name }}
                               </option>
@@ -377,27 +378,6 @@ $(document).ready(function(){
     $('select[name="status"]').on('change', function(){
         var status = $(this).val();
         window.syncBulkApproveVisibility();
-        if(status) {
-            $.ajax({
-                url: 'reimbursement-user?status='+status+'&reimbursement_type=2',
-                type:"GET",
-                dataType:"json",
-                beforeSend: function(){
-                
-                },
-                success:function(data) {
-                    $('select[name="user_id"]').empty();
-                    $('select[name="user_id"]').append('<option value="">-Select Employee-</option>')
-                    $.each(data, function(key, value){
-                    $('select[name="user_id"]').append('<option value="'+ value.id +'">' + value.name + '</option>');
-                    });
-
-
-                },
-            });
-        } else {
-            $('select[name="user_id"]').empty();
-        }
     });
 
     window.syncBulkApproveVisibility();
@@ -457,6 +437,7 @@ $(document).ready(function(){
           self.loadData(startDate,endDate,self.status, self.user_id);
       });
         this.initSelectForm()
+        this.loadEmployees()
         this.$nextTick(function () {
           if (typeof window.syncBulkApproveVisibility === 'function') {
             window.syncBulkApproveVisibility();
@@ -465,6 +446,18 @@ $(document).ready(function(){
        
       },
       methods : {
+          // Employee options: every employee with this claim type. Independent of the
+          // Status filter (loaded once), so picking a Status never changes/clears Employee.
+          loadEmployees() {
+            var self = this;
+            $.ajax({
+              url: `{{url("/")}}/reimbursement-user?status=ALL&reimbursement_type=2`,
+              dataType: 'json',
+              success: function(list) {
+                self.employees = Array.isArray(list) ? list : [];
+              }
+            });
+          },
           searchStatus(){
           let self = this;
           this.$nextTick(() => {
@@ -472,15 +465,6 @@ $(document).ready(function(){
               window.syncBulkApproveVisibility();
             }
           });
-          $.ajax({
-            url: 'reimbursement-user?status='+self.status+'&reimbursement_type=2',
-            methods: 'GET',
-            success: function(e) {
-              console.log(e)
-              
-              self.employees = e.data
-            }
-          })
 
         },
         searchDriver(){

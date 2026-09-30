@@ -944,7 +944,7 @@ class TravelReimbursementController extends Controller
                     }
                 }
                 if (!$hasDetail) {
-                    $v->errors()->add('cost_type_id', 'Minimal satu baris rincian biaya (pilih cost type) harus diisi lengkap.');
+                    $v->errors()->add('cost_type_id', 'At least one expense detail row (select a cost type) must be filled in completely.');
                 }
             });
         }
@@ -958,7 +958,7 @@ class TravelReimbursementController extends Controller
      * Type — sebelum data disimpan. Draft ("save_draft"/"save_item") boleh
      * belum lengkap.
      */
-    private function validateTravelSubmissionRequest(Request $request, bool $isFinalSubmit): void
+    private function validateTravelSubmissionRequest(Request $request, bool $isFinalSubmit, ?int $excludeReimbursementId = null): void
     {
         if (!$isFinalSubmit) {
             return;
@@ -969,6 +969,53 @@ class TravelReimbursementController extends Controller
         if (!empty($errors)) {
             throw ValidationException::withMessages(['reimburse' => $errors]);
         }
+
+        $this->guardAgainstDuplicateTripDates($request, $excludeReimbursementId);
+    }
+
+    /**
+     * Hard block when this applicant already has a (non-rejected) travel
+     * submission covering one of these trip days. Agreed with the approvers
+     * (Sep 2026): a day may only be claimed once, so a left-out day has to be
+     * filed inside a later business trip with the reason in its remarks --
+     * hence no "continue anyway" path, here or in the form.
+     *
+     * Scoped to the applicant, unlike the invoice/OCR checks: two different
+     * people travelling on the same date is perfectly normal.
+     */
+    private function guardAgainstDuplicateTripDates(Request $request, ?int $excludeReimbursementId = null): void
+    {
+        $dates = [];
+        foreach ((array) $request->input('reimburse', []) as $leg) {
+            $date = is_array($leg) ? trim((string) ($leg['date'] ?? '')) : '';
+            if ($date !== '') {
+                $dates[] = substr($date, 0, 10);
+            }
+        }
+
+        if (empty($dates)) {
+            return;
+        }
+
+        // The submission being edited must not collide with its own saved
+        // days -- its id comes from the route, not the form body.
+        $taken = \App\Support\ReimbursementDuplicateGuard::findDuplicateTravelTripDates(
+            (int) auth()->id(),
+            $dates,
+            $excludeReimbursementId
+        );
+
+        if (empty($taken)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'reimburse' => [
+                'Anda sudah pernah mengajukan reimbursement travel untuk tanggal '
+                . implode(', ', $taken)
+                . '. Silakan perbaiki tanggalnya, atau ajukan hari yang terlewat lewat business trip berikutnya dan jelaskan alasannya di kolom Remarks.',
+            ],
+        ]);
     }
 
     /**
@@ -987,7 +1034,7 @@ class TravelReimbursementController extends Controller
      *
      * @param mixed $amountRaw
      */
-    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice, string $legDate, $amountRaw): void
+    private function guardAgainstDuplicateRowInvoice(?int $excludeDetailId, string $normalizedInvoice, string $legDate, $amountRaw, string $excludeTable = 'reimbursement_travel_details'): void
     {
         if ($normalizedInvoice === '') {
             return;
@@ -995,7 +1042,7 @@ class TravelReimbursementController extends Controller
 
         if ($excludeDetailId) {
             $current = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
-                (string) (DB::table('reimbursement_travel_details')->where('id', $excludeDetailId)->value('no_invoice') ?? '')
+                (string) (DB::table($excludeTable)->where('id', $excludeDetailId)->value('no_invoice') ?? '')
             );
             if ($normalizedInvoice === $current) {
                 return;
@@ -1058,7 +1105,7 @@ class TravelReimbursementController extends Controller
                 ->exists();
             if ($duplicateEvidence) {
                 throw ValidationException::withMessages([
-                    'evidence' => ['Foto bukti/struk ini sudah pernah diupload pada pengajuan reimbursement travel lain. Silakan upload bukti yang berbeda.'],
+                    'evidence' => ['This proof/receipt photo has already been uploaded in another travel reimbursement submission. Please upload a different proof.'],
                 ]);
             }
         }
@@ -1088,20 +1135,116 @@ class TravelReimbursementController extends Controller
      */
     private function extractReceiptInvoiceNumber(array $files): string
     {
-        $verifier = new \App\Support\ReceiptOcrVerifier();
         $extractedInvoice = '';
         foreach ($files as $file) {
             if (!$file instanceof UploadedFile) {
                 continue;
             }
-            $result = $verifier->read($file);
-            $this->ocrResultsByFileId[spl_object_id($file)] = $result;
+            $result = $this->ocrResultFor($file);
             if ($extractedInvoice === '' && !empty($result['extracted_no_invoice'])) {
                 $extractedInvoice = \App\Support\DuplicateInvoiceChecker::normalizeNumber($result['extracted_no_invoice']);
             }
         }
 
         return $extractedInvoice;
+    }
+
+    /** OCRs $file, caching by object identity in $ocrResultsByFileId so the same UploadedFile is never sent to the OCR provider twice within one request (e.g. once during guardAgainstDuplicateInvoiceWithinSubmission()'s pre-check, once again here). */
+    private function ocrResultFor(UploadedFile $file): array
+    {
+        $key = spl_object_id($file);
+        if (!isset($this->ocrResultsByFileId[$key])) {
+            $this->ocrResultsByFileId[$key] = (new \App\Support\ReceiptOcrVerifier())->read($file);
+        }
+
+        return $this->ocrResultsByFileId[$key];
+    }
+
+    /**
+     * Hard block when two DIFFERENT files uploaded in the SAME submission
+     * (any day, whether attached at day level or tagged to a specific
+     * Expense Detail row) read the same No. Invoice/Receipt number -- e.g.
+     * uploading one photo of a receipt as a PNG and again as a PDF. Every
+     * other duplicate check in this controller (guardAgainstDuplicateRowInvoice,
+     * guardAgainstDuplicateEvidenceFile's file-hash check, the day-level
+     * resolveTravelRowInvoiceNumber()) only compares against rows/files
+     * already SAVED in the database, so two never-yet-saved files submitted
+     * together in one store() call slip past all of them: neither one has a
+     * database row for the other to collide with yet. Runs once, up front,
+     * before anything is written -- a hard ValidationException here rolls
+     * back the whole submission cleanly (nothing has been created yet).
+     *
+     * @param UploadedFile[] $allFiles every file across every day in this submission, in submission order
+     */
+    private function guardAgainstDuplicateInvoiceWithinSubmission(array $allFiles): void
+    {
+        if (!\App\AppSetting::isTravelOcrCheckEnabled()) {
+            return;
+        }
+
+        /** @var array<string, string> $seenBy normalized invoice number => the first file's original name that read it */
+        $seenBy = [];
+        foreach ($allFiles as $file) {
+            if (!$file instanceof UploadedFile) {
+                continue;
+            }
+            $result = $this->ocrResultFor($file);
+            $rawInvoice = $result['extracted_no_invoice'] ?? null;
+            if (empty($rawInvoice)) {
+                continue;
+            }
+            $normalized = \App\Support\DuplicateInvoiceChecker::normalizeNumber($rawInvoice);
+            if ($normalized === '') {
+                continue;
+            }
+
+            $originalName = 'file';
+            try {
+                $originalName = (string) $file->getClientOriginalName();
+            } catch (\Throwable $e) {
+                // keep the generic fallback name
+            }
+
+            if (isset($seenBy[$normalized]) && $seenBy[$normalized] !== $originalName) {
+                throw ValidationException::withMessages([
+                    'evidence' => ["No. Invoice/Receipt \"{$rawInvoice}\" was read in more than one file uploaded in this submission ({$seenBy[$normalized]} and {$originalName}). Each invoice may only be uploaded once -- remove one of the duplicate files."],
+                ]);
+            }
+
+            $seenBy[$normalized] = $originalName;
+        }
+    }
+
+    /**
+     * Every file across every day of this submission, in submission order --
+     * day-level (untagged) files and row-tagged files alike, plus the legacy
+     * single file/proof fields -- for guardAgainstDuplicateInvoiceWithinSubmission().
+     * Mirrors exactly which files store()'s own per-day loop treats as this
+     * day's evidence (see $ocrCandidateFiles there), just gathered across
+     * every day up front instead of one day at a time.
+     */
+    private function collectAllSubmissionFiles(Request $request): array
+    {
+        $all = [];
+        foreach ((array) $request->input('reimburse', []) as $key => $value) {
+            $multiFiles = (array) $request->file('reimburse.'.$key.'.files', []);
+            foreach ($multiFiles as $file) {
+                if ($file instanceof UploadedFile) {
+                    $all[] = $file;
+                }
+            }
+
+            $legacyProof = $request->file('reimburse.'.$key.'.proof');
+            if ($legacyProof instanceof UploadedFile) {
+                $all[] = $legacyProof;
+            }
+            $legacyMain = $request->file('reimburse.'.$key.'.file');
+            if ($legacyMain instanceof UploadedFile) {
+                $all[] = $legacyMain;
+            }
+        }
+
+        return $all;
     }
 
     /**
@@ -1112,14 +1255,14 @@ class TravelReimbursementController extends Controller
      * silently wipe out a No. Invoice/Receipt that was already OCR-verified,
      * making the duplicate check on it moot on every subsequent edit.
      */
-    private function carryForwardInvoiceNumber(string $extractedInvoice, ?int $oldDetailId): string
+    private function carryForwardInvoiceNumber(string $extractedInvoice, ?int $oldDetailId, string $table = 'reimbursement_travel_details'): string
     {
         if ($extractedInvoice !== '' || !$oldDetailId) {
             return $extractedInvoice;
         }
 
         $stored = \App\Support\DuplicateInvoiceChecker::normalizeNumber(
-            (string) (DB::table('reimbursement_travel_details')->where('id', $oldDetailId)->value('no_invoice') ?? '')
+            (string) (DB::table($table)->where('id', $oldDetailId)->value('no_invoice') ?? '')
         );
         if ($stored !== '') {
             return $stored;
@@ -1129,33 +1272,136 @@ class TravelReimbursementController extends Controller
         // been OCR'd yet (e.g. attached before this feature existed). Give
         // its still-unchecked attachment(s) one chance to catch up now,
         // instead of staying silently unverified forever.
-        return (new \App\Support\ReceiptOcrVerifier())->backfillUncheckedAttachment('reimbursement_travel_details', $oldDetailId);
+        return (new \App\Support\ReceiptOcrVerifier())->backfillUncheckedAttachment($table, $oldDetailId);
+    }
+
+    /**
+     * Resolves a co-traveler's typed No. Invoice/Receipt into a link to the
+     * OTHER traveler's already-uploaded evidence, instead of asking this row
+     * to upload the same physical receipt again -- e.g. two travelers
+     * sharing one hotel room where only one of them has the Guest Folio.
+     * Only reached when the row carries no upload of its own (see
+     * resolveTravelRowInvoiceNumber()). Rejects a number that can't be found,
+     * and rejects self-reference (that's just re-claiming your own other
+     * expense twice, not a co-traveler story).
+     *
+     * @return array{no_invoice:string,reference_reimbursement_id:?int}
+     */
+    private function resolveReferencedRowInvoice(string $referenceInvoiceRaw, int $ownerUserId, ?int $excludeReimbursementId, string $legDate = ''): array
+    {
+        $number = \App\Support\DuplicateInvoiceChecker::normalizeNumber($referenceInvoiceRaw);
+
+        $owner = \App\Support\ReimbursementDuplicateGuard::findClaimOwnerByInvoiceNumber($number, $excludeReimbursementId);
+        if (!$owner) {
+            throw ValidationException::withMessages([
+                'evidence' => ["No. Invoice/Receipt \"{$number}\" that you referenced was not found in any other reimbursement submission. Make sure the number is correct, or upload your own proof."],
+            ]);
+        }
+
+        if ($owner['user_id'] === $ownerUserId) {
+            throw ValidationException::withMessages([
+                'evidence' => ["No. Invoice/Receipt \"{$number}\" is your own claim in another submission -- references are only for proof that belongs to a different co-traveler. Upload your own proof, or enter your co-traveler's Invoice No."],
+            ]);
+        }
+
+        // Same-trip rules, enforced server-side too: owner's expense approved and
+        // this day's date inside the owner's trip dates.
+        $block = \App\Support\ReimbursementDuplicateGuard::sameTripBlockReason($owner, $legDate, $legDate);
+        if ($block !== null) {
+            $reason = $block === 'not_approved'
+                ? 'the claim of that invoice owner has not been approved yet'
+                : 'your trip dates do not overlap with the invoice owner trip';
+            throw ValidationException::withMessages([
+                'evidence' => ["No. Invoice/Receipt \"{$number}\" cannot be referenced: {$reason}. Upload your own proof."],
+            ]);
+        }
+
+        return [
+            'no_invoice' => $number,
+            'reference_reimbursement_id' => $owner['reimbursement_id'],
+        ];
     }
 
     /**
      * Single gate for every row-level No. Invoice/Receipt resolution --
-     * behind App\AppSetting::isTravelEntertainmentOcrCheckEnabled(). Off
+     * behind App\AppSetting::isTravelOcrCheckEnabled(). Off
      * means no Gemini call happens at all (no extraction, no backfill, no
      * duplicate check); the row simply saves with no invoice number, same
      * as before this feature existed. On means the existing OCR + carry-
      * forward + duplicate-guard pipeline runs exactly as it always has.
      *
+     * A row with NO uploaded file but a typed $referenceInvoiceRaw links to
+     * another traveler's claim instead (see resolveReferencedRowInvoice()) --
+     * a row with both an upload and a reference just uses its own upload,
+     * the reference is silently ignored.
+     *
      * @param UploadedFile[] $files
      * @param mixed $amountRaw
+     * @param string $idTable which table $oldDetailId belongs to -- the legacy
+     *   per-row callers (add-item flow) pass a reimbursement_travel_details id,
+     *   the day-level callers (store()/updateInquiry(), Sep 2026 redesign) pass
+     *   a reimbursement_travel (day) id and 'reimbursement_travel' here.
+     * @return array{no_invoice:string,reference_reimbursement_id:?int}
      */
-    private function resolveTravelRowInvoiceNumber(array $files, ?int $oldDetailId, string $legDate, $amountRaw): string
-    {
-        if (!\App\AppSetting::isTravelEntertainmentOcrCheckEnabled()) {
-            return '';
+    private function resolveTravelRowInvoiceNumber(
+        array $files,
+        ?int $oldDetailId,
+        string $legDate,
+        $amountRaw,
+        string $referenceInvoiceRaw = '',
+        int $ownerUserId = 0,
+        ?int $excludeReimbursementId = null,
+        string $idTable = 'reimbursement_travel_details',
+        string $submittedInvoiceNumber = ''
+    ): array {
+        if (!\App\AppSetting::isTravelOcrCheckEnabled()) {
+            return ['no_invoice' => '', 'reference_reimbursement_id' => null];
         }
 
-        $extractedInvoice = $this->carryForwardInvoiceNumber(
-            $this->extractReceiptInvoiceNumber($files),
-            $oldDetailId
-        );
-        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $extractedInvoice, $legDate, $amountRaw);
+        $referenceInvoiceRaw = trim((string) $referenceInvoiceRaw);
+        if (empty($files) && $referenceInvoiceRaw !== '') {
+            return $this->resolveReferencedRowInvoice($referenceInvoiceRaw, $ownerUserId, $excludeReimbursementId, $legDate);
+        }
 
-        return $extractedInvoice;
+        // Day-level uploads already carry the freshly OCR'd No. Invoice from
+        // the pre-submit verify call (shown/editable in the OCR summary). Prefer
+        // it when non-empty so a manual correction is honoured and save-time
+        // re-OCRs the file only as a fallback.
+        $freshest = trim((string) $submittedInvoiceNumber);
+        if ($freshest === '') {
+            $freshest = $this->carryForwardInvoiceNumber(
+                $this->extractReceiptInvoiceNumber($files),
+                $oldDetailId,
+                $idTable
+            );
+        } else {
+            $freshest = \App\Support\DuplicateInvoiceChecker::normalizeNumber($freshest);
+            if ($freshest === '') {
+                $freshest = $this->carryForwardInvoiceNumber('', $oldDetailId, $idTable);
+            }
+        }
+        $this->guardAgainstDuplicateRowInvoice($oldDetailId, $freshest, $legDate, $amountRaw, $idTable);
+
+        return ['no_invoice' => $freshest, 'reference_reimbursement_id' => null];
+    }
+
+    /**
+     * A row linked via reference_reimbursement_id (same-trip legitimate
+     * duplicate: co-traveler is only claiming allowance, not re-billing an
+     * expense someone else already claimed) must never carry its own
+     * expense cost -- otherwise the same hotel invoice would be paid out
+     * twice. Allowance itself lives on reimbursement_travel, not this
+     * detail row, so it is unaffected.
+     */
+    private function zeroExpenseForReferencedRow(ReimbursementTravelDetail $detail, array $rowInvoice): void
+    {
+        if ($rowInvoice['reference_reimbursement_id'] === null) {
+            return;
+        }
+
+        $detail->amount = 0;
+        $detail->idr_rate = 0;
+        $detail->tax = 0;
     }
 
     /**
@@ -1491,7 +1737,7 @@ class TravelReimbursementController extends Controller
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
             "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
-            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelOcrCheckEnabled(),
         ]);
 
     }
@@ -1513,7 +1759,7 @@ class TravelReimbursementController extends Controller
             "types" => $types,
             "hotel_conditions" => $hotelCondition,
             "not_stay_hotel_condition_id" => $this->resolveNotStayHotelConditionId(),
-            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelOcrCheckEnabled(),
         ]);
 
     }
@@ -1527,6 +1773,14 @@ class TravelReimbursementController extends Controller
         // (business decision, Sep 2026), which is enforced per row by
         // guardAgainstDuplicateRowInvoice() below.
 
+        // Catches the same invoice uploaded twice (e.g. once as a PNG, once
+        // as a PDF) WITHIN this one submission, across every day -- every
+        // other duplicate check here only compares against rows/files
+        // already saved in the database, which a brand-new submission has
+        // none of yet. Runs before the transaction starts (nothing to roll
+        // back) and before any files are moved to permanent storage.
+        $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
+
         if (isset($_POST['save'])) {
             $status = 0;
             $notif = 'Reimbursement Successfully Submitted';
@@ -1537,7 +1791,7 @@ class TravelReimbursementController extends Controller
             $status = 10;
             $notif = 'redirect';
         } else {
-            return redirect()->back()->withInput()->withErrors(['Tindakan tidak dikenali. Gunakan tombol SUBMIT atau DRAFT.']);
+            return redirect()->back()->withInput()->withErrors(['Unrecognized action. Use the SUBMIT or DRAFT button.']);
         }
 
         DB::beginTransaction();
@@ -1593,79 +1847,7 @@ class TravelReimbursementController extends Controller
                 })
                 ->toArray();
 
-            foreach ($request->reimburse as $key => $value) {
-                $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
-                $payload = [
-                    'reimbursement_id' => $data->id,
-                    'date' => $value['date'],
-                    'purpose' => $value['purpose'],
-                    'trip_type_id' => $tripTypeId,
-                    'hotel_condition_id' => $this->normalizeHotelConditionId($value['hotel_condition_id'] ?? null, $tripTypeId),
-                    'start_time' => $this->normalizeTravelTime($value['start_time'] ?? null, $tripTypeId),
-                    'end_time' => $this->normalizeTravelTime($value['end_time'] ?? null, $tripTypeId),
-                    'allowance' => $this->normalizeTravelMoneyValue($value['allowance'] ?? ''),
-                    'total' => $this->normalizeTravelMoneyValue($value['total'] ?? ''),
-                ];
-    
-                $dt = ReimbursementTravel::create($payload);
-                foreach ($value['detail'] as $k => $v) {
-                    if (isset($v['cost_type_id'])) {
-
-                    $currencyCode = !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR';
-                    $amountValue = $this->normalizeTravelAmountValue($v['amount'] ?? '');
-                    $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
-                    $computedIdrRate = $this->computeDetailIdrRate(
-                        $amountValue,
-                        $rateValue,
-                        $currencyCode,
-                        (string) ($v['payment_type'] ?? '')
-                    );
-
-                    $payloadDetail = [
-                        'reimbursement_id' => $data->id,
-                        'reimbursement_travel_id' => $dt->id,
-                        'destination' => $v['destination'],
-                        'remarks' => $v['remarks'] ?? null,
-                        'payment_type' => $v['payment_type'],
-                        'cost_type_id' => $v['cost_type_id'],
-                        'currency' => $currencyCode,
-                        'amount' => $amountValue,
-                        'idr_rate' => $computedIdrRate,
-                        'tax' => $this->normalizeTravelMoneyValue($v['tax'] ?? '0'),
-                    ];
-                    $uploadFiles = [];
-                    $proofFile = $request->file('reimburse.'.$key.'.detail.'.$k.'.proof');
-                    if ($proofFile instanceof UploadedFile) {
-                        $uploadFiles[] = $proofFile;
-                    }
-                    $mainFile = $request->file('reimburse.'.$key.'.detail.'.$k.'.file');
-                    if ($mainFile instanceof UploadedFile) {
-                        $uploadFiles[] = $mainFile;
-                    }
-
-                    $this->guardAgainstDuplicateEvidenceFile($uploadFiles);
-                    $payloadDetail['no_invoice'] = $this->resolveTravelRowInvoiceNumber($uploadFiles, null, (string) ($value['date'] ?? ''), $v['amount'] ?? '');
-
-                    if (!empty($uploadFiles)) {
-                        $firstStored = $this->storeTravelEvidenceFile($uploadFiles[0]);
-                        if ($firstStored !== '') {
-                            $payloadDetail['evidence'] = $firstStored;
-                        }
-                    }
-                    $da = ReimbursementTravelDetail::create($payloadDetail);
-
-                    if (!empty($uploadFiles)) {
-                        $this->appendUploadedAttachments(
-                            (int) $data->id,
-                            'travel',
-                            'reimbursement_travel_details',
-                            (int) $da->id,
-                            $uploadFiles
-                        );
-                    }
-                    }
-                }
-            }
+            $this->persistTravelDays($request, $data, $tripRateMap);
 
             $id_main = $data->id;
 
@@ -1812,6 +1994,255 @@ class TravelReimbursementController extends Controller
             return $this->respondErrorForTravelSave($request, $e->getMessage(), redirect()->back()->withErrors(['Error '.$e->getMessage()]));
         }
     }
+
+    /**
+     * Persists every day (reimburse[i]) of the request -- evidence, OCR/duplicate/refer
+     * resolution, day row and expense detail rows -- under an existing Reimbursement.
+     * Shared by store() (brand-new submission) and storeDays() (adding days to one).
+     */
+    private function persistTravelDays(Request $request, $data, array $tripRateMap, ?array $legs = null, array $seedDayInvoiceByKey = []): void
+    {
+            // $legs: only the days to create (updateAllItems passes the brand-new
+            // cards of the edit form, keeping their original form indexes so the
+            // uploaded-file keys still line up). $seedDayInvoiceByKey: invoices of
+            // the already-saved days, so a new day can "refer" an earlier one.
+            $dayInvoiceByKey = $seedDayInvoiceByKey;
+            foreach (($legs ?? $request->reimburse) as $key => $value) {
+                $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
+                $payload = [
+                    'reimbursement_id' => $data->id,
+                    'date' => $value['date'],
+                    'purpose' => $value['purpose'],
+                    'trip_type_id' => $tripTypeId,
+                    'hotel_condition_id' => $this->normalizeHotelConditionId($value['hotel_condition_id'] ?? null, $tripTypeId),
+                    'start_time' => $this->normalizeTravelTime($value['start_time'] ?? null, $tripTypeId),
+                    'end_time' => $this->normalizeTravelTime($value['end_time'] ?? null, $tripTypeId),
+                    'allowance' => $this->normalizeTravelMoneyValue($value['allowance'] ?? ''),
+                    'total' => $this->normalizeTravelMoneyValue($value['total'] ?? ''),
+                    'merchant_name' => $value['merchant_name'] ?? null,
+                ];
+
+                // Evidence/No. Invoice used to be captured as a single file per
+                // day (Step 1: Upload Evidence) -- see
+                // ReimbursementDuplicateGuard::findSameDayMessRelation() and the
+                // Sep 2026 redesign notes on resolveTravelRowInvoiceNumber().
+                // Multi-file redesign (Sep 2026): Step 1 now accepts several
+                // files per day, each optionally tagged to a specific Expense
+                // Detail row via reimburse[i][file_row_tags][] (same index as
+                // reimburse[i][files][]; a blank/missing tag means "day-level",
+                // same as before -- e.g. one combined invoice covering every
+                // line item that day). Tagged files get attached to their own
+                // ReimbursementTravelDetail once it's created below, instead of
+                // only ever landing on the day (ReimbursementTravel) record.
+                $dayUploadFiles = [];      // untagged -> attached to the day
+                $rowTaggedFiles = [];      // [row index (string) => UploadedFile[]] -> attached per detail row
+                $ocrCandidateFiles = [];   // every file for the day, tagged or not -- one pool for OCR/duplicate/mess-relation checks
+
+                $multiFiles = (array) $request->file('reimburse.'.$key.'.files', []);
+                $rowTags = (array) $request->input('reimburse.'.$key.'.file_row_tags', []);
+                $fileTypes = (array) $request->input('reimburse.'.$key.'.file_types', []);
+                foreach ($multiFiles as $fileIdx => $uploadedFile) {
+                    if (!$uploadedFile instanceof UploadedFile) {
+                        continue;
+                    }
+                    // "Bukti Perjalanan" files (ticket, assignment letter, ...) are attached
+                    // but never OCR'd / invoice-checked -- only Invoice/Receipt files are.
+                    if (($fileTypes[$fileIdx] ?? 'invoice') !== 'proof') {
+                        $ocrCandidateFiles[] = $uploadedFile;
+                    }
+                    $tag = trim((string) ($rowTags[$fileIdx] ?? ''));
+                    if ($tag === '') {
+                        $dayUploadFiles[] = $uploadedFile;
+                    } else {
+                        $rowTaggedFiles[$tag][] = $uploadedFile;
+                    }
+                }
+
+                // Legacy single-file/proof fields, kept for any older client
+                // (or entry point) that hasn't picked up the multi-file JS yet.
+                $legacyProofFile = $request->file('reimburse.'.$key.'.proof');
+                if ($legacyProofFile instanceof UploadedFile) {
+                    $dayUploadFiles[] = $legacyProofFile;
+                    $ocrCandidateFiles[] = $legacyProofFile;
+                }
+                $legacyMainFile = $request->file('reimburse.'.$key.'.file');
+                if ($legacyMainFile instanceof UploadedFile) {
+                    $dayUploadFiles[] = $legacyMainFile;
+                    $ocrCandidateFiles[] = $legacyMainFile;
+                }
+
+                $this->guardAgainstDuplicateEvidenceFile($ocrCandidateFiles);
+                $dayInvoice = $this->resolveTravelRowInvoiceNumber(
+                    $ocrCandidateFiles,
+                    null,
+                    (string) ($value['date'] ?? ''),
+                    $value['total'] ?? '',
+                    (string) ($value['reference_invoice'] ?? ''),
+                    (int) $data->id_user,
+                    (int) $data->id,
+                    'reimbursement_travel',
+                    (string) ($value['no_invoice'] ?? '')
+                );
+                // Multi-day: "Refer Hari Sebelumnya/Pertama" -- Travel Allowance only,
+                // re-using an EARLIER day's evidence of this same submission. Own upload
+                // wins; the source must be an earlier day. Expenses get zeroed below
+                // exactly like a co-traveler reference.
+                $referDayRaw = $value['refer_day'] ?? '';
+                if (empty($ocrCandidateFiles) && $referDayRaw !== '' && is_numeric($referDayRaw)
+                    && (int) $referDayRaw < (int) $key && isset($dayInvoiceByKey[(int) $referDayRaw])) {
+                    $dayInvoice = [
+                        'no_invoice' => $dayInvoiceByKey[(int) $referDayRaw],
+                        'reference_reimbursement_id' => (int) $data->id,
+                    ];
+                }
+                $dayInvoiceByKey[(int) $key] = $dayInvoice['no_invoice'];
+                $payload['no_invoice'] = $dayInvoice['no_invoice'];
+                $payload['reference_reimbursement_id'] = $dayInvoice['reference_reimbursement_id'];
+                // "Hanya Travel Allowance" day (no evidence, no expense) or a referred day.
+                $zeroExpense = $dayInvoice['reference_reimbursement_id'] !== null
+                    || (!empty($value['allowance_only']) && empty($ocrCandidateFiles));
+
+                $dt = ReimbursementTravel::create($payload);
+
+                if (!empty($dayUploadFiles)) {
+                    $this->appendUploadedAttachments(
+                        (int) $data->id,
+                        'travel',
+                        'reimbursement_travel',
+                        (int) $dt->id,
+                        $dayUploadFiles
+                    );
+                }
+
+                foreach ($value['detail'] as $k => $v) {
+                    if (isset($v['cost_type_id'])) {
+
+                    $currencyCode = !empty($v['currency']) ? strtoupper(trim((string) $v['currency'])) : 'IDR';
+                    // A day resolved via reference-invoice (no own evidence upload)
+                    // has nothing of its own to expense -- it's Allowance-only, same
+                    // intent as the old per-row zeroExpenseForReferencedRow().
+                    $amountValue = $zeroExpense
+                        ? 0.0
+                        : $this->normalizeTravelAmountValue($v['amount'] ?? '');
+                    $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
+                    $computedIdrRate = $zeroExpense
+                        ? 0.0
+                        : $this->computeDetailIdrRate(
+                            $amountValue,
+                            $rateValue,
+                            $currencyCode,
+                            (string) ($v['payment_type'] ?? '')
+                        );
+
+                    $payloadDetail = [
+                        'reimbursement_id' => $data->id,
+                        'reimbursement_travel_id' => $dt->id,
+                        'destination' => $v['destination'],
+                        'remarks' => $v['remarks'] ?? null,
+                        'payment_type' => $v['payment_type'],
+                        'cost_type_id' => $v['cost_type_id'],
+                        'currency' => $currencyCode,
+                        'amount' => $amountValue,
+                        'idr_rate' => $computedIdrRate,
+                        'tax' => $zeroExpense ? 0.0 : $this->normalizeTravelMoneyValue($v['tax'] ?? '0'),
+                        // NOT NULL, no default -- evidence now lives at day level (ReimbursementAttachment
+                        // against the reimbursement_travel row), this column is intentionally left blank.
+                        'evidence' => '',
+                    ];
+
+                    $newDetail = ReimbursementTravelDetail::create($payloadDetail);
+
+                    // File(s) tagged to this specific row in Step 1 (e.g. hotel
+                    // receipt tagged to the Hotel row, taxi receipt tagged to
+                    // the Taxi row) instead of only sitting at day level.
+                    if (!empty($rowTaggedFiles[(string) $k])) {
+                        $this->appendUploadedAttachments(
+                            (int) $data->id,
+                            'travel',
+                            'reimbursement_travel_details',
+                            (int) $newDetail->id,
+                            $rowTaggedFiles[(string) $k]
+                        );
+                    }
+                    }
+                }
+            }
+    }
+
+    /**
+     * "Add New Item": the create form opened in append mode for an existing
+     * reimbursement -- generate/add several days at once, same Step 1/2/3 form.
+     */
+    public function addDaysForm($id_main)
+    {
+        $reimbursement = Reimbursement::findOrFail($id_main);
+        if ((int) $reimbursement->reimbursement_type !== 2 || !$this->canManageTravelTabs($reimbursement)) {
+            return redirect()->route('reimbursement-travel.index')->withErrors(['You do not have access to add days to this submission at its current status.']);
+        }
+
+        $isOverseas = strtolower((string) $reimbursement->travel_type) !== 'domestic';
+        $tripTypes = $isOverseas
+            ? TravelTripType::where('type', 'INTERNATIONAL')->where('is_show', 1)->get()
+            : TravelTripType::where('type', 'LOCAL')->get();
+
+        return view($isOverseas ? 'reimbursement-travel.create-overseas' : 'reimbursement-travel.create', [
+            'trip_types' => $tripTypes,
+            'types' => TravelType::get(),
+            'hotel_conditions' => TravelHotelCondition::get(),
+            'not_stay_hotel_condition_id' => $this->resolveNotStayHotelConditionId(),
+            'travelEntertainmentOcrEnabled' => \App\AppSetting::isTravelOcrCheckEnabled(),
+            'appendTo' => $reimbursement,
+            'appendRates' => TravelTripRate::where('reimbursement_id', $reimbursement->id)->get(['currency', 'rate']),
+        ]);
+    }
+
+    public function storeDays(Request $request, $id_main)
+    {
+        $reimbursement = Reimbursement::findOrFail($id_main);
+        if ((int) $reimbursement->reimbursement_type !== 2 || !$this->canManageTravelTabs($reimbursement)) {
+            return redirect()->route('reimbursement-travel.index')->withErrors(['You do not have access to add days to this submission at its current status.']);
+        }
+
+        $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
+
+        DB::beginTransaction();
+        try {
+            $tripRateMap = TravelTripRate::where('reimbursement_id', $reimbursement->id)
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [strtoupper((string) $row->currency) => (float) $row->rate];
+                })
+                ->toArray();
+
+            $this->persistTravelDays($request, $reimbursement, $tripRateMap);
+            $this->recomputeAllTravelDayTotalsForReimbursement((int) $reimbursement->id);
+            $this->recalculateTravelSummary((int) $reimbursement->id);
+
+            ActivityLogger::log(
+                'reimbursement-travel',
+                'update',
+                'Days added to reimbursement travel',
+                $reimbursement->no_reimbursement,
+                'reimbursement',
+                $reimbursement->id,
+                ['added_days' => count((array) $request->input('reimburse', []))]
+            );
+
+            DB::commit();
+
+            $return = redirect('reimbursement-travel/add-item/' . $reimbursement->id)
+                ->with(['success' => 'Days successfully added']);
+
+            return $this->respondAfterTravelSave($request, $return);
+        } catch (ValidationException $e) {
+            DB::rollback();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollback();
+            return $this->respondErrorForTravelSave($request, $e->getMessage(), redirect()->back()->withErrors(['Error ' . $e->getMessage()]));
+        }
+    }
+
 
     public function saveItem(Request $request, $id_main)
     {
@@ -1962,11 +2393,14 @@ class TravelReimbursementController extends Controller
                 $amountValue = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
 
                 $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
-                $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+                $rowInvoice = $this->resolveTravelRowInvoiceNumber(
                     $this->getUploadedFilesByRow($request, $i),
                     $oldDetailId > 0 ? $oldDetailId : null,
                     (string) $request->date,
-                    $request->amount[$i] ?? ''
+                    $request->amount[$i] ?? '',
+                    (string) ($request->reference_invoice[$i] ?? ''),
+                    $ownerUserId,
+                    (int) $id_main
                 );
 
                 $new = new ReimbursementTravelDetail;
@@ -1976,7 +2410,8 @@ class TravelReimbursementController extends Controller
                 $new->destination = $request->destination[$i] ?? '';
                 $new->remarks = $request->remarks[$i] ?? null;
                 $new->payment_type = $request->payment_type[$i] ?? '';
-                $new->no_invoice = $extractedInvoice;
+                $new->no_invoice = $rowInvoice['no_invoice'];
+                $new->reference_reimbursement_id = $rowInvoice['reference_reimbursement_id'];
                 $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
                 $computedIdrRate = $this->computeDetailIdrRate(
                     $amountValue,
@@ -1989,6 +2424,7 @@ class TravelReimbursementController extends Controller
                 $new->amount = $amountValue;
                 $new->idr_rate = $computedIdrRate;
                 $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
+                $this->zeroExpenseForReferencedRow($new, $rowInvoice);
                 $new->evidence = '';
                 $new->status = 1;
                 $new->save();
@@ -2250,6 +2686,30 @@ class TravelReimbursementController extends Controller
         }
         $currency  = DB::select( DB::raw("SELECT * FROM travel_trip_rates WHERE reimbursement_id='$id_reimb' "));
 
+        // All-days payload for the create-style collapsible edit UI
+        // (add-item/add-item-overseas now render every day vertically instead
+        // of one tab pane at a time -- see updateAllItems for the matching
+        // single-submit save endpoint).
+        $allTravelDays = DB::table('reimbursement_travel')
+            ->where('reimbursement_id', (int) $id_main)
+            ->orderBy('id', 'asc')
+            ->get();
+        $editDays = $this->buildTravelEditDaysPayload(
+            (int) $id_main,
+            $allTravelDays,
+            (int) ($data['0']->id_user ?? 0),
+            (int) $id_travel
+        );
+        $editRates = collect($travel_trip)->map(function ($r) {
+            return [
+                'code' => strtoupper((string) ($r->currency ?? '')),
+                'rate' => $this->formatTravelRateForEditForm($r->rate ?? 0),
+            ];
+        })->values()->all();
+        if (empty($editRates)) {
+            $editRates = [['code' => 'IDR', 'rate' => '1,00']];
+        }
+
         $payload = [
             "trip_types" => $tripTypes,
             "types" => $types,
@@ -2263,7 +2723,10 @@ class TravelReimbursementController extends Controller
             "data_item" => $item,
             "travel_type" => $travel_type,
             "is_overseas" => ($travel_type !== 'Domestic'),
-            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelOcrCheckEnabled(),
+            "editDays" => $editDays,
+            "editRates" => $editRates,
+            "activeDayId" => (int) $id_travel,
         ];
 
         if ($request->query('rt_partial') === '1' || $request->header('X-RT-Partial') === '1') {
@@ -2271,6 +2734,869 @@ class TravelReimbursementController extends Controller
         }
 
         return view('reimbursement-travel.'.$file.'', $payload);
+    }
+
+    /**
+     * Format a stored money float for the edit form's Vue models (same
+     * German-style display the create form's maskMoney produces).
+     */
+    private function formatTravelMoneyForEditForm($value): string
+    {
+        return number_format((float) ($value ?? 0), 2, ',', '.');
+    }
+
+    /**
+     * Amount column default for the edit form: no comma at all -- truly
+     * blank when there is no value yet, plain "0" for zero (never "0,00").
+     * Both parse back to 0 everywhere (maskMoney focus handler, JS
+     * parseTravelMoney, normalizeTravelAmountValue) and "0" still satisfies
+     * the non-empty validator for filled rows.
+     */
+    private function formatTravelAmountForEditForm($value): string
+    {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return '';
+        }
+        if (abs((float) $value) < 0.00001) {
+            return '0';
+        }
+        return number_format((float) $value, 2, ',', '.');
+    }
+
+    private function formatTravelRateForEditForm($value): string
+    {
+        return number_format((float) ($value ?? 0), 2, ',', '.');
+    }
+
+    private function travelEditAttachmentUrl(string $fileName): string
+    {
+        return url('images/file_bukti/' . $fileName);
+    }
+
+    private function travelEditAttachmentIsPdf($attachment): bool
+    {
+        $mime = strtolower((string) ($attachment->mime_type ?? ''));
+        if (strpos($mime, 'pdf') !== false) {
+            return true;
+        }
+        return strtolower((string) pathinfo((string) ($attachment->file_name ?? ''), PATHINFO_EXTENSION)) === 'pdf';
+    }
+
+    /**
+     * Build the prefilled day cards for the create-style collapsible edit UI
+     * (add-item/add-item-overseas). Existing attachments are folded into each
+     * day's existingFiles list (day-level files carry rowTag '', row files
+     * carry their detail index) so the create form's chips, row-tags and
+     * previews work unchanged; brand-new uploads travel the exact same hidden
+     * inputs as a fresh submission (reimburse[i][files][] + file_row_tags +
+     * file_types).
+     *
+     * @param \Illuminate\Support\Collection|array $allDays reimbursement_travel rows, id ascending
+     */
+    private function buildTravelEditDaysPayload(int $idMain, $allDays, int $ownerUserId, int $activeDayId): array
+    {
+        $typeMap = TravelType::get()->keyBy('id');
+        $days = [];
+        $invoiceByIndex = [];
+
+        foreach ($allDays as $index => $d) {
+            $dayId = (int) ($d->id ?? 0);
+            $details = DB::table('reimbursement_travel_details')
+                ->where('reimbursement_travel_id', $dayId)
+                ->where('status', '1')
+                ->orderBy('id', 'asc')
+                ->get();
+
+            $detailModels = [];
+            $hasNonZeroAmount = false;
+            foreach ($details as $j => $row) {
+                $amount = (float) ($row->amount ?? 0);
+                if (abs($amount) > 0.00001) {
+                    $hasNonZeroAmount = true;
+                }
+                $detailModels[] = [
+                    'id_detail' => (int) ($row->id ?? 0),
+                    'cost_type' => (string) ($row->cost_type_id ?? ''),
+                    'destination' => (string) ($row->destination ?? ''),
+                    'remarks' => (string) ($row->remarks ?? ''),
+                    'currency' => strtoupper(trim((string) ($row->currency ?? ''))) ?: 'IDR',
+                    'amount' => $this->formatTravelAmountForEditForm($row->amount ?? null),
+                    'tax' => $this->formatTravelMoneyForEditForm($row->tax ?? 0),
+                    'idr_rate' => $this->formatTravelMoneyForEditForm($row->idr_rate ?? 0),
+                    'payment_type' => (string) ($row->payment_type ?? ''),
+                    'code' => (string) ($typeMap->get($row->cost_type_id)->type ?? ''),
+                ];
+            }
+
+            $existingFiles = [];
+            if ($this->attachmentTableReady()) {
+                $dayAttachments = ReimbursementAttachment::where('detail_type', 'reimbursement_travel')
+                    ->where('detail_id', $dayId)
+                    ->orderBy('id')
+                    ->get();
+                foreach ($dayAttachments as $att) {
+                    $existingFiles[] = $this->travelEditFileEntry($att, '');
+                }
+                foreach ($details as $j => $row) {
+                    $rowAttachments = ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                        ->where('detail_id', (int) ($row->id ?? 0))
+                        ->orderBy('id')
+                        ->get();
+                    foreach ($rowAttachments as $att) {
+                        $existingFiles[] = $this->travelEditFileEntry($att, (string) $j);
+                    }
+                }
+            }
+
+            // Multi-day refer: this day reuses an earlier day's document when
+            // it points at this same submission with a matching invoice.
+            $referDay = null;
+            $referenceId = $d->reference_reimbursement_id ?? null;
+            $dayInvoice = trim((string) ($d->no_invoice ?? ''));
+            if ($referenceId !== null && (int) $referenceId === $idMain && $dayInvoice !== '') {
+                foreach ($invoiceByIndex as $srcIdx => $srcInvoice) {
+                    if ($srcInvoice !== '' && $srcInvoice === $dayInvoice) {
+                        $referDay = $srcIdx;
+                        break;
+                    }
+                }
+            }
+            $invoiceByIndex[$index] = $dayInvoice;
+
+            // Same-trip co-traveler reference (another submission's invoice).
+            $sameTripRef = null;
+            $referenceInvoice = '';
+            if ($referenceId !== null && (int) $referenceId !== $idMain) {
+                $referenceInvoice = $dayInvoice;
+                $ownerName = '-';
+                $ticketNumber = '-';
+                try {
+                    $ownerReimb = Reimbursement::find((int) $referenceId);
+                    if ($ownerReimb) {
+                        $ticketNumber = (string) ($ownerReimb->no_reimbursement ?? '-');
+                        $ownerUser = User::find((int) ($ownerReimb->id_user ?? 0));
+                        if ($ownerUser) {
+                            $ownerName = (string) ($ownerUser->name ?? '-');
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // keep fallbacks
+                }
+                $sameTripRef = [
+                    'no_invoice' => $dayInvoice,
+                    'owner_name' => $ownerName,
+                    'ticket_number' => $ticketNumber,
+                ];
+            }
+
+            $tripId = $d->trip_type_id ?? '';
+            if ($tripId === null || $tripId === '') {
+                $tripId = '0';
+            }
+            $hotelConditionId = $d->hotel_condition_id ?? '';
+            if ($hotelConditionId === null || $hotelConditionId === '') {
+                $hotelConditionId = $this->resolveNotStayHotelConditionId();
+            }
+            $days[] = [
+                'travel_id' => $dayId,
+                'trip' => (string) $tripId,
+                'hotel_condition' => (string) $hotelConditionId,
+                'trip_allowance' => $this->formatTravelMoneyForEditForm($d->allowance ?? 0),
+                'travel_time' => (string) ($d->travel_time ?? ''),
+                'start_time' => $d->start_time ? substr((string) $d->start_time, 0, 5) : null,
+                'end_time' => $d->end_time ? substr((string) $d->end_time, 0, 5) : null,
+                'date' => $d->date ? date('Y-m-d', strtotime((string) $d->date)) : null,
+                'purpose' => (string) ($d->purpose ?? ''),
+                'collapsed' => $dayId !== $activeDayId,
+                'dayFiles' => [],
+                'existingFiles' => $existingFiles,
+                'referenceInvoice' => $referenceInvoice,
+                'referDay' => $referDay,
+                // "Travel Allowance only" is a transient create-form state (no
+                // column stored); re-derive it: no evidence at all and every
+                // expense row is zero.
+                'allowanceOnly' => empty($existingFiles) && !empty($detailModels) && !$hasNonZeroAmount,
+                'uploadType' => 'invoice',
+                'sameTripRef' => $sameTripRef,
+                'referenceFeedback' => ['message' => '', 'color' => ''],
+                'ocrStatus' => null,
+                'ocrSummary' => null,
+                'ocrEditing' => false,
+                'messRelation' => null,
+                'details' => $detailModels,
+                'total' => $this->formatTravelMoneyForEditForm($d->total ?? 0),
+            ];
+        }
+
+        // Fall back to the first card expanded when the URL's travel id is gone.
+        $hasActive = false;
+        foreach ($days as $day) {
+            if (!$day['collapsed']) {
+                $hasActive = true;
+                break;
+            }
+        }
+        if (!$hasActive && !empty($days)) {
+            $days[0]['collapsed'] = false;
+        }
+
+        return $days;
+    }
+
+    private function travelEditFileEntry($attachment, string $rowTag): array
+    {
+        $fileName = (string) ($attachment->file_name ?? '');
+        $isPdf = $this->travelEditAttachmentIsPdf($attachment);
+
+        return [
+            'uid' => 'ex-' . (int) ($attachment->id ?? 0),
+            'existingId' => (int) ($attachment->id ?? 0),
+            'existingUrl' => $this->travelEditAttachmentUrl($fileName),
+            'name' => (string) ($attachment->original_name ?: $fileName),
+            'dataUrl' => $isPdf ? null : $this->travelEditAttachmentUrl($fileName),
+            'isPdf' => $isPdf,
+            'rowTag' => $rowTag,
+            'docType' => 'invoice',
+        ];
+    }
+
+    /**
+     * Single-submit save for the create-style collapsible edit UI
+     * (add-item/add-item-overseas). Payload mirrors store()'s nested
+     * reimburse[i] shape plus travel_id per day, id_detail per row and
+     * keep_attachment_ids for already-stored files; per-day and per-row
+     * handling mirrors updateItem()/persistTravelDays().
+     */
+    public function updateAllItems(Request $request, $id_main)
+    {
+        $id_main = (int) $id_main;
+        $main = Reimbursement::find($id_main);
+        if (!$main) {
+            return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
+        }
+        $currentStatus = (int) ($main->status ?? 0);
+        $ownerUserId = (int) ($main->id_user ?? 0);
+
+        if ((int) $request->input('id_user') == (int) $request->input('id_editor')) {
+            $actions = $this->applyTravelFormActionFallback($currentStatus, $this->parseTravelFormActions());
+            $resolved = $this->resolveTravelItemSaveStatus($currentStatus, $actions);
+            $status = $resolved['status'];
+            $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
+
+            if ($resolved['notif'] === 'redirect') {
+                $return = redirect('reimbursement-travel/add-days/' . $id_main);
+            } elseif ($status === 0 && $sendSubmissionNotifications) {
+                $return = redirect('reimbursement-travel')->with(['success' => $resolved['notif']]);
+            } else {
+                $return = redirect('reimbursement-travel/add-item/' . $id_main . '/' . $this->resolveBulkReturnDayId($request, $id_main))->with(['success' => $resolved['notif']]);
+            }
+        } else {
+            if (isset($_POST['save_item'])) {
+                $status = $currentStatus;
+                $return = redirect('reimbursement-travel/add-days/' . $id_main);
+            } else if (isset($_POST['save_owner'])) {
+                $status = 3;
+                $return = redirect()->back()->with(['success' => "Reimbursement Successfully Updated"]);
+            } else if (isset($_POST['edit_owner'])) {
+                $status = $currentStatus;
+                $return = redirect()->to('reimbursement-travel/add-item/' . $id_main . '/' . $this->resolveBulkReturnDayId($request, $id_main))->with('success', 'Reimbursement Successfully Updated');
+            } else if (isset($_POST['edit_finance'])) {
+                $status = ($currentStatus > 1) ? $currentStatus : 1;
+                $return = redirect()->to('reimbursement-travel/add-item/' . $id_main . '/' . $this->resolveBulkReturnDayId($request, $id_main))->with('success', 'Reimbursement Successfully Updated');
+            } else if (isset($_POST['save_finance'])) {
+                $status = 2;
+                $return = redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);
+            } else {
+                // Default update (e.g. Update via edit_finance/edit_owner where the
+                // button name did not reach $_POST): treat as an in-place update and
+                // return to the reimbursement-travel list, NOT the approval tab.
+                // Status is left untouched so an approver's edit does not silently
+                // reset it.
+                $status = $currentStatus;
+                $return = redirect('reimbursement-travel')->with(['success' => 'Reimbursement Successfully Updated']);
+            }
+        }
+
+        // Same strictness as the create form: final submits validate every
+        // filled row, drafts stay lenient.
+        $isFinalSubmit = !isset($_POST['save_draft']) && !isset($_POST['save_item']);
+        // $id_main excluded: re-saving this submission must not collide with
+        // the trip days it already owns.
+        $this->validateTravelSubmissionRequest($request, $isFinalSubmit, $id_main);
+        $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
+
+        DB::beginTransaction();
+        try {
+            $legs = (array) $request->input('reimburse', []);
+            $firstLeg = reset($legs);
+            Reimbursement::whereId($id_main)->update([
+                'remark' => $request->remark,
+                'reimbursement_department_id' => $request->reimbursement_department_id,
+                'date' => is_array($firstLeg) ? ($firstLeg['date'] ?? $main->date) : $main->date,
+            ]);
+
+            $this->syncBulkTripRates((array) $request->input('rates', []), $id_main, (string) ($main->travel_type ?? 'Domestic'));
+
+            $tripRateMap = TravelTripRate::where('reimbursement_id', $id_main)
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [strtoupper((string) $row->currency) => (float) $row->rate];
+                })
+                ->toArray();
+
+            $allowIncomplete = isset($_POST['save_draft']) || isset($_POST['save_item']);
+            $draftFallbackCostTypeId = (int) (TravelType::min('id') ?: 0);
+            $dayInvoiceByKey = [];
+            $newLegs = [];
+
+            foreach ($legs as $key => $value) {
+                if (!is_array($value)) {
+                    continue;
+                }
+                $travelId = (int) ($value['travel_id'] ?? 0);
+                $dayRow = $travelId > 0
+                    ? ReimbursementTravel::where('id', $travelId)->where('reimbursement_id', $id_main)->first()
+                    : null;
+                if (!$dayRow) {
+                    // A card without a travel_id is a day added in this same
+                    // edit form ("Add New Item"): created below, after the saved
+                    // days are updated. A stale id that no longer exists is skipped.
+                    if ($travelId <= 0) {
+                        $newLegs[$key] = $value;
+                    }
+                    continue;
+                }
+
+                $dayResult = $this->applyBulkTravelDayUpdate(
+                    $request,
+                    (int) $key,
+                    $value,
+                    $id_main,
+                    (int) $dayRow->id,
+                    $dayRow,
+                    $tripRateMap,
+                    $ownerUserId,
+                    $allowIncomplete,
+                    $draftFallbackCostTypeId,
+                    $dayInvoiceByKey
+                );
+                $dayInvoiceByKey[(int) $key] = $dayResult['no_invoice'];
+            }
+
+            if (!empty($newLegs)) {
+                $this->persistTravelDays($request, $main, $tripRateMap, $newLegs, $dayInvoiceByKey);
+                $this->recomputeAllTravelDayTotalsForReimbursement($id_main);
+            }
+
+            // Every saved day above got fresh detail rows and the attachments the
+            // user kept were copied onto them, so any row-level attachment still
+            // pointing at a detail row that no longer exists is one the user
+            // removed (or a leftover from an earlier save). Drop it: otherwise
+            // TravelAttachmentResolver::repairForReimbursement() -- run each time
+            // the edit page opens -- treats it as a lost file and re-attaches it,
+            // so a deleted document "comes back". Only DB rows go; files on disk stay.
+            if ($this->attachmentTableReady()) {
+                $liveDetailIds = DB::table('reimbursement_travel_details')
+                    ->where('reimbursement_id', $id_main)
+                    ->pluck('id')
+                    ->all();
+                ReimbursementAttachment::where('reimbursement_id', $id_main)
+                    ->where('detail_type', 'reimbursement_travel_details')
+                    ->whereNotIn('detail_id', $liveDetailIds)
+                    ->delete();
+            }
+
+            $total = DB::select(DB::raw("SELECT sum(total) as total FROM reimbursement_travel WHERE reimbursement_id='$id_main'"))['0']->total;
+            Reimbursement::where('id', $id_main)->update([
+                'status' => $status,
+                'nominal_pengajuan' => $this->normalizeTravelMoneyValue($total ?? ''),
+            ]);
+
+            $this->refreshTravelReimbursementReport((int) $id_main);
+
+            $logRow = Reimbursement::find($id_main);
+            ActivityLogger::log(
+                'reimbursement-travel',
+                $status == 9 ? 'reject' : 'update',
+                $status == 9 ? 'Item reimbursement travel ditolak/diperbaharui' : 'Item reimbursement travel diperbaharui (semua hari)',
+                $logRow ? $logRow->no_reimbursement : null,
+                'reimbursement',
+                $id_main,
+                ['status' => $status]
+            );
+
+            if ((int) $request->input('id_user') == (int) $request->input('id_editor')) {
+                if ($sendSubmissionNotifications && $status === 0) {
+                    $this->sendTravelSubmissionNotifications((int) $id_main);
+                }
+            }
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withInput()->withErrors(['Error ' . $e->getMessage()]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return redirect()->back()->withInput()->withErrors(['Error ' . $e->getMessage()]);
+        }
+
+        return $this->respondAfterTravelSave($request, $return);
+    }
+
+    private function resolveBulkReturnDayId(Request $request, int $idMain): int
+    {
+        $legs = (array) $request->input('reimburse', []);
+        foreach ($legs as $value) {
+            $travelId = (int) (is_array($value) ? ($value['travel_id'] ?? 0) : 0);
+            if ($travelId <= 0) {
+                continue;
+            }
+            $exists = ReimbursementTravel::where('id', $travelId)
+                ->where('reimbursement_id', $idMain)
+                ->exists();
+            if ($exists) {
+                return $travelId;
+            }
+        }
+
+        return (int) (ReimbursementTravel::where('reimbursement_id', $idMain)->min('id') ?? 0);
+    }
+
+    /**
+     * Create-style nested rates (rates[i][code/rate]) synced to
+     * travel_trip_rates -- mirrors syncTripRatesFromMainForm().
+     */
+    private function syncBulkTripRates(array $rates, int $reimbursementId, string $travelType): void
+    {
+        $hasPayload = false;
+        foreach ($rates as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $currency = strtoupper(trim((string) ($r['code'] ?? '')));
+            if ($currency === '') {
+                continue;
+            }
+            $rate = $currency === 'IDR'
+                ? '1.00'
+                : $this->normalizeExchangeRateValue($r['rate'] ?? '');
+            $hasPayload = true;
+            TravelTripRate::updateOrCreate(
+                ['reimbursement_id' => $reimbursementId, 'currency' => $currency],
+                ['rate' => $rate]
+            );
+        }
+
+        if (!$hasPayload) {
+            return;
+        }
+
+        $this->ensureDefaultTripRates($reimbursementId, $travelType);
+    }
+
+    /**
+     * Save one existing day inside updateAllItems(). Mirrors the day-header
+     * update of updateItem() plus the day-level invoice/file handling of
+     * persistTravelDays(); detail rows mirror updateItem()'s loop.
+     *
+     * @return array{no_invoice:string}
+     */
+    private function applyBulkTravelDayUpdate(Request $request, int $key, array $value, int $idMain, int $travelId, $dayRow, array $tripRateMap, int $ownerUserId, bool $allowIncomplete, int $draftFallbackCostTypeId, array $dayInvoiceByKey): array
+    {
+        // Partition this day's brand-new uploads exactly like a fresh
+        // submission: untagged files stay day-level, tagged files belong to
+        // their Expense Detail row.
+        $dayUploadFiles = [];
+        $rowTaggedFiles = [];
+        $ocrCandidateFiles = [];
+        $multiFiles = (array) $request->file('reimburse.' . $key . '.files', []);
+        $rowTags = (array) ($value['file_row_tags'] ?? []);
+        $fileTypes = (array) ($value['file_types'] ?? []);
+        foreach ($multiFiles as $fileIdx => $uploadedFile) {
+            if (!$uploadedFile instanceof UploadedFile) {
+                continue;
+            }
+            if (($fileTypes[$fileIdx] ?? 'invoice') !== 'proof') {
+                $ocrCandidateFiles[] = $uploadedFile;
+            }
+            $tag = trim((string) ($rowTags[$fileIdx] ?? ''));
+            if ($tag === '') {
+                $dayUploadFiles[] = $uploadedFile;
+            } else {
+                $rowTaggedFiles[$tag][] = $uploadedFile;
+            }
+        }
+
+        $this->guardAgainstDuplicateEvidenceFile($ocrCandidateFiles);
+
+        $referDayRaw = $value['refer_day'] ?? '';
+        $referenceInvoiceRaw = trim((string) ($value['reference_invoice'] ?? ''));
+        $allowanceOnlyRaw = !empty($value['allowance_only']);
+        $touchedEvidence = !empty($ocrCandidateFiles)
+            || ($referDayRaw !== '' && $referDayRaw !== null)
+            || $referenceInvoiceRaw !== ''
+            || $allowanceOnlyRaw;
+
+        if ($touchedEvidence) {
+            $dayInvoice = $this->resolveTravelRowInvoiceNumber(
+                $ocrCandidateFiles,
+                $travelId,
+                (string) ($value['date'] ?? ''),
+                $value['total'] ?? '',
+                $referenceInvoiceRaw,
+                $ownerUserId,
+                $idMain,
+                'reimbursement_travel',
+                (string) ($value['no_invoice'] ?? '')
+            );
+            if (empty($ocrCandidateFiles) && $referDayRaw !== '' && is_numeric($referDayRaw)
+                && (int) $referDayRaw < $key && isset($dayInvoiceByKey[(int) $referDayRaw])) {
+                $dayInvoice = [
+                    'no_invoice' => $dayInvoiceByKey[(int) $referDayRaw],
+                    'reference_reimbursement_id' => $idMain,
+                ];
+            }
+            $zeroExpenseDay = $dayInvoice['reference_reimbursement_id'] !== null
+                || ($allowanceOnlyRaw && empty($ocrCandidateFiles));
+        } else {
+            // Nothing evidence-related submitted. When the stored day still
+            // carries a reference here, the user cancelled it in the UI
+            // (a kept refer/same-trip link always re-submits its signal), so
+            // drop the linkage instead of silently zeroing edited expenses.
+            $dayInvoice = [
+                'no_invoice' => (string) ($dayRow->no_invoice ?? ''),
+                'reference_reimbursement_id' => null,
+            ];
+            $zeroExpenseDay = false;
+        }
+
+        $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
+        $computedAllowance = $this->computeAllowanceInIdr((int) $tripTypeId, $idMain);
+
+        ReimbursementTravel::where('id', $travelId)->update([
+            'date' => $value['date'] ?? $dayRow->date,
+            'purpose' => $value['purpose'] ?? '',
+            'trip_type_id' => $tripTypeId,
+            'hotel_condition_id' => $this->normalizeHotelConditionId($value['hotel_condition_id'] ?? null, $tripTypeId),
+            'start_time' => $this->normalizeTravelTime($value['start_time'] ?? null, $tripTypeId),
+            'end_time' => $this->normalizeTravelTime($value['end_time'] ?? null, $tripTypeId),
+            'allowance' => $computedAllowance !== null ? $computedAllowance : $this->normalizeTravelMoneyValue($value['allowance'] ?? ''),
+            'no_invoice' => $dayInvoice['no_invoice'],
+            'reference_reimbursement_id' => $dayInvoice['reference_reimbursement_id'],
+            'merchant_name' => $touchedEvidence ? ($value['merchant_name'] ?? $dayRow->merchant_name) : $dayRow->merchant_name,
+        ]);
+
+        // Drop the day-level files the user removed BEFORE appending new uploads:
+        // the delete below keeps only the ids the form posted back, so running
+        // it after the append wiped the just-uploaded evidence (its id is never
+        // in the "kept" list).
+        if ($this->attachmentTableReady()) {
+            $keptDayIds = collect((array) ($value['keep_day_attachment_ids'] ?? []))
+                ->map(function ($v) { return (int) $v; })
+                ->filter(function ($v) { return $v > 0; })
+                ->values();
+            ReimbursementAttachment::where('detail_type', 'reimbursement_travel')
+                ->where('detail_id', $travelId)
+                ->when($keptDayIds->isNotEmpty(), function ($q) use ($keptDayIds) {
+                    $q->whereNotIn('id', $keptDayIds->all());
+                }, function ($q) use ($value) {
+                    // No keep marker at all (legacy payload): keep everything.
+                    if (!array_key_exists('keep_day_present', (array) $value)) {
+                        $q->whereRaw('1 = 0');
+                    }
+                })
+                ->delete();
+        }
+
+        // Any new day-level upload is kept -- also "proof" files (ticket,
+        // assignment letter), which are not OCR candidates and so never set
+        // $touchedEvidence.
+        if (!empty($dayUploadFiles)) {
+            $this->appendUploadedAttachments($idMain, 'travel', 'reimbursement_travel', $travelId, $dayUploadFiles);
+        }
+
+        $details = isset($value['detail']) && is_array($value['detail']) ? $value['detail'] : [];
+        $keepRows = isset($value['keep_attachment_ids']) && is_array($value['keep_attachment_ids'])
+            ? $value['keep_attachment_ids']
+            : [];
+        $keepPresent = isset($value['keep_attachment_present']) && is_array($value['keep_attachment_present'])
+            ? $value['keep_attachment_present']
+            : [];
+
+        DB::select(DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$travelId'"));
+
+        foreach ($details as $j => $v) {
+            if (!is_array($v)) {
+                continue;
+            }
+            $costTypeId = trim((string) ($v['cost_type_id'] ?? ''));
+            $rowFiles = $rowTaggedFiles[(string) $j] ?? [];
+            if ($costTypeId === '') {
+                if ($allowIncomplete && !empty($rowFiles) && $draftFallbackCostTypeId > 0) {
+                    $costTypeId = (string) $draftFallbackCostTypeId;
+                } else {
+                    continue;
+                }
+            }
+
+            $oldDetailId = 0;
+            $legacyEvidence = '';
+            $idDetailRaw = $v['id_detail'] ?? '';
+            if ($idDetailRaw !== '' && ctype_digit((string) $idDetailRaw)) {
+                $oldDetailId = (int) $idDetailRaw;
+                $rowEv = DB::select(
+                    'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
+                    [$oldDetailId]
+                );
+                $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
+            }
+
+            $currencyCode = strtoupper(trim((string) ($v['currency'] ?? '')));
+            if ($currencyCode === '') {
+                $currencyCode = 'IDR';
+            }
+
+            // Same as updateItem(): always resolve (no per-row reference
+            // input exists in this UI); untouched rows carry their stored
+            // invoice forward, and day-level allowance-only/refer zeroing
+            // flows from $zeroExpenseDay below.
+            $rowInvoice = $this->resolveTravelRowInvoiceNumber(
+                $rowFiles,
+                $oldDetailId > 0 ? $oldDetailId : null,
+                (string) ($value['date'] ?? ''),
+                $v['amount'] ?? '',
+                '',
+                $ownerUserId,
+                $idMain
+            );
+
+            $zeroExpenseRow = $zeroExpenseDay || $rowInvoice['reference_reimbursement_id'] !== null;
+            $amountValue = $zeroExpenseRow ? 0.0 : $this->normalizeTravelAmountValue($v['amount'] ?? '');
+            $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
+            $computedIdrRate = $zeroExpenseRow ? 0.0 : $this->computeDetailIdrRate(
+                $amountValue,
+                $rateValue,
+                $currencyCode,
+                (string) ($v['payment_type'] ?? '')
+            );
+
+            $new = new ReimbursementTravelDetail;
+            $new->reimbursement_id = $idMain;
+            $new->reimbursement_travel_id = $travelId;
+            $new->cost_type_id = (int) $costTypeId;
+            $new->destination = $v['destination'] ?? '';
+            $new->remarks = $v['remarks'] ?? null;
+            $new->payment_type = $v['payment_type'] ?? '';
+            $new->no_invoice = $rowInvoice['no_invoice'];
+            $new->reference_reimbursement_id = $rowInvoice['reference_reimbursement_id'];
+            $new->currency = $currencyCode;
+            $new->amount = $amountValue;
+            $new->idr_rate = $computedIdrRate;
+            $new->tax = $zeroExpenseRow ? 0.0 : $this->normalizeTravelMoneyValue($v['tax'] ?? '0');
+            $new->evidence = '';
+            $new->status = 1;
+            $new->save();
+
+            $allAttachmentNames = $this->syncBulkDayRowAttachments(
+                (array) ($keepRows[$j] ?? []),
+                array_key_exists($j, $keepPresent) || array_key_exists($j, $keepRows),
+                $rowFiles,
+                $idMain,
+                $oldDetailId,
+                (int) $new->id,
+                $legacyEvidence
+            );
+            $new->evidence = $allAttachmentNames[0] ?? '';
+            $new->save();
+        }
+
+        DB::select(DB::raw("DELETE FROM reimbursement_travel_details WHERE reimbursement_travel_id = '$travelId' AND status=0"));
+
+        $this->syncTravelDayTotalAfterDetailsSave($travelId);
+
+        return ['no_invoice' => $dayInvoice['no_invoice']];
+    }
+
+    /**
+     * Day-scoped variant of syncAttachmentsFromPreviousDetail() for the bulk
+     * edit payload: already-stored files are kept by explicit id (removed
+     * chips simply omit theirs), brand-new row-tagged uploads are appended.
+     */
+    private function syncBulkDayRowAttachments(array $keepIdsRaw, bool $hasKeepField, array $uploadedFiles, int $reimbursementId, int $oldDetailId, int $newDetailId, string $legacyEvidence = ''): array
+    {
+        $validUploads = [];
+        $seen = [];
+        foreach ($uploadedFiles as $candidate) {
+            if (!$candidate instanceof UploadedFile) {
+                continue;
+            }
+            $objectId = spl_object_id($candidate);
+            if (isset($seen[$objectId])) {
+                continue;
+            }
+            $seen[$objectId] = true;
+            $validUploads[] = $candidate;
+        }
+
+        if (!$this->attachmentTableReady()) {
+            if (!empty($validUploads)) {
+                $first = $this->storeTravelEvidenceFile($validUploads[0]);
+                return $first === '' ? [] : [$first];
+            }
+            $legacyEvidence = trim($legacyEvidence);
+            return $legacyEvidence === '' ? [] : [$legacyEvidence];
+        }
+
+        $keptFileNames = [];
+        if ($hasKeepField) {
+            $keepIds = collect($keepIdsRaw)
+                ->map(function ($v) { return (int) $v; })
+                ->filter(function ($v) { return $v > 0; })
+                ->values();
+            $oldAttachments = $keepIds->isEmpty()
+                ? collect()
+                : ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                    ->whereIn('id', $keepIds->all())
+                    ->orderBy('id')
+                    ->get();
+        } elseif ($oldDetailId > 0) {
+            $oldAttachments = ReimbursementAttachment::where('detail_type', 'reimbursement_travel_details')
+                ->where('detail_id', $oldDetailId)
+                ->orderBy('id')
+                ->get();
+        } else {
+            $oldAttachments = collect();
+        }
+
+        if ($oldDetailId > 0) {
+            $this->ensureLegacyAttachmentMigrated($reimbursementId, 'travel', 'reimbursement_travel_details', $oldDetailId, $legacyEvidence);
+        }
+
+        if ($oldAttachments->isNotEmpty()) {
+            foreach ($oldAttachments as $attachment) {
+                ReimbursementAttachment::create([
+                    'reimbursement_id' => $reimbursementId,
+                    'module' => 'travel',
+                    'detail_type' => 'reimbursement_travel_details',
+                    'detail_id' => $newDetailId,
+                    'file_name' => $attachment->file_name,
+                    'original_name' => $attachment->original_name,
+                    'mime_type' => $attachment->mime_type,
+                    'file_size' => (int) $attachment->file_size,
+                    'created_by' => auth()->id(),
+                ]);
+                $keptFileNames[] = (string) $attachment->file_name;
+            }
+        }
+
+        $newFiles = $this->appendUploadedAttachments(
+            $reimbursementId,
+            'travel',
+            'reimbursement_travel_details',
+            $newDetailId,
+            $validUploads
+        );
+
+        return array_values(array_filter(array_merge($keptFileNames, $newFiles)));
+    }
+
+    /**
+     * Submission totals + BDC/Cash report for the bulk edit save -- same
+     * numbers updateItem() writes after saving one day.
+     */
+    private function refreshTravelReimbursementReport(int $idMain): void
+    {
+        $allowance = DB::select(DB::raw("SELECT sum(allowance) AS total FROM reimbursement_travel WHERE reimbursement_id='$idMain'"))['0']->total;
+
+        $sum = function (string $payment, $costTypeId = null, string $column = 'idr_rate') use ($idMain) {
+            $sql = "SELECT sum($column) AS total FROM reimbursement_travel_details WHERE reimbursement_id='$idMain' AND payment_type='$payment'";
+            if ($costTypeId !== null) {
+                $sql .= " AND cost_type_id = " . (int) $costTypeId;
+            }
+            return DB::select(DB::raw($sql))['0']->total;
+        };
+
+        Reimbursement::whereId($idMain)->update([
+            'total_bdc' => $sum('BDC') ?? 0,
+            'allowance_bdc' => 0,
+            'simcard_bdc' => $sum('BDC', 8) ?? 0,
+            'flight_bdc' => $sum('BDC', 4) ?? 0,
+            'rentalcar_bdc' => $sum('BDC', 3) ?? 0,
+            'hotel_bdc' => $sum('BDC', 1) ?? 0,
+            'toll_bdc' => $sum('BDC', 5) ?? 0,
+            'gasoline_bdc' => $sum('BDC', 7) ?? 0,
+            'taxi_bdc' => $sum('BDC', 2) ?? 0,
+            'train_bdc' => $sum('BDC', 6) ?? 0,
+            'tax_bdc' => $sum('BDC', null, 'tax') ?? 0,
+            'others_bdc' => $sum('BDC', 9) ?? 0,
+            'total_cash' => $sum('Cash') ?? 0,
+            'allowance_cash' => $allowance,
+            'simcard_cash' => $sum('Cash', 8) ?? 0,
+            'flight_cash' => $sum('Cash', 4) ?? 0,
+            'rentalcar_cash' => $sum('Cash', 3) ?? 0,
+            'hotel_cash' => $sum('Cash', 1) ?? 0,
+            'toll_cash' => $sum('Cash', 5) ?? 0,
+            'gasoline_cash' => $sum('Cash', 7) ?? 0,
+            'taxi_cash' => $sum('Cash', 2) ?? 0,
+            'train_cash' => $sum('Cash', 6) ?? 0,
+            'tax_cash' => $sum('Cash', null, 'tax') ?? 0,
+            'others_cash' => $sum('Cash', 9) ?? 0,
+        ]);
+    }
+
+    /**
+     * Submission notifications for the bulk edit save -- same messages
+     * updateItem() sends when the owner's own edit re-submits (status 0).
+     */
+    private function sendTravelSubmissionNotifications(int $idMain): void
+    {
+        $data = Reimbursement::find($idMain);
+        if (!$data) {
+            return;
+        }
+        $user = \App\User::where('id', $data->id_user)->first();
+        if (!$user) {
+            return;
+        }
+
+        \Curl::to('https://api.fonnte.com/send')
+            ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
+            ->withData([
+                'target' => FonnteMessenger::normalizePhone($user->phoneNumber),
+                'message' =>
+                    "Hai *" .
+                    $user->name .
+                    "*,\n\nPengajuan reimbursement Anda dengan nomor *" .
+                    $data->no_reimbursement .
+                    "* sebesar *Rp " .
+                    number_format($data->nominal_pengajuan, 0, ',', '.') .
+                    "* telah diajukan.\n\nSaat ini sedang menunggu Proses Verifikasi oleh Head Department.\n\nTerima kasih.
+                    \n\nKlik untuk melihat detail pengajuan : " .
+                    url('/reimbursement-travel/' . $data->id),
+            ])->post();
+
+        $id_approval = $user->id_approval;
+        $approval = DB::select(DB::raw("SELECT * FROM users WHERE id='$id_approval'"));
+
+        if (!empty($approval)) {
+            \Curl::to('https://api.fonnte.com/send')
+                ->withHeaders(['Authorization: ' . config('services.fonnte.token')])
+                ->withData([
+                    'target' => FonnteMessenger::normalizePhone($approval[0]->phoneNumber),
+                    'message' =>
+                        "Hai *" .
+                        $approval[0]->name .
+                        "* dengan nomor *" .
+                        $data->no_reimbursement .
+                        "* sebesar *Rp " .
+                        number_format($data->nominal_pengajuan, 0, ',', '.') .
+                        "* telah diajukan kembali.\n\nSaat ini sedang menunggu Proses *Verifikasi Anda*.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " .
+                        url('/reimbursement-travel/' . $data->id),
+                ])->post();
+        }
     }
 
     public function addNewItem(Request $request, $id_main)
@@ -2340,7 +3666,7 @@ class TravelReimbursementController extends Controller
             "data_item" => $item,
             "travel_type" => $travel_type,
             "is_overseas" => ($travel_type !== 'Domestic'),
-            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
+            "travelEntertainmentOcrEnabled" => \App\AppSetting::isTravelOcrCheckEnabled(),
         ];
 
         if ($request->query('rt_partial') === '1' || $request->header('X-RT-Partial') === '1') {
@@ -2541,6 +3867,9 @@ class TravelReimbursementController extends Controller
         
         //Update table  reimbursement_travel
 
+        $id_detail  = DB::select( DB::raw("SELECT id FROM reimbursement_travel WHERE reimbursement_id = '$id'"))['0']->id;
+        $ownerUserId = (int) (Reimbursement::whereId($id)->value('id_user') ?? 0);
+
         $form_data = array(
             'purpose'        =>  $request->remark,
             'trip_type_id'        =>  $this->normalizeTripTypeId($request->trip_type_id),
@@ -2550,6 +3879,58 @@ class TravelReimbursementController extends Controller
             'allowance'        =>  $this->resolveTravelAllowanceForSave($request, (int) $id),
         );
 
+        // Evidence/No. Invoice is captured ONCE per day (Step 1: Upload
+        // Evidence), not per expense-line row -- see store() and
+        // ReimbursementDuplicateGuard::findSameDayMessRelation(). The day
+        // row is updated in place (same id across saves), so "keep the
+        // existing evidence" when nothing new is uploaded/typed just means
+        // leaving no_invoice/reference_reimbursement_id/merchant_name and the
+        // existing ReimbursementAttachment rows (still tied to this same
+        // $id_detail) untouched -- no copy-forward needed like the old
+        // per-row recreate-every-save pattern required.
+        $dayUploadFiles = [];
+        $dayProofFile = $request->file('day_proof');
+        if ($dayProofFile instanceof UploadedFile) {
+            $dayUploadFiles[] = $dayProofFile;
+        }
+        $dayMainFile = $request->file('day_file');
+        if ($dayMainFile instanceof UploadedFile) {
+            $dayUploadFiles[] = $dayMainFile;
+        }
+        $dayReferenceInvoiceRaw = trim((string) $request->input('day_reference_invoice', ''));
+
+        $existingReferenceId = (int) (DB::table('reimbursement_travel')->where('id', $id_detail)->value('reference_reimbursement_id') ?? 0);
+        $dayInvoice = ['no_invoice' => '', 'reference_reimbursement_id' => $existingReferenceId > 0 ? $existingReferenceId : null];
+
+        if (!empty($dayUploadFiles) || $dayReferenceInvoiceRaw !== '') {
+            $this->guardAgainstDuplicateEvidenceFile($dayUploadFiles);
+            $dayInvoice = $this->resolveTravelRowInvoiceNumber(
+                $dayUploadFiles,
+                (int) $id_detail,
+                (string) $request->date,
+                DB::table('reimbursement_travel')->where('id', $id_detail)->value('total') ?? '',
+                $dayReferenceInvoiceRaw,
+                $ownerUserId,
+                (int) $id,
+                'reimbursement_travel'
+            );
+            $form_data['no_invoice'] = $dayInvoice['no_invoice'];
+            $form_data['reference_reimbursement_id'] = $dayInvoice['reference_reimbursement_id'];
+            $form_data['merchant_name'] = $request->input('merchant_name');
+
+            if (!empty($dayUploadFiles)) {
+                $this->appendUploadedAttachments(
+                    (int) $id,
+                    'travel',
+                    'reimbursement_travel',
+                    (int) $id_detail,
+                    $dayUploadFiles
+                );
+            }
+        } elseif ($request->filled('merchant_name')) {
+            $form_data['merchant_name'] = $request->input('merchant_name');
+        }
+
         ReimbursementTravel::where('reimbursement_id', $id)->update($form_data);
 
         //Update table  reimbursement_travel_details
@@ -2557,7 +3938,6 @@ class TravelReimbursementController extends Controller
         $currencies = is_array($request->currency) ? $request->currency : [];
         $count_ = count($currencies);
 
-        $id_detail  = DB::select( DB::raw("SELECT id FROM reimbursement_travel WHERE reimbursement_id = '$id'"))['0']->id;
         DB::select( DB::raw("UPDATE reimbursement_travel_details SET status=0  WHERE reimbursement_travel_id = '$id_detail'"));
 
         for ($i=0; $i < $count_; $i++) {
@@ -2566,24 +3946,10 @@ class TravelReimbursementController extends Controller
                 continue;
             }
 
-            $oldDetailId = 0;
-            $legacyEvidence = '';
-            $id_detail_ = $request->id_detail[$i] ?? '';
-            if ($id_detail_ !== '' && ctype_digit((string) $id_detail_)) {
-                $oldDetailId = (int) $id_detail_;
-                $rowEv = DB::select(
-                    'SELECT evidence FROM reimbursement_travel_details WHERE id = ? LIMIT 1',
-                    [$oldDetailId]
-                );
-                $legacyEvidence = !empty($rowEv) ? ($rowEv[0]->evidence ?? '') : '';
-            }
-
-            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
-                $this->getUploadedFilesByRow($request, $i),
-                $oldDetailId > 0 ? $oldDetailId : null,
-                (string) $request->date,
-                $request->amount[$i] ?? ''
-            );
+            // A day resolved via reference-invoice (no own evidence upload)
+            // has nothing of its own to expense -- it's Allowance-only, same
+            // intent as the old per-row zeroExpenseForReferencedRow().
+            $isReferencedDay = $dayInvoice['reference_reimbursement_id'] !== null;
 
             $new = new ReimbursementTravelDetail;
             $new->reimbursement_id = $id;
@@ -2592,26 +3958,14 @@ class TravelReimbursementController extends Controller
             $new->destination = $request->destination[$i] ?? '';
             $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
-            $new->no_invoice = $extractedInvoice;
             $new->currency = $request->currency[$i] ?? '';
-            $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
-            $new->amount = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
-            $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
+            $new->idr_rate = $isReferencedDay ? 0 : $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
+            $new->amount = $isReferencedDay ? 0 : $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
+            $new->tax = $isReferencedDay ? 0 : $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
+            // NOT NULL, no default -- evidence now lives at day level (ReimbursementAttachment
+            // against the reimbursement_travel row), this column is intentionally left blank.
             $new->evidence = '';
             $new->status = 1;
-            $new->save();
-
-            $allAttachmentNames = $this->syncAttachmentsFromPreviousDetail(
-                $request,
-                $i,
-                (int) $id,
-                'travel',
-                'reimbursement_travel_details',
-                $oldDetailId,
-                (int) $new->id,
-                $legacyEvidence
-            );
-            $new->evidence = $allAttachmentNames[0] ?? '';
             $new->save();
         }
 
@@ -2781,11 +4135,14 @@ class TravelReimbursementController extends Controller
                 $status = 2;
                 $return = redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);
             } else {
-                $status = 0;
-                $return = redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);
+                // Default update (button name did not reach $_POST): treat as an
+                // in-place update and return to the reimbursement-travel list, NOT
+                // the approval tab.
+                $status = $currentStatus;
+                $return = redirect('reimbursement-travel')->with(['success' => 'Reimbursement Successfully Updated']);
             }
-          	
-            
+
+
         }
 
         $this->validateTravelReimbursementItemRequest($request, $this->travelItemAllowIncompleteForm());
@@ -2868,11 +4225,14 @@ class TravelReimbursementController extends Controller
             $amountValue = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
 
             $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
-            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+            $rowInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null,
                 (string) $request->date,
-                $request->amount[$i] ?? ''
+                $request->amount[$i] ?? '',
+                (string) ($request->reference_invoice[$i] ?? ''),
+                $ownerUserId,
+                (int) $id_main
             );
 
             $new = new ReimbursementTravelDetail;
@@ -2882,7 +4242,8 @@ class TravelReimbursementController extends Controller
             $new->destination = $request->destination[$i] ?? '';
             $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
-            $new->no_invoice = $extractedInvoice;
+            $new->no_invoice = $rowInvoice['no_invoice'];
+            $new->reference_reimbursement_id = $rowInvoice['reference_reimbursement_id'];
             $rateValue = ($currencyCode === 'IDR') ? 1.0 : ((float) ($tripRateMap[$currencyCode] ?? 0));
             $computedIdrRate = $this->computeDetailIdrRate(
                 $amountValue,
@@ -2895,6 +4256,7 @@ class TravelReimbursementController extends Controller
             $new->amount = $amountValue;
             $new->idr_rate = $computedIdrRate;
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
+            $this->zeroExpenseForReferencedRow($new, $rowInvoice);
             $new->evidence = '';
             $new->status = 1;
             $new->save();
@@ -3135,11 +4497,14 @@ class TravelReimbursementController extends Controller
             }
 
             $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
-            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+            $rowInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null,
                 (string) $request->date,
-                $request->amount[$i] ?? ''
+                $request->amount[$i] ?? '',
+                (string) ($request->reference_invoice[$i] ?? ''),
+                $ownerUserId,
+                (int) $id_main
             );
 
             $new = new ReimbursementTravelDetail;
@@ -3149,11 +4514,13 @@ class TravelReimbursementController extends Controller
             $new->destination = $request->destination[$i] ?? '';
             $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
-            $new->no_invoice = $extractedInvoice;
+            $new->no_invoice = $rowInvoice['no_invoice'];
+            $new->reference_reimbursement_id = $rowInvoice['reference_reimbursement_id'];
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
             $new->amount = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
+            $this->zeroExpenseForReferencedRow($new, $rowInvoice);
             $new->evidence = '';
             $new->status = 1;
             $new->save();
@@ -3393,11 +4760,14 @@ class TravelReimbursementController extends Controller
             }
 
             $this->guardAgainstDuplicateEvidenceFile($this->getUploadedFilesByRow($request, $i));
-            $extractedInvoice = $this->resolveTravelRowInvoiceNumber(
+            $rowInvoice = $this->resolveTravelRowInvoiceNumber(
                 $this->getUploadedFilesByRow($request, $i),
                 $oldDetailId > 0 ? $oldDetailId : null,
                 (string) $request->date,
-                $request->amount[$i] ?? ''
+                $request->amount[$i] ?? '',
+                (string) ($request->reference_invoice[$i] ?? ''),
+                $ownerUserId,
+                (int) $id_main
             );
 
             $new = new ReimbursementTravelDetail;
@@ -3407,11 +4777,13 @@ class TravelReimbursementController extends Controller
             $new->destination = $request->destination[$i] ?? '';
             $new->remarks = $request->remarks[$i] ?? null;
             $new->payment_type = $request->payment_type[$i] ?? '';
-            $new->no_invoice = $extractedInvoice;
+            $new->no_invoice = $rowInvoice['no_invoice'];
+            $new->reference_reimbursement_id = $rowInvoice['reference_reimbursement_id'];
             $new->currency = $request->currency[$i] ?? '';
             $new->idr_rate = $this->normalizeTravelMoneyValue($request->idr_rate[$i] ?? '');
             $new->amount = $this->normalizeTravelAmountValue($request->amount[$i] ?? '');
             $new->tax = $this->normalizeTravelMoneyValue($request->tax[$i] ?? '0');
+            $this->zeroExpenseForReferencedRow($new, $rowInvoice);
             $new->evidence = '';
             $new->status = 1;
             $new->save();

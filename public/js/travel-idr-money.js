@@ -1,7 +1,7 @@
 /**
  * IDR money formatting for travel reimbursement (BDC vs Cash).
  * BDC (credit card): 2 decimal places (183.472,66).
- * Cash: whole rupiah (183.473).
+ * Cash: rounded to whole rupiah but still shown with 2 decimals (183.473,00).
  */
 (function (global) {
   'use strict';
@@ -67,7 +67,7 @@
     if (isBdcPayment(paymentType)) {
       return n.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return n.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function parseTravelMoney(raw) {
@@ -160,3 +160,35 @@
   global.warnLargeTravelAmount = warnLargeTravelAmount;
   global.warnLargeTravelAmountForElement = warnLargeTravelAmountForElement;
 })(typeof window !== 'undefined' ? window : this);
+
+/**
+ * Amount (Expense Details) diketik bebas oleh user, mis. "17000,20" -- tanpa
+ * mask kanan-ke-kiri (maskMoney) yang memunculkan "0,00" dan membuat kursor
+ * harus digeser. Saat mengetik hanya karakter angka , . - yang diterima;
+ * saat blur baru diformat rapi (17.000,20). Delegated, jadi berlaku juga
+ * untuk baris yang ditambah dinamis.
+ */
+(function () {
+  'use strict';
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.classList || !t.classList.contains('amount-input') || t.readOnly) return;
+    var cleaned = t.value.replace(/[^0-9,.\-]/g, '');
+    if (cleaned !== t.value) {
+      t.value = cleaned;
+    }
+  }, true);
+  document.addEventListener('focusout', function (e) {
+    var t = e.target;
+    if (!t || !t.classList || !t.classList.contains('amount-input') || t.readOnly) return;
+    var v = t.value.trim();
+    if (v === '' || v === '-') return;
+    var n = Math.round(parseTravelMoney(v) * 100) / 100;
+    var formatted = n.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (formatted !== t.value) {
+      t.value = formatted;
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      t.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, true);
+})();

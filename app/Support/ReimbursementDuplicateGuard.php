@@ -55,6 +55,50 @@ class ReimbursementDuplicateGuard
     }
 
     /**
+     * Travel-only: the trip dates this user has ALREADY claimed. Unlike every
+     * other type, a Travel submission holds one row per trip day in
+     * reimbursement_travel, so the real trip dates live there -- the header's
+     * reimbursement.date is just the first leg, which is why the generic
+     * findDuplicateDates() above can't answer this for Travel.
+     *
+     * Deliberately scoped to ONE applicant (id_user), unlike the
+     * invoice-number checks which are cross-applicant on purpose: reusing a
+     * physical receipt is fraud no matter who does it, whereas two different
+     * people travelling on the same date is completely normal. This answers
+     * "did I already claim this very day?", not "has this evidence been used?".
+     *
+     * @param string[] $dates trip days (Y-m-d) about to be submitted
+     * @param ?int $excludeReimbursementId see findDuplicateDates()
+     * @return string[] trip dates (Y-m-d) this user already has on file
+     */
+    public static function findDuplicateTravelTripDates(int $userId, array $dates, ?int $excludeReimbursementId = null): array
+    {
+        $dates = array_values(array_unique(array_filter($dates, function ($d) {
+            return is_string($d) && trim($d) !== '';
+        })));
+
+        if (empty($dates)) {
+            return [];
+        }
+
+        return \App\ReimbursementTravel::query()
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
+            ->where('reimbursement.id_user', $userId)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->whereIn('reimbursement_travel.date', $dates)
+            ->pluck('reimbursement_travel.date')
+            ->map(function ($date) {
+                return \Carbon\Carbon::parse($date)->format('Y-m-d');
+            })
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Checked across every place an invoice/receipt number can be saved
      * (the per-submission header, Travel's legacy per-day/item numbers, the
      * current per-row numbers on Travel/Entertainment cost lines, and
@@ -137,6 +181,235 @@ class ReimbursementDuplicateGuard
     }
 
     /**
+     * Reverse lookup for the "reference another claim's evidence instead of
+     * re-uploading" flow (Travel co-traveler rows): given a typed No.
+     * Invoice/Receipt number, find who already claimed it and on which
+     * reimbursement -- so a second traveler can link their own cost-line row
+     * to that claim instead of uploading the same physical receipt again
+     * (e.g. two travelers sharing one hotel room where only one has the
+     * Guest Folio). Searches the same union of places as
+     * findDuplicateInvoiceNumbers(); returns the FIRST match found.
+     *
+     * @return null|array{user_id:int,user_name:string,reimbursement_id:int,ticket_number:?string}
+     */
+    public static function findClaimOwnerByInvoiceNumber(string $number, ?int $excludeReimbursementId = null): ?array
+    {
+        $number = DuplicateInvoiceChecker::normalizeNumber($number);
+        if ($number === '') {
+            return null;
+        }
+
+        $applyExclude = function ($query) use ($excludeReimbursementId) {
+            if ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            }
+        };
+
+        $match = Reimbursement::where('reimbursement.no_invoice', $number)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->when($excludeReimbursementId, $applyExclude)
+            ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+            ->first();
+
+        if (!$match) {
+            $match = ReimbursementTravel::where('reimbursement_travel.no_invoice', $number)
+                ->whereNull('reimbursement_travel.reference_reimbursement_id')
+                ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
+                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->when($excludeReimbursementId, $applyExclude)
+                ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+                ->first();
+        }
+
+        if (!$match) {
+            $match = ReimbursementTravelDetail::where('reimbursement_travel_details.no_invoice', $number)
+                ->where('reimbursement_travel_details.status', 1)
+                ->whereNull('reimbursement_travel_details.reference_reimbursement_id')
+                ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
+                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->when($excludeReimbursementId, $applyExclude)
+                ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+                ->first();
+        }
+
+        if (!$match) {
+            $match = ReimbursementEntertaiment::where('reimbursement_entertaiments.no_invoice', $number)
+                ->where('reimbursement_entertaiments.status', 1)
+                ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_entertaiments.reimbursement_id')
+                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->when($excludeReimbursementId, $applyExclude)
+                ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+                ->first();
+        }
+
+        if (!$match && AppSetting::isDriverOcrCheckEnabled()) {
+            $match = ReimbursementDriver::where('reimbursement_driver.no_invoice', $number)
+                ->where('reimbursement_driver.status', 1)
+                ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
+                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->when($excludeReimbursementId, $applyExclude)
+                ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+                ->first();
+        }
+
+        if (!$match) {
+            return null;
+        }
+
+        $ownerReimbursement = Reimbursement::find($match->reimbursement_id);
+
+        $tripDates = ReimbursementTravel::where('reimbursement_id', $match->reimbursement_id)
+            ->selectRaw('MIN(date) as d_from, MAX(date) as d_to')
+            ->first();
+
+        return [
+            'user_id' => (int) $match->id_user,
+            'user_name' => (string) (\App\User::whereId($match->id_user)->value('name') ?? ''),
+            'reimbursement_id' => (int) $match->reimbursement_id,
+            'status' => $ownerReimbursement ? (int) $ownerReimbursement->status : null,
+            'date_from' => $tripDates ? $tripDates->d_from : null,
+            'date_to' => $tripDates ? $tripDates->d_to : null,
+            'ticket_number' => $ownerReimbursement
+                ? ($ownerReimbursement->no_reimbursement ?: $ownerReimbursement->expectedTicketNumber())
+                : null,
+        ];
+    }
+
+    /**
+     * Same-trip (legitimate duplicate) eligibility of an owner's claim, as returned by
+     * findClaimOwnerByInvoiceNumber(): (1) the owner's expense must already be approved
+     * (not pending/rejected -- avoids collusion on unapproved claims), and (2) the
+     * requester's trip range must overlap the owner's trip dates. Returns null when
+     * eligible, otherwise a short reason code ('not_approved' | 'no_overlap').
+     */
+    public static function sameTripBlockReason(array $owner, ?string $from, ?string $to): ?string
+    {
+        if (in_array((int) ($owner['status'] ?? 0), [0, self::STATUS_REJECTED, 9], true)) {
+            return 'not_approved';
+        }
+
+        $from = $from ? substr($from, 0, 10) : null;
+        $to = $to ? substr($to, 0, 10) : $from;
+        if (!$from || empty($owner['date_from']) || empty($owner['date_to'])) {
+            return 'no_overlap';
+        }
+        $ownerFrom = substr((string) $owner['date_from'], 0, 10);
+        $ownerTo = substr((string) $owner['date_to'], 0, 10);
+
+        return ($from <= $ownerTo && $to >= $ownerFrom) ? null : 'no_overlap';
+    }
+
+    /**
+     * Travel-only: two travelers on the same calendar date sharing one
+     * Mess/Hotel invoice (e.g. one room, one bill, split between them) --
+     * the second traveler's row isn't a "duplicate" in the fraud sense, it's
+     * the expected shape of a shared lodging invoice. Used to auto-select
+     * and lock Trip Type to Stay(MESS) on the second traveler's row instead
+     * of just hard-blocking the invoice as already-used.
+     *
+     * Matches primarily on reimbursement_travel.no_invoice -- evidence/No.
+     * Invoice for Travel is captured once per day (Step 1: Upload Evidence),
+     * not per expense-line row, since the "single evidence per day" redesign
+     * (Sep 2026). Falls back to the legacy reimbursement_travel_details.no_invoice
+     * (a row-level invoice) only when the day-level check finds nothing --
+     * keeps this working against submissions made before that redesign,
+     * which still carry their invoice on the detail row instead of the day.
+     *
+     * @return null|array{user_id:int,user_name:string,reimbursement_id:int,date:string}
+     */
+    public static function findSameDayMessRelation(string $number, string $date, int $currentUserId, ?int $excludeReimbursementId = null): ?array
+    {
+        $number = DuplicateInvoiceChecker::normalizeNumber($number);
+        if ($number === '' || $date === '') {
+            return null;
+        }
+
+        $applyExclude = function ($query) use ($excludeReimbursementId) {
+            if ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            }
+        };
+
+        $match = ReimbursementTravel::where('reimbursement_travel.no_invoice', $number)
+            ->where('reimbursement_travel.date', $date)
+            ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->where('reimbursement.id_user', '!=', $currentUserId)
+            ->when($excludeReimbursementId, $applyExclude)
+            ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+            ->first();
+
+        if (!$match) {
+            // Legacy fallback: pre-redesign submissions kept their invoice on the detail row.
+            $match = ReimbursementTravelDetail::where('reimbursement_travel_details.no_invoice', $number)
+                ->where('reimbursement_travel_details.status', 1)
+                ->join('reimbursement_travel', 'reimbursement_travel.id', '=', 'reimbursement_travel_details.reimbursement_travel_id')
+                ->where('reimbursement_travel.date', $date)
+                ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
+                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->where('reimbursement.id_user', '!=', $currentUserId)
+                ->when($excludeReimbursementId, $applyExclude)
+                ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
+                ->first();
+        }
+
+        if (!$match) {
+            return null;
+        }
+
+        return [
+            'user_id' => (int) $match->id_user,
+            'user_name' => (string) (\App\User::whereId($match->id_user)->value('name') ?? ''),
+            'reimbursement_id' => (int) $match->reimbursement_id,
+            'date' => $date,
+        ];
+    }
+
+    /**
+     * Travel-only, self only: warn when a NEW Transaction Date falls within
+     * 3 days (inclusive, either direction) of a date the SAME user already
+     * has on a different Travel reimbursement -- most likely a duplicate/
+     * mistaken entry of a trip already submitted, or an overlapping second
+     * trip that was never meant to overlap. Deliberately excludes the
+     * reimbursement currently being edited/added-to (via
+     * $excludeReimbursementId): a legitimate multi-day trip has consecutive
+     * Travel day-rows under the SAME header, which must never conflict with
+     * each other -- only a genuinely different (other) reimbursement counts.
+     *
+     * @return null|array{date:string, reimbursement_id:int}
+     */
+    public static function findOwnTravelDateWindowConflict(int $userId, string $date, ?int $excludeReimbursementId = null): ?array
+    {
+        if ($date === '') {
+            return null;
+        }
+
+        $target = \Carbon\Carbon::parse($date)->startOfDay();
+        $windowStart = $target->copy()->subDays(2)->toDateString();
+        $windowEnd = $target->copy()->addDays(2)->toDateString();
+
+        $match = ReimbursementTravel::join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
+            ->where('reimbursement.id_user', $userId)
+            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereBetween('reimbursement_travel.date', [$windowStart, $windowEnd])
+            ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
+                $query->where('reimbursement.id', '!=', $excludeReimbursementId);
+            })
+            ->orderBy('reimbursement_travel.date')
+            ->select('reimbursement_travel.date', 'reimbursement.id as reimbursement_id')
+            ->first();
+
+        if (!$match) {
+            return null;
+        }
+
+        return [
+            'date' => (string) $match->date,
+            'reimbursement_id' => (int) $match->reimbursement_id,
+        ];
+    }
+
+    /**
      * Convenience wrapper for the single-date reimbursement types
      * (driver/entertainment/medical, and travel's single-leg edit form):
      * returns a ready-to-show rejection message, or null when the date
@@ -152,7 +425,7 @@ class ReimbursementDuplicateGuard
             return null;
         }
 
-        return 'Tanggal pengajuan ini sudah pernah diajukan sebelumnya. Silakan ajukan dengan tanggal yang berbeda.';
+        return 'This submission date has already been submitted before. Please submit with a different date.';
     }
 
     /**
@@ -216,8 +489,8 @@ class ReimbursementDuplicateGuard
             return null;
         }
 
-        return 'Tanggal ' . $date . ' dengan jenis transaksi ' . implode(', ', $duplicates)
-            . ' sudah pernah diajukan sebelumnya. Silakan ajukan dengan tanggal yang berbeda, atau pastikan jenis transaksinya tidak sama dengan pengajuan yang sudah ada (mis. Cash vs Fleet).';
+        return 'The date ' . $date . ' with transaction type ' . implode(', ', $duplicates)
+            . ' has already been submitted before. Please submit with a different date, or make sure the transaction type differs from the existing submission (e.g. Cash vs Fleet).';
     }
 
     /** @return ?string ready-to-show rejection message, or null when none of the given numbers are duplicates */
@@ -236,7 +509,7 @@ class ReimbursementDuplicateGuard
             return null;
         }
 
-        return 'Nomor invoice/receipt ' . implode(', ', $used) . ' sudah pernah digunakan pada pengajuan reimbursement sebelumnya.';
+        return 'Invoice/receipt number ' . implode(', ', $used) . ' has already been used in a previous reimbursement submission.';
     }
 
     /**
@@ -354,7 +627,7 @@ class ReimbursementDuplicateGuard
             return null;
         }
 
-        return "No. Invoice/Receipt \"{$number}\" dengan tanggal dan nominal yang sama sudah pernah diklaim pada pengajuan reimbursement sebelumnya. "
-            . 'Kemungkinan duplikat -- pastikan ini bukan klaim yang sama sebelum melanjutkan.';
+        return "No. Invoice/Receipt \"{$number}\" with the same date and amount has already been claimed in a previous reimbursement submission. "
+            . 'Possible duplicate -- make sure this is not the same claim before continuing.';
     }
 }
