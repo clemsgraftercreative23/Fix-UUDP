@@ -129,6 +129,10 @@
   .et-top-dropzone i { font-size: 22px; color: #8a94a6; display: block; margin-bottom: 6px; }
   .et-top-dropzone span { font-size: 12.5px; color: #495057; }
   .et-top-dropzone small { display: block; font-size: 10.5px; color: #8a94a6; margin-top: 4px; }
+  /* "Take Photo" under the Step 1 dropzone: the per-row camera button still
+     exists in the markup but its whole column is hidden (see .et-col-evidence),
+     so this is the only camera the redesigned form actually shows. */
+  .et-top-camera-btn { margin-top: 10px; width: 100%; }
   .et-top-evidence-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
   .et-top-evidence-item {
     display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d9d9d9;
@@ -357,6 +361,9 @@
                   <small>JPG, PNG, PDF -- bisa lebih dari satu file sekaligus, tiap file jadi satu baris baru</small>
               </div>
               <input type="file" id="etTopFileInput" accept="image/*,.pdf,application/pdf" multiple style="display:none">
+              <button type="button" id="etTopCameraBtn" class="btn btn-outline-success btn-sm et-top-camera-btn">
+                  <i class="fa fa-camera"></i> Take Photo
+              </button>
               <div id="etTopEvidenceList" class="et-top-evidence-list"></div>
               </div>
 
@@ -887,6 +894,76 @@ $(document).ready(function(){
     $('#etTopFileInput').on('change', function (e) {
         etHandleTopEvidenceFiles(e.target.files);
         e.target.value = '';
+    });
+
+    /**
+     * Step 1 "Take Photo": opens the webcam in #modalPhoto and feeds the
+     * captured frame into etHandleTopEvidenceFiles() -- the same entry point
+     * the dropzone and drag-drop use -- so the photo becomes a normal row
+     * attachment with the same preview, OCR and submit behaviour.
+     *
+     * The stream is stopped on every way out (capture, Cancel, the X, or a
+     * backdrop click); otherwise the camera light stays on and the device
+     * stays locked for other apps.
+     */
+    $('#etTopCameraBtn').on('click', function () {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Browser ini tidak bisa mengakses kamera. Silakan pakai "klik untuk pilih file".');
+            return;
+        }
+
+        var $modal = $('#modalPhoto');
+        var video = document.getElementById('videoElement');
+        var activeStream = null;
+
+        var stopCamera = function () {
+            if (activeStream) {
+                activeStream.getTracks().forEach(function (t) { t.stop(); });
+                activeStream = null;
+            }
+            if (video) {
+                video.srcObject = null;
+            }
+        };
+
+        $modal.off('hidden.bs.modal.etcam').on('hidden.bs.modal.etcam', function () {
+            $('#captureButton').off('click.etcam');
+            stopCamera();
+        });
+
+        navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+        }).then(function (stream) {
+            activeStream = stream;
+            video.srcObject = stream;
+            $modal.modal('show');
+
+            $('#captureButton').off('click.etcam').on('click.etcam', function () {
+                var w = video.videoWidth || 1280;
+                var h = video.videoHeight || 720;
+                var canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+
+                canvas.toBlob(function (blob) {
+                    if (!blob) {
+                        return;
+                    }
+                    // A unique name keeps each shot distinct in the chip list
+                    // and in the duplicate-file check.
+                    var name = 'camera-' + Date.now() + '.jpg';
+                    var photo = new File([blob], name, { type: 'image/jpeg' });
+                    etHandleTopEvidenceFiles([photo]);
+                }, 'image/jpeg', 0.85);
+
+                $modal.modal('hide');
+            });
+        }).catch(function () {
+            // Permission denied, no camera, or a non-HTTPS origin (browsers
+            // only expose getUserMedia on https:// or localhost).
+            alert('Kamera tidak bisa dibuka. Cek izin kamera di browser, atau pakai "klik untuk pilih file".');
+        });
     });
     $('#etTopDropzone').on('dragover', function (e) {
         e.preventDefault();

@@ -34,6 +34,91 @@ class TravelReimbursementController extends Controller
     /** OCR read results keyed by spl_object_id(UploadedFile), populated by extractReceiptInvoiceNumber(). */
     private array $ocrResultsByFileId = [];
 
+    /**
+     * Per-file "Invoice / Receipt" vs "Supporting Proof" choice, keyed by
+     * spl_object_id(UploadedFile) exactly like $ocrResultsByFileId above.
+     *
+     * Carried on the file object rather than threaded through
+     * appendUploadedAttachments()' signature so that every one of its call
+     * sites (day-level, row-level, edit, bulk-day) persists the type without
+     * each having to pass it along -- the ones that never set it simply keep
+     * the 'invoice' default, which is how all evidence behaved before.
+     */
+    private array $docTypesByFileId = [];
+
+    /** Evidence that supports the activity (emailed confirmation, ticket, assignment letter) rather than being the receipt the amount is claimed from -- never OCR'd. */
+    private const DOC_TYPE_PROOF = 'proof';
+
+    /** The Invoice/Receipt a claimed amount comes from -- the file OCR reads. */
+    private const DOC_TYPE_INVOICE = 'invoice';
+
+    /** Normalizes a submitted file_types[] entry to one of the two supported doc types. */
+    private function normalizeDocType($raw): string
+    {
+        return strtolower(trim((string) $raw)) === self::DOC_TYPE_PROOF
+            ? self::DOC_TYPE_PROOF
+            : self::DOC_TYPE_INVOICE;
+    }
+
+    /** Remembers $file's doc type so appendUploadedAttachments() can persist it onto the attachment row. */
+    private function rememberDocType(UploadedFile $file, $raw): string
+    {
+        $docType = $this->normalizeDocType($raw);
+        $this->docTypesByFileId[spl_object_id($file)] = $docType;
+
+        return $docType;
+    }
+
+    /**
+     * Applies the edit form's per-file Invoice-vs-Proof corrections to
+     * already-stored attachments: [attachment id => 'invoice'|'proof'], posted
+     * as reimburse[i][keep_attachment_doc_types] alongside each kept file's id.
+     *
+     * Scoped to $reimbursementId so a tampered payload cannot relabel another
+     * submission's evidence, and only writes when the value actually changed.
+     */
+    private function applyKeptAttachmentDocTypes($rawMap, int $reimbursementId): void
+    {
+        if (!is_array($rawMap) || empty($rawMap) || $reimbursementId <= 0 || !$this->attachmentTableReady()) {
+            return;
+        }
+
+        $wanted = [];
+        foreach ($rawMap as $attachmentId => $rawDocType) {
+            $attachmentId = (int) $attachmentId;
+            if ($attachmentId > 0) {
+                $wanted[$attachmentId] = $this->normalizeDocType($rawDocType);
+            }
+        }
+
+        if (empty($wanted)) {
+            return;
+        }
+
+        $stored = ReimbursementAttachment::whereIn('id', array_keys($wanted))
+            ->where('reimbursement_id', $reimbursementId)
+            ->get(['id', 'doc_type']);
+
+        foreach ($stored as $attachment) {
+            $docType = $wanted[(int) $attachment->id];
+            if ($this->normalizeDocType($attachment->doc_type ?? null) === $docType) {
+                continue;
+            }
+            $attachment->doc_type = $docType;
+            $attachment->save();
+        }
+    }
+
+    /** The doc type recorded for $file, defaulting to Invoice/Receipt when nothing tagged it. */
+    private function docTypeFor(?UploadedFile $file): string
+    {
+        if (!$file) {
+            return self::DOC_TYPE_INVOICE;
+        }
+
+        return $this->docTypesByFileId[spl_object_id($file)] ?? self::DOC_TYPE_INVOICE;
+    }
+
     private function attachmentTableReady(): bool
     {
         return Schema::hasTable('reimbursement_attachments');
@@ -552,6 +637,7 @@ class TravelReimbursementController extends Controller
             'detail_id' => $detailId,
             'file_name' => $storedFile,
             'original_name' => $originalName,
+            'doc_type' => $this->docTypeFor($uploadedFile),
             'mime_type' => $mimeType,
             'file_size' => $fileSize,
             'file_hash' => $fileHash,
@@ -710,6 +796,10 @@ class TravelReimbursementController extends Controller
                     'detail_id' => $newDetailId,
                     'file_name' => $attachment->file_name,
                     'original_name' => $attachment->original_name,
+                    // Kept files are re-inserted against the new detail row, so the
+                    // Invoice-vs-Proof choice has to travel with them -- otherwise
+                    // every edit silently demoted a stored proof back to an invoice.
+                    'doc_type' => $this->normalizeDocType($attachment->doc_type ?? null),
                     'mime_type' => $attachment->mime_type,
                     'file_size' => (int) $attachment->file_size,
                     'created_by' => auth()->id(),
@@ -2045,9 +2135,12 @@ class TravelReimbursementController extends Controller
                     if (!$uploadedFile instanceof UploadedFile) {
                         continue;
                     }
-                    // "Bukti Perjalanan" files (ticket, assignment letter, ...) are attached
-                    // but never OCR'd / invoice-checked -- only Invoice/Receipt files are.
-                    if (($fileTypes[$fileIdx] ?? 'invoice') !== 'proof') {
+                    // "Supporting Proof" files (emailed confirmation screenshot, ticket,
+                    // assignment letter, ...) are attached but never OCR'd /
+                    // invoice-checked -- only Invoice/Receipt files are. The choice is
+                    // also persisted (doc_type) so approvers can tell the two apart on
+                    // the detail page and a later edit doesn't re-OCR a proof.
+                    if ($this->rememberDocType($uploadedFile, $fileTypes[$fileIdx] ?? null) !== self::DOC_TYPE_PROOF) {
                         $ocrCandidateFiles[] = $uploadedFile;
                     }
                     $tag = trim((string) ($rowTags[$fileIdx] ?? ''));
@@ -2956,7 +3049,9 @@ class TravelReimbursementController extends Controller
             'dataUrl' => $isPdf ? null : $this->travelEditAttachmentUrl($fileName),
             'isPdf' => $isPdf,
             'rowTag' => $rowTag,
-            'docType' => 'invoice',
+            // The stored choice, not an assumption: a supporting proof reopened in
+            // edit used to come back as "invoice" and get re-OCR'd on save.
+            'docType' => $this->normalizeDocType($attachment->doc_type ?? null),
         ];
     }
 
@@ -2976,6 +3071,18 @@ class TravelReimbursementController extends Controller
         }
         $currentStatus = (int) ($main->status ?? 0);
         $ownerUserId = (int) ($main->id_user ?? 0);
+
+        // Validate BEFORE building $return. RedirectResponse::with() calls
+        // session()->flash() immediately, not when the response is sent, so
+        // preparing the success redirect first left a "success" message in the
+        // session even when validation then threw -- the form came back with
+        // the red error AND a green "Successfully Submitted" popup, for a
+        // submission that was never saved (Oct 2026 bug report).
+        $isFinalSubmit = !isset($_POST['save_draft']) && !isset($_POST['save_item']);
+        // $id_main excluded: re-saving this submission must not collide with
+        // the trip days it already owns.
+        $this->validateTravelSubmissionRequest($request, $isFinalSubmit, $id_main);
+        $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
 
         if ((int) $request->input('id_user') == (int) $request->input('id_editor')) {
             $actions = $this->applyTravelFormActionFallback($currentStatus, $this->parseTravelFormActions());
@@ -3016,14 +3123,6 @@ class TravelReimbursementController extends Controller
                 $return = redirect('reimbursement-travel')->with(['success' => 'Reimbursement Successfully Updated']);
             }
         }
-
-        // Same strictness as the create form: final submits validate every
-        // filled row, drafts stay lenient.
-        $isFinalSubmit = !isset($_POST['save_draft']) && !isset($_POST['save_item']);
-        // $id_main excluded: re-saving this submission must not collide with
-        // the trip days it already owns.
-        $this->validateTravelSubmissionRequest($request, $isFinalSubmit, $id_main);
-        $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
 
         DB::beginTransaction();
         try {
@@ -3219,7 +3318,7 @@ class TravelReimbursementController extends Controller
             if (!$uploadedFile instanceof UploadedFile) {
                 continue;
             }
-            if (($fileTypes[$fileIdx] ?? 'invoice') !== 'proof') {
+            if ($this->rememberDocType($uploadedFile, $fileTypes[$fileIdx] ?? null) !== self::DOC_TYPE_PROOF) {
                 $ocrCandidateFiles[] = $uploadedFile;
             }
             $tag = trim((string) ($rowTags[$fileIdx] ?? ''));
@@ -3231,6 +3330,12 @@ class TravelReimbursementController extends Controller
         }
 
         $this->guardAgainstDuplicateEvidenceFile($ocrCandidateFiles);
+
+        // An ALREADY-STORED file whose Invoice-vs-Proof dropdown was changed in
+        // this edit. Applied to the stored row before the day's kept files get
+        // copied onto their new detail rows below, so the copy (which carries
+        // doc_type across) picks up the corrected value rather than the old one.
+        $this->applyKeptAttachmentDocTypes($value['keep_attachment_doc_types'] ?? null, $idMain);
 
         $referDayRaw = $value['refer_day'] ?? '';
         $referenceInvoiceRaw = trim((string) ($value['reference_invoice'] ?? ''));
@@ -3484,6 +3589,9 @@ class TravelReimbursementController extends Controller
                     'detail_id' => $newDetailId,
                     'file_name' => $attachment->file_name,
                     'original_name' => $attachment->original_name,
+                    // See syncAttachmentsFromPreviousDetail(): the stored
+                    // Invoice-vs-Proof choice must survive a re-save.
+                    'doc_type' => $this->normalizeDocType($attachment->doc_type ?? null),
                     'mime_type' => $attachment->mime_type,
                     'file_size' => (int) $attachment->file_size,
                     'created_by' => auth()->id(),

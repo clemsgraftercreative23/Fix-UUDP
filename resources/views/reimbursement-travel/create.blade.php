@@ -141,7 +141,7 @@
     .rt-file-chip img.rt-file-thumb[data-status="not_receipt"], .rt-file-chip .rt-file-pdf-box[data-status="not_receipt"] { border-color: #f0ad4e; }
     .rt-file-chip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
     .rt-file-chip .rt-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rt-file-chip .rt-file-row-tag { font-size: 11px; padding: 1px 4px; height: auto; }
+    .rt-file-chip .rt-file-row-tag, .rt-file-chip .rt-file-doc-type { font-size: 11px; padding: 1px 4px; height: auto; }
     /* Preview button in Step 3 shows which numbered Step 1 file it links to
        (Sep 2026 feedback). */
     .rt-preview-file-btn { position: relative; }
@@ -150,6 +150,48 @@
         border-radius: 7px; background: #28a745; color: #fff; font-size: 9px; font-weight: 700;
         line-height: 14px; text-align: center;
     }
+    /* "+N" when the row carries more evidence files than the numbered one --
+       the Preview opens all of them (Oct 2026 feedback). Sits on the opposite
+       corner so it never covers the file number. */
+    .rt-preview-file-btn .rt-preview-file-more {
+        position: absolute; bottom: -6px; right: -6px; min-width: 14px; height: 14px; padding: 0 2px;
+        border-radius: 7px; background: #6c757d; color: #fff; font-size: 9px; font-weight: 700;
+        line-height: 14px; text-align: center;
+    }
+    /* Row Preview gallery (Oct 2026): every evidence file of one expense row,
+       paged in place instead of opened as several tabs that popup blockers
+       would inconsistently drop. */
+    #rtRowPreviewModal .rt-rowprev-stage {
+        position: relative; background: #f1f3f5; border-radius: 6px; text-align: center;
+        min-height: 320px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    #rtRowPreviewModal .rt-rowprev-stage img { max-width: 100%; max-height: 62vh; object-fit: contain; }
+    #rtRowPreviewModal .rt-rowprev-stage iframe { width: 100%; height: 62vh; border: 0; background: #fff; }
+    #rtRowPreviewModal .rt-rowprev-nav {
+        position: absolute; top: 50%; transform: translateY(-50%); border: none; cursor: pointer;
+        background: rgba(0,0,0,.45); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 15px;
+    }
+    #rtRowPreviewModal .rt-rowprev-nav:hover { background: rgba(0,0,0,.68); }
+    #rtRowPreviewModal .rt-rowprev-prev { left: 10px; }
+    #rtRowPreviewModal .rt-rowprev-next { right: 10px; }
+    #rtRowPreviewModal .rt-rowprev-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
+    #rtRowPreviewModal .rt-rowprev-badge { border-radius: 10px; padding: 1px 8px; font-size: 10.5px; font-weight: 600; }
+    #rtRowPreviewModal .rt-rowprev-badge.is-proof { background: #e9ecef; color: #495057; }
+    #rtRowPreviewModal .rt-rowprev-badge.is-invoice { background: #d7ebff; color: #0a58ca; }
+    #rtRowPreviewModal .rt-rowprev-thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    #rtRowPreviewModal .rt-rowprev-thumb {
+        width: 46px; height: 46px; border-radius: 4px; border: 2px solid transparent;
+        object-fit: cover; cursor: pointer; background: #fff;
+    }
+    #rtRowPreviewModal .rt-rowprev-thumb.is-active { border-color: #28a745; }
+    #rtRowPreviewModal .rt-rowprev-thumb-pdf {
+        width: 46px; height: 46px; border-radius: 4px; border: 2px solid transparent; cursor: pointer;
+        background: #fff; display: flex; align-items: center; justify-content: center; color: #c0392b;
+    }
+    #rtRowPreviewModal .rt-rowprev-thumb-pdf.is-active { border-color: #28a745; }
+    /* "Take Photo" sits directly under the dropzone so both ways of adding
+       evidence are equally visible (Oct 2026 request). */
+    .rt-camera-btn { margin-top: 8px; width: 100%; }
     .rt-file-chip .rt-file-remove { color: #dc3545; cursor: pointer; flex: none; }
     .rt-file-chip .rt-file-preview-btn { padding: 2px 6px; font-size: 11px; flex: none; }
     .rt-file-chip .rt-file-ocr-text { font-size: 10.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -366,10 +408,17 @@
                             <div class="rt-evidence-card">
                                 <div class="row">
                                     <div class="col-md-8">
-                                        <div class="rt-upload-type" style="margin-bottom:8px;font-size:13px;">
-                                            <span style="color:#6c757d;">Uploaded file type:</span>
-                                            <label style="margin:0 10px 0 8px;font-weight:400;"><input type="radio" :name="'uploadType'+i" value="invoice" v-model="data.uploadType"> Invoice / Receipt <small class="text-muted">(read by OCR)</small></label>
-                                            <label style="margin:0;font-weight:400;"><input type="radio" :name="'uploadType'+i" value="proof" v-model="data.uploadType"> Travel Proof <small class="text-muted">(ticket, assignment letter, etc. &mdash; no OCR)</small></label>
+                                        <!-- The Invoice-vs-Proof choice lives on each file chip below, not
+                                             here (Oct 2026 feedback: a secretary attaching e.g. a hotel
+                                             invoice plus a screenshot of the email approving the trip has to
+                                             mark them differently, and the old single radio applied to the
+                                             whole day -- it had to be flipped BEFORE browsing and could not
+                                             be corrected afterwards). New files default to Invoice /
+                                             Receipt, which is what every upload was treated as before. -->
+                                        <div class="rt-upload-type" style="margin-bottom:8px;font-size:12px;color:#6c757d;">
+                                            Upload the invoice/receipt plus any supporting proof. Mark each file below as
+                                            <b>Invoice / Receipt</b> (read by OCR) or <b>Supporting Proof</b> (email screenshot,
+                                            ticket, assignment letter &mdash; attached only, no OCR).
                                         </div>
                                         <div class="rt-dropzone"
                                              @click="$refs['dayFileInput'+i][0].click()"
@@ -387,6 +436,12 @@
                                              each new pick replacing the last -- this input is just the click/browse
                                              target and picks up multiple files at once via `multiple`. -->
                                         <input type="file" :ref="'dayFileInput'+i" accept="image/*,.pdf" multiple style="display:none" @change="onDayFileInputChange(i, $event)">
+                                        <!-- Take a photo instead of browsing for one. The capture lands in
+                                             the very same chip list as an uploaded file, so OCR, the row tag
+                                             and the Invoice/Supporting-Proof choice all behave identically. -->
+                                        <button type="button" class="btn btn-outline-success btn-sm rt-camera-btn" @click="openDayCamera(i)">
+                                            <i class="fa fa-camera"></i> Take Photo
+                                        </button>
                                         <input type="hidden" :name="'reimburse['+i+'][merchant_name]'" :value="primaryOcrFile(data) ? primaryOcrFile(data).ocrMerchant : ''">
                                         <input type="hidden" :name="'reimburse['+i+'][no_invoice]'" :value="primaryOcrFile(data) ? primaryOcrFile(data).ocrInvoice : ''">
 
@@ -406,6 +461,16 @@
                                                 <select class="form-control form-control-sm rt-file-row-tag" v-model="f.rowTag" @change="onFileRowTagChange(i, f)">
                                                     <option value="">General (all rows)</option>
                                                     <option v-for="(dt, di) in data.details" :value="String(di)">Baris @{{ di + 1 }}@{{ dt.destination ? (' - ' + dt.destination) : '' }}</option>
+                                                </select>
+                                                <!-- Oct 2026 feedback: more than one evidence file per expense row,
+                                                     where the user decides which one is the receipt OCR should read
+                                                     and which is only supporting proof ("mana yang buat bukti doang
+                                                     mana yang nanti bakal di scan pake OCR"). Switching to
+                                                     Supporting Proof drops this file out of the OCR/duplicate
+                                                     checks; switching back runs them (see onFileDocTypeChange()). -->
+                                                <select class="form-control form-control-sm rt-file-doc-type" v-model="f.docType" @change="onFileDocTypeChange(i, f)" title="Is this the invoice/receipt OCR should read, or just supporting proof?">
+                                                    <option value="invoice">Invoice / Receipt (OCR)</option>
+                                                    <option value="proof">Supporting Proof (no OCR)</option>
                                                 </select>
                                                 <!-- No. Invoice/Receipt this SPECIFIC file read, shown as plain text
                                                      instead of only a hover tooltip on the status icon -- with several
@@ -657,9 +722,12 @@
                                                              actually opens -- e.g. "1" if it links to file 1 (hotel),
                                                              "2" for file 2 (taxi) -- instead of an unlabelled eye icon
                                                              (Sep 2026 feedback). -->
-                                                        <button type="button" class="btn btn-outline-secondary btn-sm rt-preview-file-btn" :disabled="!data.dayFiles.length" @click="previewRowFile(i, a)" :title="matchedFileNumberForRow(i, a) ? ('View proof file ' + matchedFileNumberForRow(i, a)) : 'No proof linked yet'">
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm rt-preview-file-btn" :disabled="!data.dayFiles.length" @click="previewRowFile(i, a)" :title="previewRowTitle(i, a)">
                                                             <i class="fa fa-eye"></i>
                                                             <span v-if="matchedFileNumberForRow(i, a)" class="rt-preview-file-number">@{{ matchedFileNumberForRow(i, a) }}</span>
+                                                            <!-- A row can hold several evidence files now; this says how many
+                                                                 more the Preview opens besides the numbered one. -->
+                                                            <span v-if="matchedFileCountForRow(i, a) > 1" class="rt-preview-file-more">+@{{ matchedFileCountForRow(i, a) - 1 }}</span>
                                                         </button>
                                                     </td>
 
@@ -696,7 +764,11 @@
             <br />
             <div class="button-container">
                 @if(isset($appendTo))
-                <a class="btn btn-danger text-right" href="{{ url('reimbursement-travel/add-item/'.$appendTo->id) }}">CANCEL</a>&nbsp;
+                {{-- "Back": adding days to an EXISTING submission, so this returns to that
+                     submission rather than discarding anything (Oct 2026 feedback). The
+                     plain-create branch below keeps "Cancel" -- there it really does
+                     abandon a new submission. --}}
+                <a class="btn btn-secondary text-right" href="{{ url('reimbursement-travel/add-item/'.$appendTo->id) }}"><i class="fa fa-arrow-circle-left"></i> Back</a>&nbsp;
                 <button class="btn btn-primary" type="submit" id="action_button" name="save_item">ADD DAYS</button>
                 @else
                 <a class="btn btn-danger text-right" href="{{route('reimbursement-travel.index')}}">CANCEL</a>&nbsp;
@@ -719,6 +791,58 @@
              el:'#app' template actually contains them; placed outside #app
              (as this was originally, alongside the static-content-only Tips
              modal) it rendered as literal, uncompiled "{{ ... }}" text. -->
+        <!-- Row Preview gallery: all evidence files of ONE expense row, paged
+             in place. Replaces opening a tab per file, which popup blockers
+             dropped inconsistently (Oct 2026 feedback). Lives inside #app so
+             its v-if/@{{ }} bindings actually compile. -->
+        <div class="modal fade" id="rtRowPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content" v-if="rowPreviewCurrent()">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fa fa-images" style="color:#0a58ca;"></i>
+                            Evidence &mdash; @{{ rowPreviewIndex + 1 }} of @{{ rowPreviewFiles.length }}
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <i class="material-icons">close</i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="rt-rowprev-stage">
+                            <button type="button" class="rt-rowprev-nav rt-rowprev-prev" v-if="rowPreviewFiles.length > 1" @click="rowPreviewGo(-1)" title="Previous">
+                                <i class="fa fa-chevron-left"></i>
+                            </button>
+                            <iframe v-if="rowPreviewCurrent().isPdf" :src="rowPreviewSrc(rowPreviewCurrent())"></iframe>
+                            <img v-else :src="rowPreviewSrc(rowPreviewCurrent())" :alt="rowPreviewCurrent().name">
+                            <button type="button" class="rt-rowprev-nav rt-rowprev-next" v-if="rowPreviewFiles.length > 1" @click="rowPreviewGo(1)" title="Next">
+                                <i class="fa fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="rt-rowprev-meta">
+                            <b>@{{ rowPreviewCurrent().name }}</b>
+                            <span class="rt-rowprev-badge" :class="rowPreviewCurrent().docType === 'proof' ? 'is-proof' : 'is-invoice'">
+                                @{{ rowPreviewCurrent().docType === 'proof' ? 'Supporting Proof' : 'Invoice / Receipt' }}
+                            </span>
+                        </div>
+                        <!-- Jump straight to any file instead of paging through. -->
+                        <div class="rt-rowprev-thumbs" v-if="rowPreviewFiles.length > 1">
+                            <template v-for="(f, n) in rowPreviewFiles">
+                                <div v-if="f.isPdf" class="rt-rowprev-thumb-pdf" :class="n === rowPreviewIndex ? 'is-active' : ''" :title="f.name" @click="rowPreviewIndex = n">
+                                    <i class="fa fa-file-pdf"></i>
+                                </div>
+                                <img v-else class="rt-rowprev-thumb" :class="n === rowPreviewIndex ? 'is-active' : ''" :src="rowPreviewSrc(f)" :title="f.name" @click="rowPreviewIndex = n">
+                            </template>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" @click="rowPreviewOpenCurrent()">
+                            <i class="fa fa-external-link-alt"></i> Open in new tab
+                        </button>
+                        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="modal fade" id="rtOcrDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content" v-if="ocrDetailModalChip">
@@ -1036,6 +1160,11 @@ $(document).ready(function(){
     $('.rt-day-hidden-tag[data-uid="' + uid + '"]').val(tagValue || '');
   }
 
+  /** Keeps the submitted reimburse[i][file_types][] entry in step with the chip's own Invoice/Proof dropdown. */
+  function rtSetDayHiddenType(uid, docType) {
+    $('.rt-day-hidden-type[data-uid="' + uid + '"]').val(docType === 'proof' ? 'proof' : 'invoice');
+  }
+
   function rtRemoveDayHiddenFile(uid) {
     $('.rt-day-hidden-file[data-uid="' + uid + '"], .rt-day-hidden-tag[data-uid="' + uid + '"], .rt-day-hidden-type[data-uid="' + uid + '"]').remove();
   }
@@ -1184,6 +1313,10 @@ $(document).ready(function(){
         jpy_rate: 0,
         rangeStart: null,
         activeDay: 0,
+        // Files shown in the row Preview gallery modal, and which one is on
+        // screen. Populated by previewRowFile(); never submitted.
+        rowPreviewFiles: [],
+        rowPreviewIndex: 0,
         rangeEnd: null,
         // No day form exists until the user picks a date range and clicks
         // "Generate Daily Forms" (regenerateDaysFromRange builds this list).
@@ -2339,8 +2472,11 @@ $(document).ready(function(){
 
             // The actual <input type="file"> submitted for this file -- created
             // once per file so several can coexist (see rtAddDayHiddenFile()).
-            var isProof = entry.uploadType === 'proof';
-            rtAddDayHiddenFile(i, uid, file, isProof ? 'proof' : 'invoice');
+            // Every new file starts as an Invoice / Receipt (the behaviour before
+            // the per-file choice existed); the user re-marks it as Supporting
+            // Proof on the chip itself, which is also correctable afterwards.
+            var isProof = false;
+            rtAddDayHiddenFile(i, uid, file, 'invoice');
 
             var pushChip = function (dataUrl) {
                 var objectUrl = (!isImage) ? URL.createObjectURL(file) : null;
@@ -2349,8 +2485,17 @@ $(document).ready(function(){
                     name: file.name,
                     dataUrl: dataUrl,
                     objectUrl: objectUrl,
+                    // Drives the gallery modal's <iframe> vs <img> choice; a PDF
+                    // rendered into an <img> would just show as broken.
+                    isPdf: !isImage,
                     rowTag: '',
                     docType: isProof ? 'proof' : 'invoice',
+                    // The picked File itself, so re-marking a Supporting Proof back
+                    // to Invoice / Receipt can run OCR on it without the user having
+                    // to remove and re-upload the file (onFileDocTypeChange()).
+                    // Existing (already-stored) files reopened in edit have no File
+                    // object here -- they are re-checked server side on save.
+                    rawFile: file,
                     ocrStatus: isProof ? 'proof' : 'pending',
                     ocrMessage: '',
                     // Populated per-file in rtVerifyDayFileEvidence() -- present
@@ -2417,6 +2562,125 @@ $(document).ready(function(){
         /** 1.A: which Expense Detail row (if any) this file belongs to -- kept in sync onto the actual submitted hidden input, since Vue can't name a real file input's sibling declaratively here. */
         onFileRowTagChange(i, chip) {
             rtSetDayHiddenTag(chip.uid, chip.rowTag);
+        },
+        /**
+         * Oct 2026: the Invoice-vs-Proof choice is per file and changeable after
+         * upload, so it has to keep three things in step -- the submitted
+         * reimburse[i][file_types][] entry, this chip's OCR state, and the
+         * Submit button's enabled state.
+         *
+         * Marking a file as Supporting Proof takes it out of the OCR/duplicate
+         * checks entirely (its stale reading is cleared, so a previously-read
+         * invoice number can't keep flagging a duplicate it no longer claims).
+         * Marking it back as Invoice / Receipt re-runs OCR on the held File.
+         * Either way the server re-derives everything from file_types[] on
+         * submit -- this is the client-side mirror of that, never the authority.
+         */
+        onFileDocTypeChange(i, chip) {
+            var isProof = chip.docType === 'proof';
+            rtSetDayHiddenType(chip.uid, isProof ? 'proof' : 'invoice');
+
+            if (isProof) {
+                chip.ocrStatus = 'proof';
+                chip.ocrMessage = '';
+                chip.ocrDate = '';
+                chip.ocrMerchant = '';
+                chip.ocrAmount = '';
+                chip.ocrCurrency = '';
+                chip.ocrInvoice = '';
+                chip.ocrEditing = false;
+                // This file's invoice no longer counts toward the in-page
+                // duplicate warning, and the day may now need another file's
+                // reading as its primary.
+                this.recomputeLocalInvoiceDuplicates();
+                rtEnableTravelSubmitButtons();
+                return;
+            }
+
+            if (chip.rawFile) {
+                rtVerifyDayFileEvidence(this, i, chip, chip.rawFile);
+                return;
+            }
+
+            // An already-stored file reopened in edit: nothing to re-read here,
+            // the server checks it on save.
+            chip.ocrStatus = 'unavailable';
+            rtEnableTravelSubmitButtons();
+        },
+        /**
+         * Opens the webcam in #modalPhoto and adds the captured frame to day i
+         * as a normal evidence file.
+         *
+         * Mirrors Entertainment's camera, which users already know, but routes
+         * the result through addSingleDayFile() rather than stuffing a hidden
+         * <input type=file> like the old table UI did -- that input and its
+         * #preview_<idx> target no longer exist in this form.
+         *
+         * The stream is always stopped on the way out (capture, Cancel, or the
+         * modal being dismissed any other way), otherwise the camera light
+         * stays on and the device stays locked for other apps.
+         */
+        openDayCamera(i) {
+            var vm = this;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                rtAlertModal('This browser cannot access the camera. Please use "Browse File" instead.', 'Camera Unavailable');
+                return;
+            }
+
+            var $modal = $('#modalPhoto');
+            var video = document.getElementById('videoElement');
+            var activeStream = null;
+
+            var stopCamera = function () {
+                if (activeStream) {
+                    activeStream.getTracks().forEach(function (t) { t.stop(); });
+                    activeStream = null;
+                }
+                if (video) {
+                    video.srcObject = null;
+                }
+            };
+
+            // Runs for every close path, including the X and the backdrop.
+            $modal.off('hidden.bs.modal.rtcam').on('hidden.bs.modal.rtcam', function () {
+                $('#captureButton').off('click.rtcam');
+                stopCamera();
+            });
+
+            navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+            }).then(function (stream) {
+                activeStream = stream;
+                video.srcObject = stream;
+                $modal.modal('show');
+
+                $('#captureButton').off('click.rtcam').on('click.rtcam', function () {
+                    var w = video.videoWidth || 1280;
+                    var h = video.videoHeight || 720;
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+
+                    canvas.toBlob(function (blob) {
+                        if (!blob) {
+                            return;
+                        }
+                        // A unique name keeps each shot distinct in the chip
+                        // list and in the duplicate-file check.
+                        var name = 'camera-' + Date.now() + '.jpg';
+                        var photo = new File([blob], name, { type: 'image/jpeg' });
+                        vm.addSingleDayFile(i, photo);
+                        rtEnableTravelSubmitButtons();
+                    }, 'image/jpeg', 0.85);
+
+                    $modal.modal('hide');
+                });
+            }).catch(function () {
+                // Permission denied, no camera, or a non-HTTPS origin (browsers
+                // only expose getUserMedia on https:// or localhost).
+                rtAlertModal('The camera could not be opened. Check the browser\'s camera permission, or use "Browse File" instead.', 'Camera Unavailable');
+            });
         },
         onDayFileInputChange(i, event) {
             this.addDayFiles(i, event.target.files);
@@ -2559,17 +2823,40 @@ $(document).ready(function(){
          * at all yet.
          */
         matchedFileForRow(i, a) {
+            return this.matchedFilesForRow(i, a)[0] || null;
+        },
+        /**
+         * EVERY file belonging to this Expense Detail row, not just the first
+         * one (Oct 2026 feedback: "di preview tetap 1 gambar aja yang bisa
+         * dicek?"). A row can now carry several evidence files -- e.g. the
+         * invoice/receipt plus a supporting email screenshot -- and the old
+         * single-file lookup silently hid every one after the first.
+         *
+         * Returns the files tagged to THIS row PLUS the untagged ones, since
+         * "General (all rows)" means exactly that -- it covers every row, so it
+         * belongs in the row's preview alongside the row's own files. Returning
+         * only the tagged ones hid day-level evidence from Preview: on the edit
+         * form a saved day-level file comes back as rowTag '' while a saved
+         * row-level file comes back as '0', so a row holding one of each showed
+         * just a single file even though the chip list showed two (Oct 2026
+         * bug report).
+         *
+         * Order follows the chip list (saved files first, then new uploads), so
+         * the Preview opens them in the same order they are displayed. Falls
+         * back to the most recently added file when a row matches nothing at
+         * all, preserving the pre-tagging behaviour.
+         */
+        matchedFilesForRow(i, a) {
             var entry = this.reimburses[i];
-            if (!entry.dayFiles.length) {
-                return null;
+            var pool = entry.dayFiles || [];
+            if (!pool.length) {
+                return [];
             }
             var tag = String(a);
-            var tagged = entry.dayFiles.filter(function (f) { return f.rowTag === tag; })[0];
-            if (tagged) {
-                return tagged;
-            }
-            var untagged = entry.dayFiles.filter(function (f) { return !f.rowTag; })[0];
-            return untagged || entry.dayFiles[entry.dayFiles.length - 1];
+            var matched = pool.filter(function (f) {
+                return f.rowTag === tag || !f.rowTag;
+            });
+            return matched.length ? matched : [pool[pool.length - 1]];
         },
         /** 1-based position of matchedFileForRow() within Step 1's file list -- shown on the Preview button (Sep 2026 feedback: "preview nomor 1 nge-link ke file nomor 1 yang diupload") so it's visible at a glance which numbered file a row's Preview actually opens, instead of an unlabelled eye icon. */
         matchedFileNumberForRow(i, a) {
@@ -2580,10 +2867,71 @@ $(document).ready(function(){
             }
             return entry.dayFiles.indexOf(matched) + 1;
         },
+        /** How many files this row's Preview will open -- drives the "+N" hint when a row carries more than one evidence file. */
+        matchedFileCountForRow(i, a) {
+            return this.matchedFilesForRow(i, a).length;
+        },
+        /** Tooltip for the Preview button, naming every file it opens so it's clear before clicking. */
+        previewRowTitle(i, a) {
+            var matched = this.matchedFilesForRow(i, a);
+            if (!matched.length) {
+                return 'No proof linked yet';
+            }
+            if (matched.length === 1) {
+                return 'View proof: ' + matched[0].name;
+            }
+            return 'View all ' + matched.length + ' evidence files of this row: '
+                + matched.map(function (f) { return f.name; }).join(', ');
+        },
+        /**
+         * Shows every file linked to this row in one gallery modal.
+         *
+         * This used to call window.open() once per file. Only the FIRST of
+         * those runs under the click's own user activation -- the staggered
+         * ones lose it, so popup blockers allowed some tabs and silently
+         * dropped others: "kadang kebuka 1 proof doang kadang kebuka semua"
+         * (Oct 2026). A modal renders in-page, so it can never be blocked and
+         * every file of the row is always reachable, in the same order as the
+         * chip list. A single file opens the same modal -- one predictable
+         * behaviour rather than two.
+         */
         previewRowFile(i, a) {
-            var matched = this.matchedFileForRow(i, a);
-            if (matched) {
-                this.previewFileChip(matched);
+            var matched = this.matchedFilesForRow(i, a);
+            if (!matched.length) {
+                return;
+            }
+            this.rowPreviewFiles = matched;
+            this.rowPreviewIndex = 0;
+            $('#rtRowPreviewModal').modal('show');
+        },
+        /** Gallery navigation; wraps around so paging never dead-ends. */
+        rowPreviewGo(step) {
+            var total = this.rowPreviewFiles.length;
+            if (!total) {
+                return;
+            }
+            this.rowPreviewIndex = ((this.rowPreviewIndex + step) % total + total) % total;
+        },
+        /** The file currently shown in the gallery modal. */
+        rowPreviewCurrent() {
+            return this.rowPreviewFiles[this.rowPreviewIndex] || null;
+        },
+        /**
+         * Best displayable URL for a chip, whichever shape it has: a saved
+         * attachment (existingUrl), a freshly picked image (dataUrl) or a
+         * freshly picked PDF (objectUrl).
+         */
+        rowPreviewSrc(chip) {
+            if (!chip) {
+                return '';
+            }
+            return chip.existingUrl || chip.dataUrl || chip.objectUrl || '';
+        },
+        /** Opens the currently shown file in its own tab -- a single, user-initiated window.open(), so it is never popup-blocked. */
+        rowPreviewOpenCurrent() {
+            var chip = this.rowPreviewCurrent();
+            if (chip) {
+                this.previewFileChip(chip);
             }
         },
         /**
