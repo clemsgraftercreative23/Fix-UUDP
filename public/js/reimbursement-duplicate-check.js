@@ -12,6 +12,34 @@
     return $('meta[name="csrf-token"]').attr('content') || '';
   }
 
+  /**
+   * Soft variant of showDuplicateBlocked(): the submission is NOT stopped,
+   * the user is only told to double-check. Used for the per-applicant trip
+   * date check (Travel/Entertainment/Medical), where an overlapping date can
+   * be perfectly legitimate (a trip that continues or resumes) -- unlike a
+   * reused invoice number, which stays a hard block. Resolves to true when
+   * the user confirms, false when they cancel and go back to the form.
+   */
+  function confirmDuplicateWarning(message) {
+    try {
+      if (typeof window.swal.close === 'function') {
+        window.swal.close();
+      }
+    } catch (e) { /* ignore */ }
+
+    return new Promise(function (resolve) {
+      window.swal({
+        title: 'Cek Dulu Ya',
+        text: message,
+        icon: 'warning',
+        buttons: ['Periksa Lagi', 'Lanjutkan'],
+        dangerMode: false
+      }).then(function (confirmed) {
+        resolve(!!confirmed);
+      });
+    });
+  }
+
   function showDuplicateBlocked(message) {
     // Classic SweetAlert (v1, window.swal) can silently no-op a new swal()
     // call while it still considers a previous one "open" -- close any
@@ -113,9 +141,24 @@
             return;
           }
 
-          showDuplicateBlocked(messages.join('\n\n'));
-          // Blocked: no proceed() call here on purpose -- the form stays
-          // un-submitted until the user changes the date/invoice number.
+          // warnOnly checks (per-applicant trip date) let the user continue
+          // after acknowledging; everything else stays a hard block.
+          var blocking = results.filter(function (res, idx) {
+            return res && res.duplicate && !checks[idx].warnOnly;
+          });
+
+          if (blocking.length) {
+            showDuplicateBlocked(blocking.map(function (res) { return res.message; }).join('\n\n'));
+            // Blocked: no proceed() call here on purpose -- the form stays
+            // un-submitted until the user changes the date/invoice number.
+            return;
+          }
+
+          confirmDuplicateWarning(messages.join('\n\n')).then(function (goOn) {
+            if (goOn) {
+              proceed();
+            }
+          });
         });
     });
 
@@ -131,12 +174,23 @@
       $form.on('change', earlySelectors, function () {
         Promise.all(checks.map(function (check) { return runCheck(check, $form); }))
           .then(function (results) {
-            var messages = results
-              .filter(function (res) { return res && res.duplicate; })
+            var blocking = results
+              .filter(function (res, idx) { return res && res.duplicate && !checks[idx].warnOnly; })
               .map(function (res) { return res.message; });
 
-            if (messages.length) {
-              showDuplicateBlocked(messages.join('\n\n'));
+            if (blocking.length) {
+              showDuplicateBlocked(blocking.join('\n\n'));
+              return;
+            }
+
+            // warnOnly: heads-up only, phrased so it doesn't read like a
+            // rejection -- the user can still submit.
+            var warnings = results
+              .filter(function (res, idx) { return res && res.duplicate && checks[idx].warnOnly; })
+              .map(function (res) { return res.message; });
+
+            if (warnings.length) {
+              confirmDuplicateWarning(warnings.join('\n\n'));
             }
           });
       });

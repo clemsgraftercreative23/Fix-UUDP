@@ -16,7 +16,18 @@ class TravelAttachmentResolver
     }
 
     /**
-     * @return array<int, array{id:int, file_name:string, original_name:string}>
+     * Invoice/Receipt (the file OCR reads) vs Supporting Proof (an emailed
+     * confirmation, ticket or assignment letter attached to back the activity
+     * up). Anything unset -- legacy evidence saved before the choice existed --
+     * reads as 'invoice', which is how it was always treated.
+     */
+    public static function normalizeDocType($raw): string
+    {
+        return strtolower(trim((string) $raw)) === 'proof' ? 'proof' : 'invoice';
+    }
+
+    /**
+     * @return array<int, array{id:int, file_name:string, original_name:string, doc_type:string}>
      */
     public static function rowsForDetail(
         int $reimbursementId,
@@ -34,6 +45,8 @@ class TravelAttachmentResolver
                     'id' => 0,
                     'file_name' => $legacyEvidence,
                     'original_name' => $legacyEvidence,
+                    // Legacy single-file evidence predates the Invoice/Proof choice.
+                    'doc_type' => 'invoice',
                 ];
             }
         }
@@ -69,10 +82,43 @@ class TravelAttachmentResolver
                 'id' => (int) $candidate->id,
                 'file_name' => (string) $candidate->file_name,
                 'original_name' => (string) ($candidate->original_name ?: $candidate->file_name),
+                'doc_type' => self::normalizeDocType($candidate->doc_type ?? null),
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Day-level attachments (detail_type = 'reimbursement_travel'), i.e. evidence
+     * uploaded against the whole travel day rather than a specific expense row.
+     * The edit form loads these (see buildTravelEditDaysPayload) but the detail
+     * view historically only looked at row-level attachments, so day-level
+     * evidence showed in edit yet was blank in the detail page.
+     *
+     * @return array<int, array{id:int, file_name:string, original_name:string, doc_type:string}>
+     */
+    public static function rowsForDay(int $travelDayId): array
+    {
+        if ($travelDayId <= 0 || !self::tableReady()) {
+            return [];
+        }
+
+        return ReimbursementAttachment::query()
+            ->where('detail_type', 'reimbursement_travel')
+            ->where('detail_id', $travelDayId)
+            ->orderBy('id')
+            ->get(['id', 'file_name', 'original_name', 'doc_type'])
+            ->map(function (ReimbursementAttachment $row) {
+                return [
+                    'id' => (int) $row->id,
+                    'file_name' => (string) $row->file_name,
+                    'original_name' => (string) ($row->original_name ?: $row->file_name),
+                    'doc_type' => self::normalizeDocType($row->doc_type ?? null),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     public static function repairForReimbursement(int $reimbursementId): int
@@ -375,7 +421,7 @@ class TravelAttachmentResolver
     }
 
     /**
-     * @return array<int, array{id:int, file_name:string, original_name:string}>
+     * @return array<int, array{id:int, file_name:string, original_name:string, doc_type:string}>
      */
     private static function queryByDetailId(int $detailId): array
     {
@@ -387,12 +433,13 @@ class TravelAttachmentResolver
             ->where('detail_type', self::DETAIL_TYPE)
             ->where('detail_id', $detailId)
             ->orderBy('id')
-            ->get(['id', 'file_name', 'original_name'])
+            ->get(['id', 'file_name', 'original_name', 'doc_type'])
             ->map(function (ReimbursementAttachment $row) {
                 return [
                     'id' => (int) $row->id,
                     'file_name' => (string) $row->file_name,
                     'original_name' => (string) ($row->original_name ?: $row->file_name),
+                    'doc_type' => self::normalizeDocType($row->doc_type ?? null),
                 ];
             })
             ->values()

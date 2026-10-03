@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
  * Receipt + amount). Mirrors FonnteMessenger's shape: config-driven,
  * never throws, logs and returns a failure array instead.
  */
-class GeminiOcrClient
+class GeminiOcrClient implements OcrClientInterface
 {
     /**
      * Delays (ms) between retries when Gemini reports the model is overloaded --
@@ -28,14 +28,19 @@ class GeminiOcrClient
 
     private const PROMPT = <<<'PROMPT'
 You are reading a receipt or invoice photo for an expense reimbursement system.
-Extract exactly two fields and reply with STRICT JSON only, no prose, no markdown
+Extract exactly five fields and reply with STRICT JSON only, no prose, no markdown
 code fences, matching this shape:
-{"no_invoice": "<the invoice/receipt/transaction number printed on it, or null if none is visible>", "amount": <the total amount paid as a plain number with no currency symbol or thousands separator, or null if unreadable>}
-If the image is not a receipt/invoice at all, reply {"no_invoice": null, "amount": null}.
+{"no_invoice": "<the invoice/receipt/transaction number printed on it, or null if none is visible>", "amount": <the total amount paid as a plain number with no currency symbol or thousands separator, or null if unreadable>, "transaction_date": "<the transaction/checkout date printed on it, formatted as YYYY-MM-DD, or null if unreadable>", "merchant_name": "<the merchant, hotel, or business name printed on it, or null if unreadable>", "currency": "<the 3-letter ISO currency code the amount is in, e.g. IDR/USD/JPY, your best guess from symbols or country context, or null if you cannot tell>"}
+If the image is not a receipt/invoice at all, reply with all five fields set to null.
 PROMPT;
 
+    public function isConfigured(): bool
+    {
+        return !empty(config('services.gemini.api_key'));
+    }
+
     /**
-     * @return array{ok: bool, no_invoice: ?string, amount: ?float, error: ?string, raw: array}
+     * @return array{ok: bool, no_invoice: ?string, amount: ?float, transaction_date: ?string, merchant_name: ?string, currency: ?string, error: ?string, raw: array}
      */
     public function extract(string $absoluteFilePath, string $mimeType): array
     {
@@ -80,7 +85,26 @@ PROMPT;
 
     private function failure(string $error): array
     {
-        return ['ok' => false, 'no_invoice' => null, 'amount' => null, 'error' => $error, 'raw' => []];
+        return [
+            'ok' => false,
+            'no_invoice' => null,
+            'amount' => null,
+            'transaction_date' => null,
+            'merchant_name' => null,
+            'currency' => null,
+            'error' => $error,
+            'raw' => [],
+        ];
+    }
+
+    /** Trim a nullable OCR string field, treating blank/the literal "null" as absent. */
+    private function nullableString($value): ?string
+    {
+        if (!is_scalar($value)) {
+            return null;
+        }
+        $value = trim((string) $value);
+        return ($value === '' || strtolower($value) === 'null') ? null : $value;
     }
 
     /** Gemini reports model overload as HTTP 503 / status "UNAVAILABLE" -- per Google, these spikes are usually temporary and worth a quick retry. */
@@ -140,19 +164,35 @@ PROMPT;
                 return $this->failure('Could not parse OCR result');
             }
 
-            $noInvoice = isset($extracted['no_invoice']) && is_scalar($extracted['no_invoice'])
-                ? trim((string) $extracted['no_invoice'])
-                : null;
-            $noInvoice = ($noInvoice === '' || strtolower((string) $noInvoice) === 'null') ? null : $noInvoice;
+            $noInvoice = $this->nullableString($extracted['no_invoice'] ?? null);
 
             $amount = isset($extracted['amount']) && is_numeric($extracted['amount'])
                 ? (float) $extracted['amount']
                 : null;
 
+            $transactionDate = $this->nullableString($extracted['transaction_date'] ?? null);
+            if ($transactionDate !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $transactionDate)) {
+                // Model didn't follow the requested YYYY-MM-DD shape closely enough to trust blindly.
+                $transactionDate = null;
+            }
+
+            $merchantName = $this->nullableString($extracted['merchant_name'] ?? null);
+
+            $currency = $this->nullableString($extracted['currency'] ?? null);
+            if ($currency !== null) {
+                $currency = strtoupper($currency);
+                if (!preg_match('/^[A-Z]{3}$/', $currency)) {
+                    $currency = null;
+                }
+            }
+
             return [
                 'ok' => true,
                 'no_invoice' => $noInvoice,
                 'amount' => $amount,
+                'transaction_date' => $transactionDate,
+                'merchant_name' => $merchantName,
+                'currency' => $currency,
                 'error' => null,
                 'raw' => $decoded,
             ];

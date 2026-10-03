@@ -1161,7 +1161,8 @@
       $pane.find('[id^="preview_"] img').length > 0 ||
       $pane.find('[id^="preview_"] a').length > 0 ||
       $pane.find('.pending-attachment-item').length > 0 ||
-      $pane.find('.existing-attachment-item').length > 0;
+      $pane.find('.existing-attachment-item').length > 0 ||
+      $pane.find('tr.fieldGroupDetail[data-reference-status="found"]').length > 0;
     var hasPending = false;
     $pane.find('input.pending-attachment-input[type="file"]').each(function () {
       if (this.files && this.files.length) {

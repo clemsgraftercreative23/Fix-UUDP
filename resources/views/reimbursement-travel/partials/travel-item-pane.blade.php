@@ -56,19 +56,18 @@ if (!function_exists('rt_travel_pane_render_attachments')) {
             if ($attId > 0) {
                 echo '<input type="hidden" name="keep_attachment_ids[' . (int) $rowIndex . '][]" value="' . (int) $attId . '" class="keep-attachment-input">';
             }
-            echo '<div class="existing-attachment-item" style="margin-top:6px; border:1px solid #d9d9d9; border-radius:6px; padding:6px;">';
-            echo '<div style="display:flex; gap:6px; align-items:center;">';
+            echo '<div class="existing-attachment-item preview-card">';
+            if ($canEditAttachments && $file !== '') {
+                echo '<button type="button" class="btn remove-existing-attachment preview-card-remove" data-attachment-id="' . (int) $attId . '" data-legacy-file="' . e($file) . '">&times;</button>';
+            }
             if ($file !== '' && in_array($ext, $imageExt, true)) {
                 $imgUrl = url('images/file_bukti/' . $file) . rt_travel_pane_attachment_cache_bust($file);
-                echo '<img src="' . e($imgUrl) . '" class="preview-thumbnail" data-preview-src="' . e($imgUrl) . '" style="max-width:55px; max-height:55px; border:2px solid #28a745; border-radius:5px; cursor:pointer;">';
+                echo '<img src="' . e($imgUrl) . '" class="preview-thumbnail preview-card-thumb" data-preview-src="' . e($imgUrl) . '">';
             } else {
                 $fileUrl = url('images/file_bukti/' . $file) . rt_travel_pane_attachment_cache_bust($file);
-                echo '<a href="' . e($fileUrl) . '" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" style="max-width:40px; max-height:40px;"></a>';
+                echo '<a href="' . e($fileUrl) . '" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" class="preview-card-thumb preview-card-thumb-icon" alt="File"></a>';
             }
-            echo '<a href="' . e(url('images/file_bukti/' . $file)) . '" target="_blank" style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">' . e($name) . '</a>';
-            if ($canEditAttachments && $file !== '') {
-                echo '<button type="button" class="btn btn-sm btn-danger remove-existing-attachment" data-attachment-id="' . (int) $attId . '" data-legacy-file="' . e($file) . '" style="margin-left:auto;">x</button>';
-            }
+            echo '<a href="' . e(url('images/file_bukti/' . $file)) . '" target="_blank" class="preview-card-name" title="' . e($name) . '">' . e($name) . '</a>';
             echo '</div></div>';
         }
         echo '</div>';
@@ -97,6 +96,8 @@ $rtRow0 = (isset($travel_detail[0]) && $travel_detail[0])
         'evidence' => '',
     ];
 $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
+// Day that only claims the Travel Allowance by referencing another claim/day: Expense Details are locked.
+$rtDayLocked = !empty($data_travel['0']->reference_reimbursement_id);
 @endphp
 @php
     $statusInt = (int) ($data[0]->status ?? 0);
@@ -134,6 +135,28 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
         $canEditAttachments = true;
     }
 @endphp
+<style>
+    #rt-travel-item-pane .rt-step-title { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; }
+    #rt-travel-item-pane .rt-step-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #28a745; color: #fff; font-weight: 700; font-size: 13px; flex: none; }
+    #rt-travel-item-pane .rt-step-title h5 { margin: 0; font-weight: 700; }
+    #rt-travel-item-pane .rt-step-desc { color: #6c757d; font-size: 12.5px; margin: 0 0 14px 36px; }
+    /* Expense rows stack downward as cards (fields wrap in a grid) instead of one wide row scrolling to the right. */
+    #rt-travel-item-pane table.rt-expense-table,
+    #rt-travel-item-pane table.rt-expense-table tbody { display: block !important; width: 100% !important; overflow: visible !important; white-space: normal !important; }
+    #rt-travel-item-pane table.rt-expense-table thead { display: none; }
+    #rt-travel-item-pane table.rt-expense-table tr.fieldGroupDetail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; border: 1px solid #e2e5ea; border-radius: 8px; background: #fff; padding: 14px 16px; margin-bottom: 12px; }
+    #rt-travel-item-pane table.rt-expense-table tr.fieldGroupDetail > td { display: block; border: 0 !important; padding: 0 !important; min-width: 0; }
+    #rt-travel-item-pane table.rt-expense-table tr.fieldGroupDetail > td::before { content: attr(data-label); display: block; font-size: 12px; color: #6c757d; margin-bottom: 4px; }
+    #rt-travel-item-pane table.rt-expense-table td select,
+    #rt-travel-item-pane table.rt-expense-table td input.form-control { width: 100% !important; }
+    #rt-travel-item-pane table.rt-expense-table td.file-proof,
+    #rt-travel-item-pane table.rt-expense-table td[data-label="Preview"] { grid-column: span 2; }
+    #rt-travel-item-pane table.rt-expense-table td[data-label="Action"] { grid-column: 1 / -1; text-align: right; }
+    #rt-travel-item-pane table.rt-expense-table td[data-label="Action"]::before { display: none; }
+    @media (max-width: 991px) { #rt-travel-item-pane table.rt-expense-table tr.fieldGroupDetail { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 575px) { #rt-travel-item-pane table.rt-expense-table tr.fieldGroupDetail { grid-template-columns: 1fr; } #rt-travel-item-pane table.rt-expense-table td.file-proof, #rt-travel-item-pane table.rt-expense-table td[data-label="Preview"] { grid-column: auto; } }
+    #rt-travel-item-pane .rt-expense-locked { pointer-events: none; opacity: .55; }
+</style>
 <div class="nav-tabs-container">
     <ul class="nav nav-tabs">
         @foreach($data_item as $item)
@@ -152,11 +175,13 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
         @endforeach
         @if($canManageTabs)
         <li class="nav-item">
-            <button type="button" class="nav-link js-rt-save-item-tab" id="action_button_item" formnovalidate><i class="fa fa-plus"></i> &nbsp;Add New Item</button>
+            <a class="nav-link" href="{{ url('reimbursement-travel/add-days/'.$data['0']->id) }}"><i class="fa fa-plus"></i> &nbsp;Add New Item</a>
         </li>
         @endif
     </ul>
-</div><hr>
+</div>
+<div class="rt-step-title"><span class="rt-step-badge">1</span><h5>Request Information</h5></div>
+<p class="rt-step-desc">Please complete the additional information below.</p>
 <div class="row">
     <input type="hidden" name="active_travel_id" value="{{ $data_travel['0']->id }}">
     <div class="col-md-3">
@@ -180,7 +205,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
     <div class="col-md-3">
         <label for="">Hotel </label>
         <select id="hotel_condition_id" class="form-control" name="hotel_condition_id" required>
-            <option value="" selected disabled>Pilih...</option>
+            <option value="" selected disabled>Select...</option>
             @foreach ($hotel_conditions as $item)
                 <option value="{{$item->id}}" @if($item->id == $data_travel['0']->hotel_condition_id) selected @endif>{{$item->name}}</option>
             @endforeach
@@ -214,9 +239,14 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
     </div>
 </div>
 <hr>
+<div class="rt-step-title"><span class="rt-step-badge">2</span><h5>Expense Details</h5></div>
+<p class="rt-step-desc">Add expense details based on the uploaded proof or add manually. Proof is uploaded per row.</p>
+@if($rtDayLocked)
+<div class="alert alert-secondary" style="font-size:12px;padding:8px 12px;"><i class="fa fa-lock"></i> Expense Details are locked: this day only claims the Travel Allowance (it uses another claim's document), so no expense is reimbursed.</div>
+@endif
 <div class="row">
-    <div class="col-xl">
-        <table class="table full-width" style="width: 100%;overflow-x: auto;white-space: nowrap;display:block">
+    <div class="col-xl @if($rtDayLocked) rt-expense-locked @endif">
+        <table class="table full-width rt-expense-table" style="width: 100%;">
             <thead style="width: 100%">
                 <tr>
                     <th width="200">Cost Type</th>
@@ -233,8 +263,8 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                 </tr>
             </thead>
             <tbody>
-                <tr class="fieldGroupDetail" data-row-index="0">
-                    <td>
+                <tr class="fieldGroupDetail" data-row-index="0" {!! !empty($rtRow0->reference_reimbursement_id ?? null) ? 'data-reference-status="found"' : '' !!}>
+                    <td data-label="Cost Type">
                         <input type="hidden" name="id_detail[]" value="{{ $rtRow0->id }}">
                         <select class="form-control cost_type_id0 cost-type-select" name="cost_type_id[]">
                             <option value="">Select...</option>
@@ -243,13 +273,13 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                             @endforeach
                         </select>
                     </td>
-                    <td>
+                    <td data-label="Destination">
                         <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="{{ $rtRow0->destination }}">
                     </td>
-                    <td>
-                        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="mis. Hotel for 18-20 Aug 2026" value="{{ $rtRow0->remarks ?? '' }}">
+                    <td data-label="Remarks">
+                        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="e.g. Hotel for 18-20 Aug 2026" value="{{ $rtRow0->remarks ?? '' }}">
                     </td>
-                    <td>
+                    <td data-label="Currency">
                         <select class="form-control currency0 currency-select" name="currency[]" style="width:130%">
                             <option value="">Select...</option>
                             @foreach ($currency as $item)
@@ -257,23 +287,23 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                             @endforeach
                         </select>
                     </td>
-                    <td>
+                    <td data-label="Amount">
                         <input type="text" class="form-control currency amount0 change-amount" value="{{ rt_travel_pane_amount_int($rtRow0->amount) }}" name="amount[]">
                     </td>
-                    <td>
+                    <td data-label="IDR Rate">
                         <input type="text" class="form-control currency number-format idr_rate_main change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($rtRow0->idr_rate) }}" name="idr_rate[]" readonly>
                     </td>
-                    <td>
+                    <td data-label="Pph23">
                         <input type="text" class="form-control currency number-format tax0{{ $taxFirstExtra }}" readonly value="{{ rt_travel_pane_rupiah($rtRow0->tax) }}" name="tax[]">
                     </td>
-                    <td>
+                    <td data-label="Payment">
                         <select class="form-control payment-select" name="payment_type[]" style="width:130%">
                             <option value="">Select...</option>
                             <option value="BDC" @if($rtRow0->payment_type=='BDC') selected @endif>BDC</option>
                             <option value="Cash" @if($rtRow0->payment_type=='Cash') selected @endif>Cash</option>
                         </select>
                     </td>
-                    <td class="file-proof">
+                    <td class="file-proof" data-label="File">
                         <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
                             <i class="fa fa-upload"></i>
                         </button>
@@ -282,8 +312,12 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                         </button>
                         <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
                         <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                        <div class="reference-invoice-wrap" style="display:none;">
+                            <input type="text" class="form-control form-control-sm reference-invoice-input" name="reference_invoice[]" placeholder="atau No. Invoice rekan" autocomplete="off" value="{{ !empty($rtRow0->reference_reimbursement_id ?? null) ? $rtRow0->no_invoice : '' }}">
+                            <div class="reference-invoice-feedback" style="font-size:11px; margin-top:2px;"></div>
+                        </div>
                     </td>
-                    <td>
+                    <td data-label="Preview">
                         @php
                             $attachments = rt_travel_detail_attachments(
                                 $rtRow0->id ?? 0,
@@ -295,7 +329,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                             rt_travel_pane_render_attachments($attachments, 0, $canEditAttachments, 'preview_1');
                         @endphp
                     </td>
-                    <td>
+                    <td data-label="Action">
                         <button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button>
                         <button type="button" class="btn btn-danger remove-detail" style="margin-left:6px;"><i class="fa fa-trash"></i></button>
                     </td>
@@ -304,8 +338,8 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                 @foreach ($travel_detail as $key => $row)
                 @if($key > 0)
                 <?php $n = $key + 1;?>
-                <tr class="fieldGroupDetail" data-row-index="{{ (int) $key }}">
-                    <td>
+                <tr class="fieldGroupDetail" data-row-index="{{ (int) $key }}" {!! !empty($row->reference_reimbursement_id ?? null) ? 'data-reference-status="found"' : '' !!}>
+                    <td data-label="Cost Type">
                         <input type="hidden" name="id_detail[]" value="{{$row->id}}">
                         <select class="form-control cost_type_id{{$key}} cost-type-select" name="cost_type_id[]">
                             <option value="">Select...</option>
@@ -314,13 +348,13 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                             @endforeach
                         </select>
                     </td>
-                    <td>
+                    <td data-label="Destination">
                         <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="{{$row->destination}}">
                     </td>
-                    <td>
-                        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="mis. Hotel for 18-20 Aug 2026" value="{{$row->remarks ?? ''}}">
+                    <td data-label="Remarks">
+                        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="e.g. Hotel for 18-20 Aug 2026" value="{{$row->remarks ?? ''}}">
                     </td>
-                    <td>
+                    <td data-label="Currency">
                         <select class="form-control currency{{$key}} currency-select" name="currency[]" style="width:130%">
                             <option value="">Select...</option>
                             @foreach ($currency as $item)
@@ -328,23 +362,23 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                             @endforeach
                         </select>
                     </td>
-                    <td>
+                    <td data-label="Amount">
                         <input type="text" class="form-control amount{{$key}} amount-input currency change-amount" value="{{ rt_travel_pane_amount_int($row->amount) }}" name="amount[]">
                     </td>
-                    <td>
+                    <td data-label="IDR Rate">
                         <input type="text" class="form-control number-format currency idr_rate_{{$key}} change-rate idr-rate-input" value="{{ rt_travel_pane_rupiah($row->idr_rate) }}" name="idr_rate[]" readonly>
                     </td>
-                    <td>
+                    <td data-label="Pph23">
                         <input type="text" class="form-control number-format currency tax{{$key}}{{ $taxFirstExtra }} tax-input" readonly value="{{ rt_travel_pane_rupiah($row->tax) }}" name="tax[]">
                     </td>
-                    <td>
+                    <td data-label="Payment">
                         <select class="form-control payment-select" name="payment_type[]" style="width:130%">
                             <option value="">Select...</option>
                             <option value="BDC" @if($row->payment_type=='BDC') selected @endif>BDC</option>
                             <option value="Cash" @if($row->payment_type=='Cash') selected @endif>Cash</option>
                         </select>
                     </td>
-                    <td class="file-proof">
+                    <td class="file-proof" data-label="File">
                         <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
                             <i class="fa fa-upload"></i>
                         </button>
@@ -353,8 +387,12 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                         </button>
                         <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
                         <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+                        <div class="reference-invoice-wrap" style="display:none;">
+                            <input type="text" class="form-control form-control-sm reference-invoice-input" name="reference_invoice[]" placeholder="atau No. Invoice rekan" autocomplete="off" value="{{ !empty($row->reference_reimbursement_id ?? null) ? $row->no_invoice : '' }}">
+                            <div class="reference-invoice-feedback" style="font-size:11px; margin-top:2px;"></div>
+                        </div>
                     </td>
-                    <td>
+                    <td data-label="Preview">
                         @php
                             $attachments = rt_travel_detail_attachments(
                                 $row->id ?? 0,
@@ -366,7 +404,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
                             rt_travel_pane_render_attachments($attachments, (int) $key, $canEditAttachments, 'preview_' . $n);
                         @endphp
                     </td>
-                    <td>
+                    <td data-label="Action">
                         <button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button>
                     </td>
                 </tr>
@@ -379,7 +417,7 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
 
 <script type="text/template" id="rt-detail-row-template">
 <tr class="fieldGroupDetail" data-row-index="__IDX__">
-    <td>
+    <td data-label="Cost Type">
         <input type="hidden" name="id_detail[]" value="">
         <select class="form-control cost_type_id__IDX__ cost-type-select" name="cost_type_id[]">
             <option value="">Select...</option>
@@ -388,13 +426,13 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
             @endforeach
         </select>
     </td>
-    <td>
+    <td data-label="Destination">
         <input type="text" class="form-control destination-input" name="destination[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="">
     </td>
-    <td>
-        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="mis. Hotel for 18-20 Aug 2026" value="">
+    <td data-label="Remarks">
+        <input type="text" class="form-control remarks-input" name="remarks[]" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="e.g. Hotel for 18-20 Aug 2026" value="">
     </td>
-    <td>
+    <td data-label="Currency">
         <select class="form-control currency__IDX__ currency-select" name="currency[]" style="width:130%">
             <option value="">Select...</option>
             @foreach ($currency as $item)
@@ -402,23 +440,23 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
             @endforeach
         </select>
     </td>
-    <td>
+    <td data-label="Amount">
         <input type="text" class="form-control amount__IDX__ amount-input currency change-amount" name="amount[]" value="">
     </td>
-    <td>
+    <td data-label="IDR Rate">
         <input type="text" class="form-control number-format currency idr_rate___IDX__ change-rate idr-rate-input" name="idr_rate[]" readonly value="">
     </td>
-    <td>
+    <td data-label="Pph23">
         <input type="text" class="form-control number-format currency tax__IDX__{{ $taxFirstExtra }} tax-input" readonly name="tax[]" value="">
     </td>
-    <td>
+    <td data-label="Payment">
         <select class="form-control payment-select" name="payment_type[]" style="width:130%">
             <option value="">Select...</option>
             <option value="BDC">BDC</option>
             <option value="Cash">Cash</option>
         </select>
     </td>
-    <td class="file-proof">
+    <td class="file-proof" data-label="File">
         <button type="button" data-idx="__IDX__" class="btn btn-success btn-sm addFile">
             <i class="fa fa-upload"></i>
         </button>
@@ -427,11 +465,15 @@ $rtDayTotal = rt_travel_pane_day_total($data_travel['0'], $travel_detail);
         </button>
         <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file__IDX__">
         <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
+        <div class="reference-invoice-wrap" style="display:none;">
+            <input type="text" class="form-control form-control-sm reference-invoice-input" name="reference_invoice[]" placeholder="atau No. Invoice rekan" autocomplete="off" value="">
+            <div class="reference-invoice-feedback" style="font-size:11px; margin-top:2px;"></div>
+        </div>
     </td>
-    <td>
+    <td data-label="Preview">
         <div id="preview___PREVIEW__"></div>
     </td>
-    <td>
+    <td data-label="Action">
         <button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button>
     </td>
 </tr>

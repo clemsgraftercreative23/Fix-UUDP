@@ -384,6 +384,18 @@ $(document).ready(function(){
                         var amount = ($form.find('input[name="total_pengajuan"]').val() || '').split('.').join('');
                         return (date && number && amount) ? { date: date, no_invoice: number, amount: amount } : null;
                     }
+                },
+                // Separate, softer check: this applicant already submitted a
+                // claim for this date. Warning only -- unlike the combined
+                // check above it doesn't prove a duplicate on its own.
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    warnOnly: true,
+                    params: function ($form) {
+                        var date = $form.find('input[name="date"]').val();
+                        if (!date) return null;
+                        return { reimbursement_type: 4, dates: [date] };
+                    }
                 }
             ]
         });

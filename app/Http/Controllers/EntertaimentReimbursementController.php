@@ -269,7 +269,7 @@ class EntertaimentReimbursementController extends Controller
      */
     private function syncEntertainmentAttachments(Request $request, int $rowIndex, int $reimbursementId, int $newDetailId, int $oldDetailId = 0, string $legacyEvidence = ''): array
     {
-        $ocrEnabled = \App\AppSetting::isTravelEntertainmentOcrCheckEnabled();
+        $ocrEnabled = \App\AppSetting::isEntertainmentOcrCheckEnabled();
 
         if (!$this->attachmentTableReady()) {
             $uploaded = $this->getEntertainmentRowUploadedFiles($request, $rowIndex);
@@ -545,7 +545,7 @@ class EntertaimentReimbursementController extends Controller
             'kelompok' => Master_kelompok_kegiatan::get(),
             'daftar' => Master_daftar_rencana::get(),
             'driver' => User::whereIn('id',Reimbursement::select('id_user')->get()->pluck('id_user'))->get(),
-            'travelEntertainmentOcrEnabled' => \App\AppSetting::isTravelEntertainmentOcrCheckEnabled(),
+            'travelEntertainmentOcrEnabled' => \App\AppSetting::isEntertainmentOcrCheckEnabled(),
         ]);
     }
     
@@ -780,7 +780,10 @@ class EntertaimentReimbursementController extends Controller
             }
 
             DB::commit();
-            return redirect()->back()->with(['success' => $notif]);
+            // Back to the list, not back to the form: a finished submission
+            // should leave the editor (Sep 2026 request), and the list is
+            // where the success popup is shown.
+            return redirect('reimbursement-entertaiment')->with(['success' => $notif]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollback();
@@ -1056,7 +1059,10 @@ class EntertaimentReimbursementController extends Controller
                 }
             }
             
-            return redirect()->back()->with(['success' => $notif]);
+            // Back to the list, not back to the form: a finished submission
+            // should leave the editor (Sep 2026 request), and the list is
+            // where the success popup is shown.
+            return redirect('reimbursement-entertaiment')->with(['success' => $notif]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollback();
@@ -1166,7 +1172,11 @@ class EntertaimentReimbursementController extends Controller
                 
                 DB::commit();
 
-                return redirect()->back()->with(['success' => $notif]);
+                // Same as update(): finish on the list, not back inside the edit
+                // modal. This path serves the ordinary edit form for every
+                // non-'karyawan' user (see detail.blade.php's form action), which
+                // is why back() left them sitting on the edit page.
+                return redirect('reimbursement-entertaiment')->with(['success' => $notif]);
 
             } catch (\Illuminate\Validation\ValidationException $e) {
                 DB::rollback();
@@ -1264,8 +1274,10 @@ class EntertaimentReimbursementController extends Controller
                     return app(ReimbursementController::class)->approve($request, $id);
                 }
 
-                return redirect()
-                  ->back()
+                // Draft branch: finish on the list like every other save. (The
+                // Submit branch above hands off to approve(), which is shared
+                // with Driver/Travel and keeps its own redirect.)
+                return redirect('reimbursement-entertaiment')
                   ->with(['success' => 'Reimbursement Successfully Updated']);
                 } catch (\Illuminate\Validation\ValidationException $e) {
                       DB::rollback();

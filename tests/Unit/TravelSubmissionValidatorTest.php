@@ -64,6 +64,85 @@ class TravelSubmissionValidatorTest extends TestCase
         $this->assertSame(['Minimal satu hari perjalanan harus diisi.'], $errors);
     }
 
+    public function test_referred_day_is_exempt_from_detail_requirement(): void
+    {
+        $errors = TravelSubmissionValidator::findErrors([
+            $this->completeLeg(),
+            [
+                'date' => '2026-08-21',
+                'refer_day' => 0,
+                'detail' => [
+                    ['cost_type_id' => '', 'destination' => '', 'currency' => '', 'payment_type' => '', 'amount' => ''],
+                ],
+            ],
+        ]);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_allowance_only_day_is_exempt_from_detail_requirement(): void
+    {
+        $errors = TravelSubmissionValidator::findErrors([
+            [
+                'date' => '2026-08-20',
+                'allowance_only' => 1,
+                'detail' => [
+                    ['cost_type_id' => '', 'destination' => '', 'currency' => '', 'payment_type' => '', 'amount' => ''],
+                ],
+            ],
+        ]);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_same_trip_reference_day_is_exempt_from_detail_requirement(): void
+    {
+        $errors = TravelSubmissionValidator::findErrors([
+            $this->completeLeg(),
+            [
+                'date' => '2026-08-21',
+                'reference_invoice' => 'INV-88213',
+                'detail' => [
+                    ['cost_type_id' => '', 'destination' => '', 'currency' => '', 'payment_type' => '', 'amount' => ''],
+                ],
+            ],
+        ]);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_refer_to_non_earlier_day_is_not_exempt(): void
+    {
+        $errors = TravelSubmissionValidator::findErrors([
+            [
+                'date' => '2026-08-20',
+                'refer_day' => 5,
+                'detail' => [
+                    ['cost_type_id' => '', 'destination' => '', 'currency' => '', 'payment_type' => '', 'amount' => ''],
+                ],
+            ],
+        ]);
+
+        $this->assertNotEmpty($errors);
+        $this->assertStringContainsString('hari ke-1', $errors[0]);
+    }
+
+    public function test_non_numeric_refer_day_is_not_exempt(): void
+    {
+        $errors = TravelSubmissionValidator::findErrors([
+            [
+                'date' => '2026-08-20',
+                'refer_day' => 'abc',
+                'detail' => [
+                    ['cost_type_id' => '', 'destination' => '', 'currency' => '', 'payment_type' => '', 'amount' => ''],
+                ],
+            ],
+        ]);
+
+        $this->assertNotEmpty($errors);
+        $this->assertStringContainsString('Minimal satu rincian biaya', $errors[0]);
+    }
+
     public function test_reports_one_error_per_missing_field_per_row_across_multiple_legs(): void
     {
         $errors = TravelSubmissionValidator::findErrors([

@@ -5,7 +5,7 @@
 <?php
 function rupiah($angka)
 {
-    return number_format((float) $angka, 0, ',', '.');
+    return number_format((float) $angka, 2, ',', '.');
 }
 if (!function_exists('travel_detail_idr')) {
     /** Format IDR sama seperti edit: 2 desimal, titik ribuan, koma desimal. */
@@ -19,7 +19,7 @@ if (!function_exists('travel_detail_round')) {
     /** Format IDR bulat tanpa desimal (tanpa koma). */
     function travel_detail_round($angka)
     {
-        return number_format((float) round($angka), 0, ',', '.');
+        return number_format((float) round($angka), 2, ',', '.');
     }
 }
 ?>
@@ -34,6 +34,11 @@ if (!function_exists('travel_attachment_rows')) {
             (string) $destination,
             (int) $costTypeId
         );
+    }
+}
+if (!function_exists('travel_day_attachment_rows')) {
+    function travel_day_attachment_rows($travelDayId) {
+        return \App\Support\TravelAttachmentResolver::rowsForDay((int) $travelDayId);
     }
 }
 if (!function_exists('travel_attachment_cache_bust')) {
@@ -73,7 +78,13 @@ if (!function_exists('travel_attachment_cache_bust')) {
     <div class="row">
         <div class="col-lg-12">
             <div class="card">
-                <a href="{!!url('reimbursement-travel')!!}" class="btn btn-primary" style="float:left;"><i class="fa fa-arrow-circle-left"></i> Back </a>
+                {{-- Goes back one step in history so the approval list reappears with the
+                     filters still applied (status, period, employee ...) -- those live in
+                     the page's Vue state, not the URL, so a plain link to the list would
+                     reset them (Oct 2026 feedback). Falls back to the list itself when
+                     there is no history to return to, e.g. a link opened in a new tab. --}}
+                <a href="{!!url('reimbursement-travel')!!}" class="btn btn-primary" style="float:left;"
+                   onclick="if (document.referrer && history.length > 1) { history.back(); return false; }"><i class="fa fa-arrow-circle-left"></i> Back </a>
             </div>
         </div>
     </div>
@@ -318,16 +329,33 @@ if (!function_exists('travel_attachment_cache_bust')) {
                     
                     <td>{{$dt->payment_type}}</td>
                     <td>
-                        @foreach(travel_attachment_rows($data->id, $dt->id ?? 0, $dt->evidence ?? '', $dt->destination ?? '', $dt->cost_type_id ?? 0) as $att)
+                        @php
+                            $attachmentRows = travel_attachment_rows($data->id, $dt->id ?? 0, $dt->evidence ?? '', $dt->destination ?? '', $dt->cost_type_id ?? 0);
+                            // Day-level evidence (uploaded against the whole day, not a
+                            // specific row) is shown once, on the first detail row.
+                            if ($loop->first) {
+                                $attachmentRows = array_merge(travel_day_attachment_rows($item->id ?? 0), $attachmentRows);
+                            }
+                        @endphp
+                        @foreach($attachmentRows as $att)
                             @php
                                 $fileName = $att['file_name'] ?? '';
                                 $display = $att['original_name'] ?? $fileName;
+                                // Oct 2026: a row can carry several evidence files -- the
+                                // invoice/receipt the amount is claimed from plus supporting
+                                // proof (email screenshot, ticket, assignment letter). Label
+                                // them so an approver doesn't have to open each one to tell
+                                // which is which.
+                                $isProof = ($att['doc_type'] ?? 'invoice') === 'proof';
                             @endphp
                             @if($fileName !== '')
                                 <div>
                                     <a href="{{ URL::to('/') }}/images/file_bukti/{{$fileName}}{{ travel_attachment_cache_bust($fileName) }}" target="_blank" title="{{ $display }}">
-                                        <i class="fa fa-file"></i> {{ $display }}
+                                        <i class="fa {{ $isProof ? 'fa-paperclip' : 'fa-file-invoice' }}"></i> {{ $display }}
                                     </a>
+                                    <span class="badge {{ $isProof ? 'badge-secondary' : 'badge-info' }}" style="font-weight:400;">
+                                        {{ $isProof ? 'Supporting Proof' : 'Invoice / Receipt' }}
+                                    </span>
                                 </div>
                             @endif
                         @endforeach

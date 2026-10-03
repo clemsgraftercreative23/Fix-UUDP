@@ -58,7 +58,8 @@
                             <div class="col-md-3 mb-3">
                                 <label for="user_id">Employee</label>
                                 <select name="user_id" @change="searchDriver" class="form-control select2 employee" v-model="user_id">
-                                    <option v-for="item in employees" :value="item.id">@{{item.name}}</option>
+                                    <option :value="null">-Select Employee-</option>
+                              <option v-for="item in employees" :value="item.id">@{{item.name}}</option>
                                 </select>
                             </div>
                         @endif
@@ -427,27 +428,6 @@ $(document).ready(function(){
         var status = $(this).val();
         window.syncBulkApproveVisibility();
       
-        if(status) {
-            $.ajax({
-                url: 'reimbursement-user?status='+status+'&reimbursement_type=3',
-                type:"GET",
-                dataType:"json",
-                beforeSend: function(){
-                
-                },
-                success:function(data) {
-                    $('select[name="user_id"]').empty();
-                    $('select[name="user_id"]').append('<option value="">-Select Employee-</option>')
-                    $.each(data, function(key, value){
-                    $('select[name="user_id"]').append('<option value="'+ value.id +'">' + value.name + '</option>');
-                    });
-
-
-                },
-            });
-        } else {
-            $('select[name="user_id"]').empty();
-        }
     });
     
     
@@ -714,6 +694,7 @@ $(document).ready(function(){
           self.loadData(startDate,endDate,self.status, self.user_id);
         });
         this.initSelectForm()
+        this.loadEmployees()
         this.$nextTick(function () {
           if (typeof window.syncBulkApproveVisibility === 'function') {
             window.syncBulkApproveVisibility();
@@ -723,6 +704,18 @@ $(document).ready(function(){
       },
     
       methods: {
+        // Employee options: every employee with this claim type. Independent of the
+        // Status filter (loaded once), so picking a Status never changes/clears Employee.
+        loadEmployees() {
+          var self = this;
+          $.ajax({
+            url: `{{url("/")}}/reimbursement-user?status=ALL&reimbursement_type=3`,
+            dataType: 'json',
+            success: function(list) {
+              self.employees = Array.isArray(list) ? list : [];
+            }
+          });
+        },
         searchStatus(){
           let self = this;
           this.$nextTick(function () {
@@ -730,13 +723,6 @@ $(document).ready(function(){
               window.syncBulkApproveVisibility();
             }
           });
-          $.ajax({
-            url: `{{url("/")}}/reimbursement-user?status=${self.status}&reimbursement_type=3`,
-            methods: 'GET',
-            success: function(e) {
-              self.employees = e.data
-            }
-          })
         },
         searchDriver(){
 

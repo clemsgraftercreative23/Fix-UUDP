@@ -19,24 +19,45 @@
 
                   <div class="form-group">
                     <div class="custom-control custom-switch">
-                      <input type="hidden" name="travel_entertainment_ocr_check_enabled" value="0">
+                      <input type="hidden" name="travel_ocr_check_enabled" value="0">
                       <input
                         type="checkbox"
                         class="custom-control-input"
-                        id="travel_entertainment_ocr_check_enabled"
-                        name="travel_entertainment_ocr_check_enabled"
+                        id="travel_ocr_check_enabled"
+                        name="travel_ocr_check_enabled"
                         value="1"
-                        @if($travelEntertainmentOcrEnabled) checked @endif
+                        @if($travelOcrEnabled) checked @endif
                       >
-                      <label class="custom-control-label" for="travel_entertainment_ocr_check_enabled">
-                        Aktifkan pengecekan OCR No. Invoice/Receipt untuk reimbursement Travel &amp; Entertainment
+                      <label class="custom-control-label" for="travel_ocr_check_enabled">
+                        Aktifkan pengecekan OCR No. Invoice/Receipt untuk reimbursement <strong>Travel</strong>
                       </label>
                     </div>
                     <small class="form-text text-muted">
-                      Kalau aktif: No. Invoice/Receipt di form Travel &amp; Entertainment otomatis dibaca dari foto
-                      struk yang diupload, dan struk yang sudah pernah dipakai di pengajuan lain akan ditolak otomatis.
+                      Kalau aktif: No. Invoice/Receipt di form Travel otomatis dibaca dari foto struk yang diupload,
+                      dan struk yang sudah pernah dipakai di pengajuan lain akan ditolak otomatis.
                       Kalau nonaktif: tidak ada pembacaan OCR sama sekali (tidak ada panggilan ke Gemini API / tidak
                       memakai kuota), form berjalan seperti biasa tanpa pengisian ataupun pengecekan No. Invoice/Receipt.
+                    </small>
+                  </div>
+
+                  <div class="form-group">
+                    <div class="custom-control custom-switch">
+                      <input type="hidden" name="entertainment_ocr_check_enabled" value="0">
+                      <input
+                        type="checkbox"
+                        class="custom-control-input"
+                        id="entertainment_ocr_check_enabled"
+                        name="entertainment_ocr_check_enabled"
+                        value="1"
+                        @if($entertainmentOcrEnabled) checked @endif
+                      >
+                      <label class="custom-control-label" for="entertainment_ocr_check_enabled">
+                        Aktifkan pengecekan OCR No. Invoice/Receipt untuk reimbursement <strong>Entertainment</strong>
+                      </label>
+                    </div>
+                    <small class="form-text text-muted">
+                      Sama seperti Travel, tapi khusus form Entertainment -- keduanya bisa dinyalakan/dimatikan
+                      sendiri-sendiri.
                     </small>
                   </div>
 

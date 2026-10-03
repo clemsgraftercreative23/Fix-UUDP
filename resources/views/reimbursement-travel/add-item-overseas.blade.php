@@ -1,20 +1,64 @@
 @extends('template.app')
 
 @section('content')
-
+@php
+    // Same role/status matrix as the old tab edit pane (partials.travel-item-pane):
+    // who may delete days ($canManageTabs) and who may add/remove proof files
+    // ($canEditAttachments). Field editing itself stays as before.
+    $statusInt = (int) ($data['0']->status ?? 0);
+    $jabatan = (string) (auth()->user()->jabatan ?? '');
+    $canManageTabs = false;
+    if ($statusInt === 10) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin', 'admin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 1 && in_array($jabatan, ['Finance', 'Finance Supervisor', 'HR', 'HR GA', 'superadmin', 'admin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 2 && in_array($jabatan, ['Owner', 'Finance Supervisor', 'superadmin', 'admin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 11 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 3 && in_array($jabatan, ['Owner', 'Finance Manager', 'superadmin', 'admin'], true)) {
+        $canManageTabs = true;
+    } elseif ($statusInt === 9) {
+        $canManageTabs = (int) ($data['0']->id_user ?? 0) === (int) auth()->id() || in_array($jabatan, ['superadmin', 'admin'], true);
+    }
+    $canEditAttachments = false;
+    if (in_array($jabatan, ['superadmin', 'admin'], true)) {
+        $canEditAttachments = true;
+    } elseif ($statusInt === 10 || $statusInt === 9) {
+        $canEditAttachments = (int) ($data['0']->id_user ?? 0) === (int) auth()->id();
+    } elseif ($statusInt === 0 && in_array($jabatan, ['Direktur Operasional', 'superadmin', 'admin'], true)) {
+        $canEditAttachments = true;
+    } elseif (in_array($jabatan, ['Finance', 'HR', 'HR GA', 'superadmin', 'admin'], true) && in_array($statusInt, [1, 2], true)) {
+        $canEditAttachments = true;
+    } elseif ($jabatan === 'Finance Supervisor' && in_array($statusInt, [1, 2], true)) {
+        $canEditAttachments = true;
+    } elseif ($jabatan === 'Owner' && in_array($statusInt, [2, 11], true)) {
+        $canEditAttachments = true;
+    } elseif ($jabatan === 'Finance Manager' && $statusInt === 11) {
+        $canEditAttachments = true;
+    }
+    // Submit starts enabled when there is anything submittable already:
+    // stored proof files, a day living off another day's document, or the
+    // single-day allowance-only state (same situations that unlock the
+    // buttons in the create form after an upload/refer/allowance action).
+    $submitUnlocked = collect($editDays ?? [])->contains(function ($d) {
+        return !empty($d['existingFiles']) || ($d['referDay'] ?? null) !== null || !empty($d['sameTripRef']) || !empty($d['allowanceOnly']);
+    });
+@endphp
 <style>
-    /* Hanya modal kamera: jangan timpa .modal-dialog global (merusak #previewImageModal). */
-    #modalPhoto .modal-dialog {
+    .modal-dialog {
         max-width: 100%;
         margin: 0 auto;
     }
 
-    #modalPhoto .modal-content {
+    .modal-content {
         max-height: 100vh; 
         overflow-y: auto; 
     }
 
-    #modalPhoto .modal-body {
+    .modal-body {
         overflow-y: auto;
         max-height: 90vh; 
     }
@@ -40,45 +84,9 @@
     }
 
     .nav-link {
-        background-color: #e8e8e8;
         display: block;
         padding: 10px 15px;
         white-space: nowrap; /* Pastikan teks tidak terpotong */
-    }
-    .travel-tab {
-        display: flex;
-        align-items: center;
-    }
-    .tab-close-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 22px;
-        height: 22px;
-        margin-left: 6px;
-        border-radius: 50%;
-        background: #dc3545;
-        color: #fff;
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 700;
-        line-height: 1;
-        flex-shrink: 0;
-    }
-    .tab-close-link:hover {
-        color: #fff;
-        text-decoration: none;
-        opacity: 0.85;
-    }
-    #rt-travel-item-pane.rt-pane-loading {
-        opacity: 0.55;
-        pointer-events: none;
-    }
-    button.nav-link.travel-item-link {
-        border: none;
-        cursor: pointer;
-        font: inherit;
-        text-align: inherit;
     }
     .button-container {
         display: flex;
@@ -92,13 +100,6 @@
     .btn {
         white-space: nowrap; /* Pastikan teks tidak turun ke bawah */
         flex-shrink: 0; /* Mencegah tombol mengecil */
-    }
-    #preview_1 {
-        maxWidth: '75px';
-        maxHeight: '75px';
-        border: '2px solid #28a745';
-        borderRadius: '5px';
-        marginTop: '5px';
     }
   
     @media (max-width: 768px) {
@@ -120,7 +121,8 @@
       }
 
       .idr-rate-input,
-      .tax-input {
+      .tax-input,
+      .exchange-rate-input {
         width: 150px !important;
       }
 
@@ -128,1092 +130,1720 @@
         width: 80px !important;
       }
     }
-    
+
+    .rt-create-tabs { margin-bottom: 12px; }
+    .rt-create-tabs .nav-tabs { flex-wrap: wrap; border-bottom: 1px solid #dee2e6; }
+    .rt-create-tabs .travel-tab { position: relative; display: inline-flex; align-items: center; }
+    .rt-create-tabs .travel-tab .nav-link { padding-right: 26px; cursor: pointer; }
+    .rt-create-tabs .tab-close-link { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: #c0392b; font-weight: 700; text-decoration: none; line-height: 1; }
+    .rt-create-tabs .nav-link.active { font-weight: 700; color: #1e7e34; border-color: #dee2e6 #dee2e6 #fff; }
+    /* --- Step wizard look (Sep 2026 redesign: single evidence per day) --- */
+    .rt-step-title { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .rt-step-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; border-radius: 50%; background: #28a745; color: #fff;
+        font-weight: 700; font-size: 13px; flex: none;
+    }
+    .rt-step-title h5 { margin: 0; font-weight: 700; }
+    .rt-step-desc { color: #6c757d; font-size: 12.5px; margin: 0 0 14px 36px; }
+    .rt-evidence-card { background: #f8f9fb; border: 1px solid #e2e5ea; border-radius: 8px; padding: 16px 18px; margin-bottom: 18px; }
+    .rt-dropzone {
+        border: 2px dashed #c9d3e0; border-radius: 8px; background: #fff; text-align: center;
+        padding: 26px 14px; cursor: pointer; transition: border-color .15s;
+    }
+    .rt-dropzone:hover, .rt-dropzone.is-dragover { border-color: #28a745; background: #f4fff7; }
+    .rt-dropzone i { font-size: 26px; color: #8a94a6; margin-bottom: 6px; display: block; }
+    .rt-dropzone small { display: block; color: #8a94a6; margin-top: 6px; }
+    .rt-ocr-hint { background: #eef7f0; border: 1px solid #cdeadb; border-radius: 8px; padding: 12px 14px; font-size: 12.5px; height: 100%; }
+    .rt-ocr-hint .rt-ocr-hint-title { font-weight: 700; color: #1e7e34; margin-bottom: 6px; }
+    .rt-ocr-hint ul { list-style: none; padding: 0; margin: 0; }
+    .rt-ocr-hint li { margin-bottom: 4px; }
+    .rt-ocr-hint li i { color: #28a745; margin-right: 6px; }
+    /* Tips used to be a permanent box taking up a whole column (col-md-3) on
+       every day card -- moved into an on-demand modal (Sep 2026 feedback:
+       "tips yang di card itu di ilangin aja atau dijadiin modal soalnya
+       makan tempat") triggered by this small icon next to the step title. */
+    .rt-tips-trigger { padding: 0; margin-left: auto; color: #c99a1a; font-size: 15px; }
+    .rt-tips-trigger:hover { color: #8a6416; }
+    .rt-tips-modal-body { background: #fffbea; border: 1px solid #ffe9a8; border-radius: 8px; padding: 14px 16px; font-size: 13px; }
+    .rt-file-chip {
+        display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #d9d9d9;
+        border-radius: 6px; padding: 8px 10px; margin-top: 10px; font-size: 12.5px;
+    }
+    /* Preview thumbnail, enlarged (Sep 2026 feedback: "preview nya itu jelas
+       keliatan/informatif") -- big enough to actually recognize the receipt
+       at a glance instead of squinting at a 34px icon, with the status
+       colour as a border so read/duplicate/pending is visible without
+       reading the text next to it. Still clickable to open full-size. */
+    .rt-file-chip img.rt-file-thumb, .rt-file-chip .rt-file-pdf-box {
+        width: 64px; height: 64px; object-fit: cover; border-radius: 6px; cursor: pointer; flex: none;
+        border: 2px solid #d9d9d9; transition: border-color .15s;
+    }
+    .rt-file-chip .rt-file-pdf-box { display: flex; align-items: center; justify-content: center; background: #f7f7f7; }
+    .rt-file-chip .rt-file-pdf-box i { font-size: 24px; color: #dc3545; }
+    .rt-file-chip img.rt-file-thumb[data-status="read"], .rt-file-chip .rt-file-pdf-box[data-status="read"] { border-color: #28a745; }
+    .rt-file-chip img.rt-file-thumb[data-status="duplicate"], .rt-file-chip .rt-file-pdf-box[data-status="duplicate"] { border-color: #dc3545; }
+    .rt-file-chip img.rt-file-thumb[data-status="pending"], .rt-file-chip .rt-file-pdf-box[data-status="pending"] { border-color: #f0ad4e; }
+    .rt-file-chip img.rt-file-thumb[data-status="not_receipt"], .rt-file-chip .rt-file-pdf-box[data-status="not_receipt"] { border-color: #f0ad4e; }
+    .rt-file-chip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .rt-file-chip .rt-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rt-file-chip .rt-file-row-tag, .rt-file-chip .rt-file-doc-type { font-size: 11px; padding: 1px 4px; height: auto; }
+    /* Preview button in Step 3 shows which numbered Step 1 file it links to
+       (Sep 2026 feedback). */
+    .rt-preview-file-btn { position: relative; }
+    .rt-preview-file-btn .rt-preview-file-number {
+        position: absolute; top: -6px; right: -6px; min-width: 14px; height: 14px; padding: 0 2px;
+        border-radius: 7px; background: #28a745; color: #fff; font-size: 9px; font-weight: 700;
+        line-height: 14px; text-align: center;
+    }
+    .rt-file-chip .rt-file-ocr-text { font-size: 10.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Per-file OCR detail line (Sep 2026 feedback: "setiap evident yang
+       diupload juga muncul OCR result-nya") -- date/merchant/amount for THIS
+       specific file, shown inline/sideways in one small row right under its
+       "No. Invoice: ..." line, instead of only the day's single latest file
+       having any detail shown at all. */
+    .rt-file-chip .rt-file-ocr-detail { font-size: 9.5px; line-height: 1.3; color: #6c757d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+    .rt-file-chip .rt-file-ocr-detail:hover { color: #0a58ca; }
+    .rt-file-chip .rt-file-ocr-detail b { color: #495057; font-weight: 600; }
+    /* Per-file OCR Result modal (Sep 2026 feedback) -- shows the FULL reading
+       for one specific file, read-only, so multiple files' results don't
+       overwrite each other in the single editable panel (which can only
+       ever hold the one no_invoice/merchant_name the day actually submits). */
+    .rt-ocr-detail-modal-field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; }
+    .rt-ocr-detail-modal-field label { width: 90px; flex: none; color: #6c757d; margin: 0; font-size: 11.5px; }
+    .rt-ocr-detail-modal-field b { flex: 1; }
+    /* "+N" when the row carries more evidence files than the numbered one --
+       the Preview opens all of them (Oct 2026 feedback). Sits on the opposite
+       corner so it never covers the file number. */
+    .rt-preview-file-btn .rt-preview-file-more {
+        position: absolute; bottom: -6px; right: -6px; min-width: 14px; height: 14px; padding: 0 2px;
+        border-radius: 7px; background: #6c757d; color: #fff; font-size: 9px; font-weight: 700;
+        line-height: 14px; text-align: center;
+    }
+    /* Row Preview gallery (Oct 2026): every evidence file of one expense row,
+       paged in place instead of opened as several tabs that popup blockers
+       would inconsistently drop. */
+    #rtRowPreviewModal .rt-rowprev-stage {
+        position: relative; background: #f1f3f5; border-radius: 6px; text-align: center;
+        min-height: 320px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    #rtRowPreviewModal .rt-rowprev-stage img { max-width: 100%; max-height: 62vh; object-fit: contain; }
+    #rtRowPreviewModal .rt-rowprev-stage iframe { width: 100%; height: 62vh; border: 0; background: #fff; }
+    #rtRowPreviewModal .rt-rowprev-nav {
+        position: absolute; top: 50%; transform: translateY(-50%); border: none; cursor: pointer;
+        background: rgba(0,0,0,.45); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 15px;
+    }
+    #rtRowPreviewModal .rt-rowprev-nav:hover { background: rgba(0,0,0,.68); }
+    #rtRowPreviewModal .rt-rowprev-prev { left: 10px; }
+    #rtRowPreviewModal .rt-rowprev-next { right: 10px; }
+    #rtRowPreviewModal .rt-rowprev-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
+    #rtRowPreviewModal .rt-rowprev-badge { border-radius: 10px; padding: 1px 8px; font-size: 10.5px; font-weight: 600; }
+    #rtRowPreviewModal .rt-rowprev-badge.is-proof { background: #e9ecef; color: #495057; }
+    #rtRowPreviewModal .rt-rowprev-badge.is-invoice { background: #d7ebff; color: #0a58ca; }
+    #rtRowPreviewModal .rt-rowprev-thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    #rtRowPreviewModal .rt-rowprev-thumb {
+        width: 46px; height: 46px; border-radius: 4px; border: 2px solid transparent;
+        object-fit: cover; cursor: pointer; background: #fff;
+    }
+    #rtRowPreviewModal .rt-rowprev-thumb.is-active { border-color: #28a745; }
+    #rtRowPreviewModal .rt-rowprev-thumb-pdf {
+        width: 46px; height: 46px; border-radius: 4px; border: 2px solid transparent; cursor: pointer;
+        background: #fff; display: flex; align-items: center; justify-content: center; color: #c0392b;
+    }
+    #rtRowPreviewModal .rt-rowprev-thumb-pdf.is-active { border-color: #28a745; }
+    /* "Take Photo" sits directly under the dropzone so both ways of adding
+       evidence are equally visible (Oct 2026 request). */
+    .rt-camera-btn { margin-top: 8px; width: 100%; }
+    .rt-file-chip .rt-file-remove { color: #dc3545; cursor: pointer; flex: none; }
+    .rt-file-chip .rt-file-preview-btn { padding: 2px 6px; font-size: 11px; flex: none; }
+    .rt-reference-wrap { margin-top: 14px; }
+    /* Compact OCR Result -- sits beside the dropzone (in the same column the
+       "OCR will read" hint occupies before any file is read) instead of a
+       full-width block below it. Sep 2026 feedback: "keterangannya kesamping
+       aja, dibuat kecil" -- each field is label+value on one line (inline)
+       instead of label stacked above the input. Sep 2026 feedback again:
+       "resultnya masih replace, harusnya engga" -- .rt-ocr-summary-list
+       stacks ONE .rt-ocr-summary-compact panel PER FILE (see readOcrFiles()),
+       each editing that file's own chip data, so a second/third file no
+       longer silently overwrites what an earlier file's panel showed. */
+    .rt-ocr-summary-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+    .rt-ocr-summary-compact { background: #fff; border: 1px solid #d9e6ff; border-radius: 8px; padding: 8px 10px; font-size: 11px; }
+    .rt-ocr-summary-compact-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .rt-ocr-summary-compact-head b { color: #0a58ca; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .rt-ocr-summary-compact-head .btn { padding: 0px 5px; font-size: 10px; flex: none; }
+    .rt-ocr-summary-compact label { font-size: 9.5px; color: #6c757d; margin: 0; flex: none; width: 62px; }
+    .rt-ocr-summary-compact .form-control-sm { font-size: 10.5px; padding: 1px 5px; height: auto; }
+    .rt-ocr-summary-compact-field { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+    .rt-ocr-summary-compact-field input { flex: 1; min-width: 0; }
+    .rt-ocr-summary-compact-primary { margin-top: 4px; font-size: 9.5px; color: #1e7e34; font-weight: 600; }
+    .rt-mess-note, .rt-same-trip-note-inline { margin-top: 10px; font-size: 12px; border-radius: 6px; padding: 8px 10px; }
+    .rt-mess-note { background: #f1fff5; border: 1px solid #bfe8cd; color: #1e7e34; }
 
 </style>
 
-<?php 
-function rupiah($angka){
-	
-	$hasil_rupiah = number_format($angka,0,',','.');
-	return $hasil_rupiah;
- 
-}
-
-function rate_input($angka){
-    if ($angka === null || $angka === '') return '';
-    if (!is_numeric($angka)) return (string) $angka;
-    return number_format((float) $angka, 2, ',', '.');
-}
-?>
-
 <div class="page-content" id="app">
-@if(session()->has('success'))
-    <div class="alert alert-success">
-        {{ session()->get('success') }}
-    </div>
-@endif
-@if ($errors->any())
-    @foreach ($errors->all() as $error)
-        <div class="alert alert-danger">
-            {{ $error }}
-        </div>
-    @endforeach
-@endif
-<div class="">
-    <!--@if(auth()->user()->jabatan=='karyawan')
-    <form action="{!!url('reimbursement-travel/update-item/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
-    @else
-    <form action="{!!url('reimbursement-travel/update-item-approval/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
-    @endif -->
-  
-    @if($data['0']->status!=9)
-    	<form action="{!!url('reimbursement-travel/update-item/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
-    @else
-        <form id="reimbursement-form" action="{!!url('reimbursement-travel/update-item-reject/'.Request::segment(3).'/'.Request::segment(4).'')!!}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;">
+    @if ($errors->any())
+        @foreach ($errors->all() as $error)
+            <div class="alert alert-danger">
+                {{ $error }}
+            </div>
+        @endforeach
     @endif
-          
-        @csrf 
-        <div class="row">
-            <div class="col-xl">
-                <div class="card">
-                    <div class="card-body">
-                        
-                        <div class="d-flex justify-content-between w-100"><h2 id="exampleModalCenterTitle" class="modal-title maintitle clr-green mb-0">REIMBURSEMENT UUDP - TRAVEL {{strtoupper($travel_type)}}</h2> 
-                        <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close js-rt-discard-edit" data-rt-main-id="{{ $data['0']->id }}"><i class="material-icons">close</i></a></div>
-                        <hr>
-                        
-                        <div class="row">
-                            <input type="hidden" name="travel_type" value="{{$travel_type}}">
-                            <div class="col-md-3">
-                                <label for="">Employee</label>
-                                <input type="text" class="form-control" readonly value="{{auth()->user()->name}}">
-                                <input type="hidden" class="form-control" name="id_editor" value="{{auth()->user()->id}}">
-                                <input type="hidden" class="form-control" name="id_user" value="{{$data['0']->id_user}}">
-                            </div>
-                            <div class="col-md-3">
-                                <label for="">Apply Date</label>
-                                <input type="text" class="form-control" name="remark" value="{{ date('d F Y', strtotime($data['0']->created_at)) }}" readonly>
-                            </div> 
-                            <div class="col-md-3">
-                                <label for="">Purpose Trip</label>
-                                <input type="text" class="form-control" name="remark" value="{{$data['0']->remark}}">
-                            </div>   
-                            <div class="col-md-3">
-                            	<div class="form-group">
-                                <label for="exampleFormControlInput1">Department</label>
-                                <select name="reimbursement_department_id" id="" class="form-control">
-                                    @foreach (\App\Departemen::get() as $item)
-                                        <option value="{{$item->id}}" @if(auth()->user()->departmentId == $item->id) selected @endif>{{$item->nama_departemen}}</option>
-                                    @endforeach
-                                </select>
+    <div class="">
+        <form id="travel_overseas_reimbursement_form" action="{{ route('reimbursement-travel.update-all', $data['0']->id) }}" method="POST" enctype="multipart/form-data" style="overflow-y: auto;" @submit="onTravelFormSubmit">
+            @csrf
+            <div class="row">
+                <div class="col-xl">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between w-100"><h2 id="exampleModalCenterTitle" class="modal-title maintitle clr-green mb-0">EDIT REIMBURSEMENT - TRAVEL ( Overseas ) &mdash; {{ $data['0']->no_reimbursement }}</h2> 
+                            <a href="{!!url('reimbursement-travel')!!}" aria-label="Close" class="close"><i class="material-icons">close</i></a></div>
+                            <hr>
+                            
+                            <input type="hidden" name="travel_type" value="Overseas" />
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label for="">Employee</label>
+                                    <input type="text" class="form-control" readonly value="{{auth()->user()->name}}" />
+                                    <input type="hidden" class="form-control" name="id_editor" value="{{auth()->user()->id}}">
+                                    <input type="hidden" class="form-control" name="id_user" value="{{$data['0']->id_user}}">
                                 </div>
-                            </div> 
-                          	@if ($data['0']->status == 9)
-                            <div class="col-md-3">
-                              	<label for="inputPassword4">Status</label>
-                                <input type="text" class="form-control" value="Rejected" readonly >
-                          	</div>
-                            <div class="col-md-3">
-                                <label for="inputPassword4">Reject Reason</label>
-                                <input type="text" class="form-control" value="{{$data['0']->reject_reason}}" readonly >
+                                <div class="col-md-3">
+                                    <label for="">Apply Date</label>
+                                    <input type="text" class="form-control" readonly value="{{ date('d F Y', strtotime($data['0']->created_at)) }}" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="">Purpose Trip</label>
+                                    <input type="text" class="form-control" name="remark" value="{{$data['0']->remark}}" />
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="exampleFormControlInput1">Department</label>
+                                        <select name="reimbursement_department_id" id="" class="form-control">
+                                            @foreach (\App\Departemen::get() as $item)
+                                            <option value="{{$item->id}}" @if(auth()->user()->departmentId == $item->id) selected @endif>{{$item->nama_departemen}}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                @if ($data['0']->status == 9)
+                                <div class="col-md-3">
+                                    <label for="inputPassword4">Status</label>
+                                    <input type="text" class="form-control" value="Rejected" readonly >
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="inputPassword4">Reject Reason</label>
+                                    <input type="text" class="form-control" value="{{$data['0']->reject_reason}}" readonly >
+                                </div>
+                                @endif
                             </div>
-                            @endif
+                            <hr />
+                            <div v-for="(dt,i) in rates" :key="'travel-rate-row-'+i" class="row">
+                                <div class="col-md-9">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <label for="">Currency</label>
+                                            <input type="text" class="form-control" :name="'rates['+i+'][code]'" v-model.trim="dt.code" @blur="dt.code = (dt.code || '').toUpperCase()" />
+                                        </div>
+                                        <div class="col-md-8">
+                                            <label for="">Exchange Rate</label>
+                                            <input type="text" class="form-control exchange-rate-input" :name="'rates['+i+'][rate]'" :value="dt.rate" @input="onExchangeRateInput(i, $event)" @focus="onExchangeRateFocus(i, $event)" @blur="onExchangeRateBlur(i, $event)" autocomplete="off" inputmode="decimal" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 text-left" v-if="i > 0" style="padding-top:28px">
+                                    <button type="button" class="btn btn-danger btn-sm" @click.prevent="removeRate(i)" title="Delete rate">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <hr />
+                            <br />
+                            <hr />
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <button type="button" class="btn btn-primary text-right" @click="addRate"><i class="fa fa-plus"></i> Add Rate</button>
+                                </div>
+                            </div>
                         </div>
-                        <hr>
-                        <div class="row">
-                            <div class="col-md-12">
-                                @php
-                                    $travelTripRatesSorted = collect($travel_trip ?? [])->values()->sort(function ($a, $b) {
-                                        $aIdr = strtoupper((string) ($a->currency ?? '')) === 'IDR';
-                                        $bIdr = strtoupper((string) ($b->currency ?? '')) === 'IDR';
-                                        if ($aIdr !== $bIdr) {
-                                            return $aIdr ? -1 : 1;
-                                        }
-                                        return ((int) ($a->id ?? 0)) <=> ((int) ($b->id ?? 0));
-                                    })->values();
-                                    if ($travelTripRatesSorted->isEmpty()) {
-                                        $travelTripRatesSorted = collect([
-                                            (object) ['id' => 0, 'currency' => 'IDR', 'rate' => 1],
-                                            (object) ['id' => 0, 'currency' => 'USD', 'rate' => 0],
-                                        ]);
-                                    } elseif (strtoupper((string) ($travel_type ?? '')) !== 'DOMESTIC'
-                                        && !$travelTripRatesSorted->contains(function ($row) {
-                                            return strtoupper((string) ($row->currency ?? '')) === 'USD';
-                                        })) {
-                                        $travelTripRatesSorted->push((object) ['id' => 0, 'currency' => 'USD', 'rate' => 0]);
-                                    }
-                                @endphp
-                                @foreach($travelTripRatesSorted as $row)
-                                <div class="row fieldGroup">
-                                    <input type="hidden" name="id_rate" class="id_rate" value="{{ $row->id }}">
-                                    <div class="col-md-3">
-                                        <label for="">Currency</label>
-                                        <input type="text" class="form-control" name="currency_rate[]" value="{{ $row->currency }}">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="">Exchange Rate</label>
-                                        <input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]" value="{{ rate_input($row->rate) }}">
-                                    </div>
-                                    <div class="col-md-3">
-                                        @if($loop->first)
-                                        <a class="btn btn-primary btn-sm addMore" style="color:white;margin-top:35px;cursor:pointer"><i class="fa fa-plus"></i></a>
-                                        @else
-                                        <a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a>
+                    </div>
+                </div>
+            </div>
+            <br />
+            <div class="row" v-if="reimburses.length > 0">
+                <div class="col-xl text-right">
+                    {{-- Adds a blank day card in this same form (nothing is reloaded, so the days already filled in stay put); updateAllItems creates it on Update/Submit. --}}
+                    <button class="btn btn-primary" type="button" @click="addNewDay"><i class="fa fa-plus"></i> Add New Item</button>
+                </div>
+            </div>
+            <br />
+            <div class="row" v-if="reimburses.length === 0">
+                <div class="col-xl">
+                    <div class="card">
+                        <div class="card-body text-center text-muted" style="padding:24px;">
+                            Belum ada form harian.
+                            <a href="{{ url('reimbursement-travel/add-days/'.$data['0']->id) }}"><b>Tambah hari</b></a> untuk mulai mengisi.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" v-for="(data,i) in reimburses" :key="'day-'+i">
+                <div class="col-xl">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center" style="cursor:pointer;" @click="toggleDayCollapse(i)">
+                                <h5 style="margin:0;font-weight:700;">
+                                    <i :class="data.collapsed ? 'fa fa-chevron-right' : 'fa fa-chevron-down'"></i>
+                                    Day @{{ i + 1 }} Form <small v-if="data.date" class="text-muted">(@{{ data.date }})</small>
+                                </h5>
+                                @if($canManageTabs)
+                                <button v-if="reimburses.length > 1 && !data.travel_id" type="button" class="btn btn-outline-danger btn-sm" @click.stop="removeDay(i)" title="Remove this new day form"><i class="fa fa-trash"></i> Remove</button>
+                                <a v-else-if="reimburses.length > 1" class="btn btn-outline-danger btn-sm" :href="'{{ url('reimbursement-travel/delete-item/'.$data['0']->id) }}/' + data.travel_id" onclick="return confirm('Delete this day form and all its data?')" @click.stop title="Delete this day form"><i class="fa fa-trash"></i> Delete</a>
+                                @endif
+                            </div>
+                            <input type="hidden" :name="'reimburse['+i+'][travel_id]'" :value="data.travel_id">
+                            <hr>
+                            <div v-show="!data.collapsed">
+
+                            <div class="rt-step-title">
+                                <span class="rt-step-badge">1</span>
+                                <h5>Upload Evidence (Invoice / Receipt)</h5>
+                                <button type="button" class="btn btn-link btn-sm rt-tips-trigger" title="Tips" @click.stop="$('#rtEvidenceTipsModal').modal('show')">
+                                    <i class="fa fa-lightbulb"></i>
+                                </button>
+                            </div>
+                            <p class="rt-step-desc">Upload your invoice or receipt to automatically read the information (OCR).</p>
+                            <div class="rt-evidence-card">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <!-- Per-file Invoice-vs-Proof choice on each chip below instead of one
+                                             day-level radio -- see the same block in create.blade.php. -->
+                                        <div class="rt-upload-type" style="margin-bottom:8px;font-size:12px;color:#6c757d;">
+                                            Upload the invoice/receipt plus any supporting proof. Mark each file below as
+                                            <b>Invoice / Receipt</b> (read by OCR) or <b>Supporting Proof</b> (email screenshot,
+                                            ticket, assignment letter &mdash; attached only, no OCR).
+                                        </div>
+                                        @if($canEditAttachments)
+                                        <div class="rt-dropzone"
+                                             @click="$refs['dayFileInput'+i][0].click()"
+                                             @dragover.prevent="$event.currentTarget.classList.add('is-dragover')"
+                                             @dragleave.prevent="$event.currentTarget.classList.remove('is-dragover')"
+                                             @drop.prevent="$event.currentTarget.classList.remove('is-dragover'); onDayFileDrop(i, $event)">
+                                            <i class="fa fa-cloud-upload-alt"></i>
+                                            Drag &amp; drop file here or<br>
+                                            <button type="button" class="btn btn-outline-success btn-sm" style="margin-top:8px;" @click.stop="$refs['dayFileInput'+i][0].click()">Browse File</button>
+                                            <small>Supported file: JPG, PNG, PDF (Max 10MB)</small>
+                                        </div>
                                         @endif
+                                        <!-- Multiple files per day (Sep 2026 redesign): the real <input type=file>
+                                             elements actually submitted are created dynamically per file (see
+                                             rtAddDayHiddenFile()) so more than one file can be attached without
+                                             each new pick replacing the last -- this input is just the click/browse
+                                             target and picks up multiple files at once via `multiple`. -->
+                                        <input type="file" :ref="'dayFileInput'+i" accept="image/*,.pdf" multiple style="display:none" @change="onDayFileInputChange(i, $event)">
+                                        <!-- Take a photo instead of browsing for one. The capture lands in
+                                             the very same chip list as an uploaded file, so OCR, the row tag
+                                             and the Invoice/Supporting-Proof choice all behave identically. -->
+                                        <button type="button" class="btn btn-outline-success btn-sm rt-camera-btn" @click="openDayCamera(i)">
+                                            <i class="fa fa-camera"></i> Take Photo
+                                        </button>
+                                        <input type="hidden" :name="'reimburse['+i+'][merchant_name]'" :value="primaryOcrFile(data) ? primaryOcrFile(data).ocrMerchant : ''">
+                                        <input type="hidden" :name="'reimburse['+i+'][no_invoice]'" :value="primaryOcrFile(data) ? primaryOcrFile(data).ocrInvoice : ''">
+
+                                        <!-- Already-stored proof (edit mode) is listed FIRST, before new
+                                             uploads (Sep 2026 feedback: "kalau edit nambah file baru itu list
+                                             evidence yg terakhir upload itu nambahnya kebawah supaya di
+                                             preview nya 1,2 tetap file di posisi yg sama"). Rendering new
+                                             uploads on top used to renumber every saved file on each upload,
+                                             which shifted the Preview badges in Step 3. Kept on save via
+                                             keep_attachment_ids unless deleted here; can be re-tagged to
+                                             another row. Numbering must stay in sync with dayFilePool(). -->
+                                        <div class="rt-file-chip" v-for="(f, ei) in data.existingFiles" :key="f.uid">
+                                            <img v-if="f.dataUrl" :src="f.dataUrl" class="rt-file-thumb" data-status="existing" title="Click to view full size" @click="previewFileChip(f)" @dblclick="previewFileChip(f)">
+                                            <div v-else class="rt-file-pdf-box" data-status="existing" title="Click to view the PDF" @click="previewFileChip(f)" @dblclick="previewFileChip(f)"><i class="fa fa-file-pdf"></i></div>
+                                            <div class="rt-file-chip-body">
+                                                <span class="rt-file-name">@{{ ei + 1 }}. @{{ f.name }}</span>
+                                                <select class="form-control form-control-sm rt-file-row-tag" v-model="f.rowTag">
+                                                    <option value="">General (all rows)</option>
+                                                    <option v-for="(dt, di) in data.details" :value="String(di)">Baris @{{ di + 1 }}@{{ dt.destination ? (' - ' + dt.destination) : '' }}</option>
+                                                </select>
+                                                <!-- A saved file's Invoice-vs-Proof choice stays correctable here --
+                                                     see add-item.blade.php. -->
+                                                <select class="form-control form-control-sm rt-file-doc-type" v-model="f.docType" title="Is this the invoice/receipt OCR should read, or just supporting proof?">
+                                                    <option value="invoice">Invoice / Receipt (OCR)</option>
+                                                    <option value="proof">Supporting Proof (no OCR)</option>
+                                                </select>
+                                                <span class="rt-file-ocr-text text-muted">@{{ f.docType === 'proof' ? 'Saved supporting proof' : 'Saved invoice / receipt' }}</span>
+                                                <input type="hidden" v-if="f.rowTag === ''" :name="'reimburse['+i+'][keep_day_attachment_ids][]'" :value="f.existingId">
+                                                <input type="hidden" v-else :name="'reimburse['+i+'][keep_attachment_ids]['+f.rowTag+'][]'" :value="f.existingId">
+                                                <input type="hidden" :name="'reimburse['+i+'][keep_attachment_doc_types]['+f.existingId+']'" :value="f.docType">
+                                            </div>
+                                            <span style="color:#6c757d;" title="Saved proof"><i class="fa fa-archive"></i></span>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm rt-file-preview-btn" @click="previewFileChip(f)" title="View this proof">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                            @if($canEditAttachments)
+                                            <i class="fa fa-times rt-file-remove" @click="removeExistingFile(i, ei)" title="Delete this file"></i>
+                                            @endif
+                                        </div>
+
+                                        <div class="rt-file-chip" v-for="(f, fi) in data.dayFiles" :key="f.uid">
+                                            <!-- Preview via single click, double-click, OR the explicit eye button
+                                                 below -- clicking the thumbnail alone wasn't a discoverable enough
+                                                 affordance (Sep 2026 feedback: "apa gak bisa yg diatas dikasih mata?
+                                                 atau double klik di attachmentnya"). -->
+                                            <img v-if="f.dataUrl" :src="f.dataUrl" class="rt-file-thumb" :data-status="f.ocrStatus" title="Click or double-click to view full size" @click="previewFileChip(f)" @dblclick="previewFileChip(f)">
+                                            <div v-else class="rt-file-pdf-box" :data-status="f.ocrStatus" title="Click or double-click to view the PDF" @click="previewFileChip(f)" @dblclick="previewFileChip(f)"><i class="fa fa-file-pdf"></i></div>
+                                            <div class="rt-file-chip-body">
+                                                <span class="rt-file-name">@{{ data.existingFiles.length + fi + 1 }}. @{{ f.name }}</span>
+                                                <!-- 1.A: tag this file to a specific Expense Detail row (e.g. file 1 ->
+                                                     Hotel, file 2 -> Taksi) instead of it applying to every row. Left
+                                                     blank/"Umum" it stays day-level, same as the old single-file
+                                                     behaviour (e.g. one combined invoice for the whole day). -->
+                                                <select class="form-control form-control-sm rt-file-row-tag" v-model="f.rowTag" @change="onFileRowTagChange(i, f)">
+                                                    <option value="">General (all rows)</option>
+                                                    <option v-for="(dt, di) in data.details" :value="String(di)">Baris @{{ di + 1 }}@{{ dt.destination ? (' - ' + dt.destination) : '' }}</option>
+                                                </select>
+                                                <!-- Per-file Invoice-vs-Proof -- see create.blade.php. -->
+                                                <select class="form-control form-control-sm rt-file-doc-type" v-model="f.docType" @change="onFileDocTypeChange(i, f)" title="Is this the invoice/receipt OCR should read, or just supporting proof?">
+                                                    <option value="invoice">Invoice / Receipt (OCR)</option>
+                                                    <option value="proof">Supporting Proof (no OCR)</option>
+                                                </select>
+                                                <!-- No. Invoice/Receipt this SPECIFIC file read, shown as plain text
+                                                     instead of only a hover tooltip on the status icon -- with several
+                                                     files per day, a tooltip alone doesn't answer "which invoice number
+                                                     belongs to which file", and hover doesn't work on a phone anyway. -->
+                                                <span v-if="f.ocrStatus === 'pending'" class="rt-file-ocr-text text-muted">Checking receipt...</span>
+                                                <span v-else-if="f.ocrStatus === 'read'" class="rt-file-ocr-text" style="color:#1e7e34;">@{{ f.ocrMessage || 'Receipt read' }}</span>
+                                                <span v-else-if="f.ocrStatus === 'duplicate'" class="rt-file-ocr-text" style="color:#c0392b;">@{{ f.ocrMessage || 'Invoice has already been used' }}</span>
+                                                <!-- OCR ran fine but found nothing receipt-shaped at all (no amount/
+                                                     merchant/date/invoice) -- almost certainly the wrong photo was
+                                                     uploaded (selfie, random screenshot, etc). Non-blocking, just a
+                                                     nudge to re-upload the correct file -- see
+                                                     ReceiptOcrVerifier::read()'s 'not_receipt' status. -->
+                                                <span v-else-if="f.ocrStatus === 'not_receipt'" class="rt-file-ocr-text" style="color:#a06a1c;">⚠ @{{ f.ocrMessage || 'Not an invoice/receipt, please upload again' }}</span>
+                                                <span v-else-if="f.ocrStatus === 'unavailable'" class="rt-file-ocr-text text-muted">OCR not available</span>
+                                                <span v-else-if="f.ocrStatus === 'proof'" class="rt-file-ocr-text text-muted">Travel proof (no OCR)</span>
+                                                <!-- Every uploaded file's own OCR reading, not just the day's latest
+                                                     one (Sep 2026 feedback: "setiap evident yang diupload juga muncul
+                                                     OCR result-nya"), compact/inline so it stays cheap on vertical
+                                                     space -- and clickable to open the full read-only OCR Result for
+                                                     THIS specific file (Sep 2026 feedback: "kek ketimpa gitu, dibikin
+                                                     button modal gitu?"), since the editable OCR Result panel on the
+                                                     right can only ever reflect one file at a time (the day only has
+                                                     one no_invoice/merchant_name field to actually submit). -->
+                                                <span v-if="f.ocrStatus === 'read' && (f.ocrDate || f.ocrMerchant || f.ocrAmount)" class="rt-file-ocr-detail" role="button" @click="showOcrDetailModal(f)" :title="'Click to view the full OCR Result of this file'">
+                                                    <template v-if="f.ocrDate"><b>@{{ f.ocrDate }}</b> · </template>@{{ f.ocrMerchant || '-' }}<template v-if="f.ocrAmount"> · @{{ f.ocrAmount }} @{{ f.ocrCurrency }}</template>
+                                                    <i class="fa fa-search-plus" style="margin-left:3px;"></i>
+                                                </span>
+                                            </div>
+                                            <span v-if="f.ocrStatus === 'pending'" title="Checking receipt..."><i class="fa fa-spinner fa-spin"></i></span>
+                                            <span v-else-if="f.ocrStatus === 'read'" style="color:#28a745;" :title="f.ocrMessage || 'Receipt read'"><i class="fa fa-check"></i></span>
+                                            <span v-else-if="f.ocrStatus === 'duplicate'" style="color:#dc3545;" :title="f.ocrMessage || 'Invoice has already been used'"><i class="fa fa-exclamation-triangle"></i></span>
+                                            <span v-else-if="f.ocrStatus === 'not_receipt'" style="color:#f0ad4e;" :title="f.ocrMessage || 'Not an invoice/receipt, please upload again'"><i class="fa fa-exclamation-triangle"></i></span>
+                                            <span v-else-if="f.ocrStatus === 'unavailable'" style="color:#adb5bd;" title="OCR not available"><i class="fa fa-info-circle"></i></span>
+                                            <span v-else-if="f.ocrStatus === 'proof'" style="color:#6c757d;" title="Travel proof"><i class="fa fa-route"></i></span>
+                                            <!-- Explicit "eye" preview button (Sep 2026 feedback), same affordance
+                                                 as Step 3's Preview column -- opens this exact file full-size. -->
+                                            <button type="button" class="btn btn-outline-secondary btn-sm rt-file-preview-btn" @click="previewFileChip(f)" title="View this proof">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                            <i class="fa fa-times rt-file-remove" @click="removeDayFile(i, fi)" title="Delete this file"></i>
+                                        </div>
+                                        <input type="hidden" :name="'reimburse['+i+'][keep_day_present]'" value="1">
+
+                                        <!-- Same-trip co-traveler (popup "Yes, Continue"): allowance only, linked to the owner's claim. -->
+                                        <div class="rt-reference-wrap" v-if="data.sameTripRef">
+                                            <input type="hidden" :name="'reimburse['+i+'][reference_invoice]'" :value="data.referenceInvoice">
+                                            <div class="alert alert-warning" style="font-size:12px;padding:8px 12px;margin:8px 0 0;">
+                                                <i class="fa fa-link"></i> Invoice <b>@{{ data.sameTripRef.no_invoice }}</b> &rarr; refer <b>@{{ data.sameTripRef.owner_name }}</b> &middot; <b>@{{ data.sameTripRef.ticket_number || '-' }}</b> &middot; allowance only
+                                                <button type="button" class="btn btn-link btn-sm" @click="clearSameTripRef(i)">Cancel</button>
+                                            </div>
+                                        </div>
+                                        <!-- One-day trip with no expense at all: only Travel Allowance is claimed. Shown only when the submission has exactly 1 day form. -->
+                                        <div class="rt-reference-wrap" v-if="i === 0 && reimburses.length === 1">
+                                            <input type="hidden" :name="'reimburse['+i+'][allowance_only]'" :value="data.allowanceOnly ? 1 : ''">
+                                            <div class="form-check" style="margin-top:8px;">
+                                                <input type="checkbox" class="form-check-input" :id="'allowanceOnly'+i" v-model="data.allowanceOnly" :disabled="(data.dayFiles.length + data.existingFiles.length) > 0" @change="onAllowanceOnlyChange(i)">
+                                                <label class="form-check-label" :for="'allowanceOnly'+i" style="font-size:13px;">No expense details &mdash; Travel Allowance only (nothing is reimbursed)</label>
+                                            </div>
+                                            <div v-if="(data.dayFiles.length + data.existingFiles.length) > 0" style="font-size:11px;color:#6c757d;">Remove the proof file first to use this option.</div>
+                                        </div>
+
+                                        <!-- Multi-day: claim ONLY Travel Allowance for this day by pointing at an
+                                             earlier day's evidence (same submission) instead of re-uploading it. -->
+                                        <div class="rt-reference-wrap" v-if="i > 0 && !data.dayFiles.length && !data.existingFiles.length">
+                                            <input type="hidden" :name="'reimburse['+i+'][refer_day]'" :value="data.referDay === null ? '' : data.referDay">
+                                            <div v-if="data.referDay !== null" class="alert alert-warning" style="font-size:12px;padding:8px 12px;margin:8px 0 0;">
+                                                <i class="fa fa-link"></i> The document of <b>Day @{{ data.referDay + 1 }}</b> is used for this day's <b>Travel Allowance</b>. No expense is claimed today (amount 0).
+                                                <button type="button" class="btn btn-link btn-sm" @click="clearReferDay(i)">Cancel</button>
+                                            </div>
+                                            <div v-else style="margin-top:8px;">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" :disabled="!canReferDay(i - 1)" @click="referToDay(i, i - 1)"><i class="fa fa-link"></i> Refer to Previous Day</button>
+                                                <button type="button" v-if="i > 1" class="btn btn-outline-primary btn-sm" :disabled="!canReferDay(0)" @click="referToDay(i, 0)"><i class="fa fa-link"></i> Refer to First Day</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <!-- Compact OCR Result -- one independent panel PER FILE (Sep 2026
+                                             feedback: "resultnya masih replace, harusnya engga" -- this used to be a
+                                             single shared panel that only ever showed whichever file was uploaded
+                                             last, silently discarding any earlier file's reading from view). Each
+                                             panel edits that ONE file's own chip data directly; nothing here
+                                             overwrites another file's. The hint reappears only once no file has
+                                             been read yet at all. -->
+                                        <div class="rt-ocr-summary-list" v-if="readOcrFiles(data).length">
+                                            <div class="rt-ocr-summary-compact" v-for="f in readOcrFiles(data)" :key="'ocrsum-'+f.uid">
+                                                <div class="rt-ocr-summary-compact-head">
+                                                    <b :title="f.name">@{{ f.name }}</b>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" @click="f.ocrEditing = !f.ocrEditing">
+                                                        <i class="fa fa-pencil-alt"></i> @{{ f.ocrEditing ? 'Done' : 'Edit' }}
+                                                    </button>
+                                                </div>
+                                                <div class="rt-ocr-summary-compact-field">
+                                                    <label title="Transaction Date">Date</label>
+                                                    <input type="text" class="form-control form-control-sm" v-model="f.ocrDate" :readonly="!f.ocrEditing">
+                                                </div>
+                                                <div class="rt-ocr-summary-compact-field">
+                                                    <label title="Merchant / Hotel">Merchant</label>
+                                                    <input type="text" class="form-control form-control-sm" v-model="f.ocrMerchant" :readonly="!f.ocrEditing">
+                                                </div>
+                                                <div class="rt-ocr-summary-compact-field">
+                                                    <label>Amount</label>
+                                                    <input type="text" class="form-control form-control-sm" v-model="f.ocrAmount" :readonly="!f.ocrEditing">
+                                                    <input type="text" class="form-control form-control-sm" style="flex:0 0 52px;" v-model="f.ocrCurrency" :readonly="!f.ocrEditing" title="Currency">
+                                                </div>
+                                                <div class="rt-ocr-summary-compact-field">
+                                                    <label title="No. Invoice / Receipt">Invoice</label>
+                                                    <input type="text" class="form-control form-control-sm" v-model="f.ocrInvoice" :readonly="!f.ocrEditing" @input="recomputeLocalInvoiceDuplicates()">
+                                                </div>
+                                                <div class="rt-ocr-summary-compact-primary" v-if="primaryOcrFile(data) && primaryOcrFile(data).uid === f.uid" title="This file's values are submitted as today's No. Invoice/Merchant Name">
+                                                    <i class="fa fa-star"></i> Used for this day
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="rt-ocr-hint" v-else>
+                                            <div class="rt-ocr-hint-title">OCR will read:</div>
+                                            <ul>
+                                                <li><i class="fa fa-check-circle"></i> No. Invoice / Receipt</li>
+                                                <li><i class="fa fa-check-circle"></i> Transaction Date</li>
+                                                <li><i class="fa fa-check-circle"></i> Merchant / Hotel Name</li>
+                                                <li><i class="fa fa-check-circle"></i> Amount</li>
+                                                <li><i class="fa fa-check-circle"></i> Currency</li>
+                                            </ul>
+                                        </div>
                                     </div>
                                 </div>
-                                @endforeach
-                            </div>                 
+                            </div>
+
+                            <div class="rt-step-title">
+                                <span class="rt-step-badge">2</span>
+                                <h5>Request Information</h5>
+                            </div>
+                            <p class="rt-step-desc">Please complete the additional information below.</p>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label for="">Transaction Date</label>
+                                    <input type="date" :name="'reimburse['+i+'][date]'" class="form-control" v-model="data.date" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="">Purpose</label>
+                                    <!-- v-model, not :value: with a one-way :value bind the typed
+                                         text lived only in the DOM, so any re-render of the day card
+                                         (collapse/expand, amount change, OCR fill, allowance recalc)
+                                         reset Purpose back to the stored value. -->
+                                    <input type="text" :name="'reimburse['+i+'][purpose]'" class="form-control" required v-model="data.purpose" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="">Trip Type</label>
+                                    <select :name="'reimburse['+i+'][trip_type_id]'" id="" class="form-control" v-model="data.trip" @change="changeTrip(i)">
+                                        <option value="" selected disabled>Select...</option>
+                                        <option value="0">None</option>
+
+                                        @foreach ($trip_types as $item)
+                                        <option value="{{$item->id}}" data-allowance="{{$item->allowance}}">{{$item->name}}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label for="">Hotel </label>
+                                    <select :name="'reimburse['+i+'][hotel_condition_id]'" id="" class="form-control" v-model="data.hotel_condition" :disabled="isTripTimeDisabled(data)">
+                                        <option value="" selected disabled>Select...</option>
+                                        @foreach ($hotel_conditions as $item)
+                                        <option value="{{$item->id}}" data-allowance="{{$item->allowance}}">{{$item->name}}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="">Start</label>
+                                    <input type="time" :name="'reimburse['+i+'][start_time]'" @change="changeTime(i)" v-model="data.start_time" class="form-control" value="" :disabled="isTripTimeDisabled(data)" :required="!isTripTimeDisabled(data)" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label for="">Arrival</label>
+                                    <input type="time" :name="'reimburse['+i+'][end_time]'" @change="changeTime(i)" v-model="data.end_time" class="form-control" value="" :disabled="isTripTimeDisabled(data)" :required="!isTripTimeDisabled(data)" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label for="">Allowance</label>
+                                    <input type="text" :name="'reimburse['+i+'][allowance]'" readonly class="form-control number-format" v-model="data.trip_allowance" value="" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label for="">Travel Time</label>
+                                    <input type="text" :name="'reimburse['+i+'][travel_time]'" readonly class="form-control" v-model="data.travel_time" value="" />
+                                </div>
+                            </div>
+                            <hr />
+                            <div class="rt-step-title">
+                                <span class="rt-step-badge">3</span>
+                                <h5>Expense Details</h5>
+                            </div>
+                            <p class="rt-step-desc">Add expense details based on the uploaded evidence or add manually.</p>
+                            <div class="row">
+                                <div class="col-xl">
+                                    <div class="alert alert-secondary" style="font-size:12px;padding:8px 12px;" v-if="data.sameTripRef"><i class="fa fa-lock"></i> Expense Details are locked: this invoice belongs to @{{ data.sameTripRef.owner_name }} (@{{ data.sameTripRef.ticket_number || '-' }}), so only the Travel Allowance is claimed today.</div>
+                                    <div class="alert alert-secondary" style="font-size:12px;padding:8px 12px;" v-if="data.allowanceOnly"><i class="fa fa-lock"></i> Expense Details are locked: only the Travel Allowance is claimed today, nothing is reimbursed as an expense.</div>
+                                    <div class="alert alert-secondary" style="font-size:12px;padding:8px 12px;" v-if="data.referDay !== null"><i class="fa fa-lock"></i> Expense Details are locked because this day uses the document of Day @{{ data.referDay + 1 }} (Travel Allowance only). Cancel the refer in Step 1 to fill in expenses.</div>
+                                    <div class="table-responsive" :style="isExpenseLocked(data) ? 'pointer-events:none;opacity:.55;' : ''">
+                                        <table class="table full-width" style="width: 100%;">
+                                            <thead style="width: 100%;">
+                                                <tr>
+                                                    <th width="200">Cost Type</th>
+                                                    <th>Destination</th>
+                                                    <th>Remarks</th>
+                                                    <th>Currency</th>
+                                                    <th>Amount</th>
+                                                    <th>IDR Rate</th>
+                                                    <th>Pph23</th>
+                                                    <th>Payment</th>
+                                                    <th>Preview</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr v-for="(dt,a) in data.details">
+                                                    <td>
+                                                        <input type="hidden" :name="'reimburse['+i+'][detail]['+a+'][id_detail]'" :value="dt.id_detail">
+                                                        <input type="hidden" :name="'reimburse['+i+'][keep_attachment_present]['+a+']'" value="1">
+                                                        <select :name="'reimburse['+i+'][detail]['+a+'][cost_type_id]'" id="" class="form-control cost-type-select" v-model="dt.cost_type" @change="changeCost(i,a)">
+                                                            <option value="" selected disabled>Select...</option>
+                                                            @foreach ($types as $item)
+                                                            <option value="{{$item->id}}" data-type="{{$item->type}}">{{$item->name}}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control destination-input" :name="'reimburse['+i+'][detail]['+a+'][destination]'" v-model="dt.destination" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control remarks-input" placeholder="e.g. Hotel for 18-20 Aug 2026" :name="'reimburse['+i+'][detail]['+a+'][remarks]'" v-model="dt.remarks" />
+                                                    </td>
+                                                    <td>
+                                                        <select :name="'reimburse['+i+'][detail]['+a+'][currency]'" class="form-control currency-select" id="" v-model="dt.currency" :required="!isExpenseLocked(data)">
+                                                            <option value="" disabled>Select...</option>
+                                                            <option v-for="rt in rates" v-if="rt.code" :value="rt.code">@{{rt.code}}</option>
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control amount-input" @change="calculateTotal(i,a)" :name="'reimburse['+i+'][detail]['+a+'][amount]'" v-model="dt.amount" :readonly="isExpenseLocked(data)" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control number-format idr-rate-input" readonly :name="'reimburse['+i+'][detail]['+a+'][idr_rate]'" v-model="dt.idr_rate" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control number-format tax-input" readonly :name="'reimburse['+i+'][detail]['+a+'][tax]'" v-model="dt.tax" />
+                                                    </td>
+                                                    <td>
+                                                        <select :name="'reimburse['+i+'][detail]['+a+'][payment_type]'" id="" class="form-control payment-select" v-model="dt.payment_type" :required="!isExpenseLocked(data)">
+                                                            <option value="" selected disabled>Select...</option>
+                                                            <option value="BDC">BDC</option>
+                                                            <option value="Cash">Cash</option>
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <!-- Shows which Step 1 file (by number) this row's Preview
+                                                             actually opens -- e.g. "1" if it links to file 1 (hotel),
+                                                             "2" for file 2 (taxi) -- instead of an unlabelled eye icon
+                                                             (Sep 2026 feedback). -->
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm rt-preview-file-btn" :disabled="!(data.dayFiles.length + data.existingFiles.length)" @click="previewRowFile(i, a)" :title="previewRowTitle(i, a)">
+                                                            <i class="fa fa-eye"></i>
+                                                            <span v-if="matchedFileNumberForRow(i, a)" class="rt-preview-file-number">@{{ matchedFileNumberForRow(i, a) }}</span>
+                                                            <!-- A row can hold several evidence files now; this says how many
+                                                                 more the Preview opens besides the numbered one. -->
+                                                            <span v-if="matchedFileCountForRow(i, a) > 1" class="rt-preview-file-more">+@{{ matchedFileCountForRow(i, a) - 1 }}</span>
+                                                        </button>
+                                                    </td>
+
+                                                    <td>
+                                                        <button type="button" v-if="a == 0" @click="addDetail(i)" class="btn btn-success">+</button>
+                                                        <button type="button" v-if="a > 0" @click="removeDetail(i,a)" class="btn btn-danger">-</button>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr />
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label for="">Total</label>
+                                    <input type="text" :name="'reimburse['+i+'][total]'" v-model="data.total" readonly class="form-control" value="" />
+                                </div>
+                            </div>
+                            </div>
                         </div>
-                        <br>
-                        <hr>
-                       
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl">
+                    <span style="color: #62d49e; float: right;" class="warning-upload">
+                        The button is disabled until a file is uploaded.
+                    </span>
+                </div>
+            </div>
+            <br />
+            <div class="button-container">
+                {{-- "Back", not "Cancel": this link goes to the submission's detail page,
+                     i.e. one step back, which is where an approver continues the
+                     approval after editing. Calling it Cancel implied the edit was
+                     being discarded (Oct 2026 feedback). --}}
+                <a class="btn btn-secondary text-right" href="{!!url('reimbursement-travel/'.$data['0']->id)!!}"><i class="fa fa-arrow-circle-left"></i> Back</a>&nbsp;
+                @if($data['0']->status==0)
+                    <button class="btn btn-warning" type="submit" id="action_button" name="save">Update</button>&nbsp;
+                @endif
+                @if($data['0']->status==9)
+                    <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" formnovalidate>Draft</button>&nbsp;
+                    <button class="btn btn-primary" type="submit" id="action_button_submit" name="save_again">Submit</button>
+                @endif
+                @if($data['0']->status==10)
+                    <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" formnovalidate>Draft</button>&nbsp;
+                    <button class="btn btn-primary" type="submit" id="action_button" name="save">Submit</button>
+                @endif
+                @if(
+                    ((auth()->user()->jabatan == 'Finance' || auth()->user()->jabatan == 'HR' || auth()->user()->jabatan == 'HR GA') && in_array((int) $data['0']->status, [1, 2], true))
+                    || (auth()->user()->jabatan == 'Finance Supervisor' && in_array((int) $data['0']->status, [1, 2], true))
+                )
+                    <button class="btn btn-warning" type="submit" id="edit_finance" name="edit_finance">Update</button>&nbsp;
+                @endif
+                @if((auth()->user()->jabatan == 'Owner' && in_array((int) $data['0']->status, [2, 11], true))
+                    || (auth()->user()->jabatan == 'Finance Manager' && (int) $data['0']->status === 11))
+                    <button class="btn btn-warning" type="submit" id="edit_owner" name="edit_owner">Update</button>&nbsp;
+                @endif
+            </div>
+            <br />
+            <br />
+        </form>
+
+        <!-- Shared across every file chip -- read-only OCR Result for ONE
+             specific file (Sep 2026 feedback: with several files per day, the
+             single editable OCR Result panel only ever shows the latest one,
+             "kek ketimpa" -- this modal lets every file's own reading
+             actually be seen). Populated from the Vue root's
+             ocrDetailModalChip whenever a file's inline OCR line is clicked
+             (see showOcrDetailModal()). MUST stay inside #app (this element)
+             -- it uses v-if/@{{ }} bindings, which only compile when Vue's
+             el:'#app' template actually contains them; placed outside #app
+             (as this was originally, alongside the static-content-only Tips
+             modal) it rendered as literal, uncompiled "{{ ... }}" text. -->
+        <!-- Row Preview gallery: all evidence files of ONE expense row, paged
+             in place. Replaces opening a tab per file, which popup blockers
+             dropped inconsistently (Oct 2026 feedback). Lives inside #app so
+             its v-if/@{{ }} bindings actually compile. -->
+        <div class="modal fade" id="rtRowPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content" v-if="rowPreviewCurrent()">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fa fa-images" style="color:#0a58ca;"></i>
+                            Evidence &mdash; @{{ rowPreviewIndex + 1 }} of @{{ rowPreviewFiles.length }}
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <i class="material-icons">close</i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="rt-rowprev-stage">
+                            <button type="button" class="rt-rowprev-nav rt-rowprev-prev" v-if="rowPreviewFiles.length > 1" @click="rowPreviewGo(-1)" title="Previous">
+                                <i class="fa fa-chevron-left"></i>
+                            </button>
+                            <iframe v-if="rowPreviewCurrent().isPdf" :src="rowPreviewSrc(rowPreviewCurrent())"></iframe>
+                            <img v-else :src="rowPreviewSrc(rowPreviewCurrent())" :alt="rowPreviewCurrent().name">
+                            <button type="button" class="rt-rowprev-nav rt-rowprev-next" v-if="rowPreviewFiles.length > 1" @click="rowPreviewGo(1)" title="Next">
+                                <i class="fa fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="rt-rowprev-meta">
+                            <b>@{{ rowPreviewCurrent().name }}</b>
+                            <span class="rt-rowprev-badge" :class="rowPreviewCurrent().docType === 'proof' ? 'is-proof' : 'is-invoice'">
+                                @{{ rowPreviewCurrent().docType === 'proof' ? 'Supporting Proof' : 'Invoice / Receipt' }}
+                            </span>
+                        </div>
+                        <!-- Jump straight to any file instead of paging through. -->
+                        <div class="rt-rowprev-thumbs" v-if="rowPreviewFiles.length > 1">
+                            <template v-for="(f, n) in rowPreviewFiles">
+                                <div v-if="f.isPdf" class="rt-rowprev-thumb-pdf" :class="n === rowPreviewIndex ? 'is-active' : ''" :title="f.name" @click="rowPreviewIndex = n">
+                                    <i class="fa fa-file-pdf"></i>
+                                </div>
+                                <img v-else class="rt-rowprev-thumb" :class="n === rowPreviewIndex ? 'is-active' : ''" :src="rowPreviewSrc(f)" :title="f.name" @click="rowPreviewIndex = n">
+                            </template>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" @click="rowPreviewOpenCurrent()">
+                            <i class="fa fa-external-link-alt"></i> Open in new tab
+                        </button>
+                        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
         </div>
-         
-        <div class="row" v-for="(data,i) in reimburses">
-            <div class="col-xl">
-                <div class="card">
-                    <div class="card-body">
-                        <div id="rt-travel-item-pane"
-                             v-once
-                             data-main-id="{{ $data['0']->id }}"
-                             data-travel-id="{{ $data_travel['0']->id }}"
-                             @if(in_array((int) $data['0']->status, [9, 10], true))
-                             data-rt-clear-travel-drafts-on-load="{{ $data['0']->id }}"
-                             @endif
-                             data-rt-href-prefix="{!! url('reimbursement-travel/add-item/'.$data['0']->id.'/') !!}">
-                            @include('reimbursement-travel.partials.travel-item-pane')
+        <div class="modal fade" id="rtOcrDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content" v-if="ocrDetailModalChip">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fa fa-file-alt" style="color:#0a58ca;"></i> OCR Result -- @{{ ocrDetailModalChip.name }}</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <i class="material-icons">close</i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="rt-ocr-detail-modal-field">
+                            <label>Transaction Date</label>
+                            <b>@{{ ocrDetailModalChip.ocrDate || '-' }}</b>
                         </div>
-                       
+                        <div class="rt-ocr-detail-modal-field">
+                            <label>Merchant / Hotel</label>
+                            <b>@{{ ocrDetailModalChip.ocrMerchant || '-' }}</b>
+                        </div>
+                        <div class="rt-ocr-detail-modal-field">
+                            <label>Amount</label>
+                            <b>@{{ ocrDetailModalChip.ocrAmount || '-' }} @{{ ocrDetailModalChip.ocrCurrency }}</b>
+                        </div>
+                        <div class="rt-ocr-detail-modal-field">
+                            <label>No. Invoice / Receipt</label>
+                            <b>@{{ ocrDetailModalChip.ocrMessage && ocrDetailModalChip.ocrMessage.indexOf('No. Invoice: ') === 0 ? ocrDetailModalChip.ocrMessage.replace('No. Invoice: ', '') : '-' }}</b>
+                        </div>
+                        <small class="text-muted">This result is purely the OCR reading of this file. The value actually saved follows the editable "OCR Result" panel next to Step 1.</small>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button>
                     </div>
                 </div>
             </div>
         </div>
-        <br>
-        
-        
-    </form>
-
-</div>
+    </div>
 </div>
 
 <!-- End Modal -->
 
-<!-- Modal -->
-<div class="modal fade" id="modalPhoto"  data-backdrop="static" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-          <div class="modal-header">
-              <h5 class="modal-title" id="exampleModalLabel">Upload Gambar</h5>
-              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                  <i class="material-icons">close</i>
-              </button>
-          </div>
-          <div class="modal-body">
-            <video id="videoElement" autoplay style="width: 100%"></video>
-            <canvas id="canvas"></canvas>
-          </div>
-          <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-              <button id="captureButton" class="btn btn-success">Capture Image</button>
-          </div>
-      </div>
-  </div>
-</div>
-
-<!-- End Modal -->
-
-<!-- Modal Preview Image -->
-<div class="modal fade" id="previewImageModal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index: 1060;">
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-        <div class="modal-content" style="background: transparent; border: 0; box-shadow: none;">
-            <div class="modal-header" style="border: 0;">
-                <h5 class="modal-title text-white">Preview Gambar</h5>
-                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 1; font-size: 2rem;">
-                    <span aria-hidden="true">&times;</span>
+<!-- Shared across every "Form Hari" card -- Tips used to be a permanent
+     column-wide box on each one; now opened on demand via the lightbulb
+     icon next to "Upload Evidence" (Sep 2026 feedback: it was taking up
+     too much space when it's the same static text every time). -->
+<div class="modal fade" id="rtEvidenceTipsModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-lightbulb" style="color:#c99a1a;"></i> Tips Upload Evidence</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <i class="material-icons">close</i>
                 </button>
             </div>
-            <div class="modal-body text-center pt-0" style="max-height: 80vh; overflow:auto;">
-                <img id="previewImageModalSrc" src="" alt="Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+            <div class="modal-body">
+                <div class="rt-tips-modal-body">
+                    Use a clear and readable image. Ensure the whole invoice is visible.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Got it</button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Modal -->
+<div class="modal fade" id="modalPhoto" data-backdrop="static" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Upload Gambar</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <i class="material-icons">close</i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <video id="videoElement" autoplay style="width: 100%;"></video>
+                <!-- <canvas id="canvas"></canvas> -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button id="captureButton" class="btn btn-success">Capture Image</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <!-- End Modal -->
 
-
 @push('scripts')
-@if($travelEntertainmentOcrEnabled ?? false)
-<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
-@endif
-<script src="{{ asset('js/reimbursement-travel-upload.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-upload.js')) }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-maskmoney/3.0.2/jquery.maskMoney.min.js" charset="utf-8"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
 <script src="{{ asset('js/exchange-rate-parser.js') }}?v={{ @filemtime(public_path('js/exchange-rate-parser.js')) }}"></script>
 <script src="{{ asset('js/travel-idr-money.js') }}?v={{ @filemtime(public_path('js/travel-idr-money.js')) }}"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.13.4/jquery.mask.min.js"></script>
-
+<script src="{{ asset('js/reimbursement-duplicate-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-duplicate-check.js')) }}"></script>
 <script type="text/javascript">
 $(document).ready(function(){
     @if(Auth::user()->status_password != 1)
         $('#modalPassword').modal('show');
     @endif
 
-    $(".warning-upload").hide();
-    
-    function numberWithCommas(x) {
-        return formatTravelIdrMoney(x, 'Cash');
-    }
+    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:2});
 
-    /** Kolom Amount: desimal (2 digit), sesuai nominal di bukti/invoice. */
-    function parseTravelAmountInteger(raw) {
-        return Math.round(parseTravelMoney(raw) * 100) / 100;
-    }
-
-    function applyIdrTaxMaskForRow($tr) {
-        if (!$tr || !$tr.length || !$.fn.maskMoney) {
-            return;
-        }
-        var paymentType = getPaymentTypeFromRow($tr);
-        var precision = isBdcPayment(paymentType) ? 2 : 0;
-        var opts = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: precision };
-        $tr.find('input[name="idr_rate[]"], input[name="tax[]"]').each(function () {
-            var $input = $(this);
-            var raw = parseTravelMoney($input.val());
-            try { $input.maskMoney('destroy'); } catch (e2) { /* not initialized */ }
-            $input.maskMoney(opts);
-            $input.val(formatTravelIdrMoney(raw, paymentType));
-            $input.maskMoney('mask');
-        });
-    }
-
-    /**
-     * Re-masking a field via .maskMoney('mask') directly on its current
-     * .val() only works if that string is already formatted under the exact
-     * thousands/decimal/precision options being applied -- otherwise the
-     * last `precision` digits get reinterpreted as decimal cents, silently
-     * shifting the value by 100x (confirmed live: adding a row corrupted
-     * every OTHER existing row's amount this way). Read each field's real
-     * value first with parseTravelMoney, then write it back through a
-     * properly formatted string before masking, so it's idempotent.
-     */
-    function applyTravelReimbursementCurrencyMasks($pane) {
-        if (!$pane || !$pane.length || !$.fn.maskMoney) return;
-        var $allCurrency = $pane.find('.currency');
-        var $excluded = $allCurrency.filter(
-            'input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input.exchange-rate-input[name="rate[]"]'
-        );
-        var $maskSrc = $allCurrency.not($excluded);
-        $maskSrc.each(function () {
-            $(this).data('rtRawValue', parseTravelMoney($(this).val()));
-        });
-        try {
-            $allCurrency.each(function () {
-                try { $(this).maskMoney('destroy'); } catch (e2) { /* not initialized */ }
-            });
-        } catch (e) { /* ignore */ }
-        var optsAllowance = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
-        var optsAmountInt = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 2 };
-        var opts0 = { thousands: '.', decimal: ',', allowZero: true, allowNegative: true, precision: 0 };
-        var $allowanceOnly = $maskSrc.filter('input[name="allowance"]');
-        var $amountOnly = $maskSrc.filter('input[name="amount[]"]');
-        var $intLike = $maskSrc.not($allowanceOnly).not($amountOnly);
-
-        // Formats using THIS field's own mask opts (thousands/decimal/precision
-        // can differ per file/field) rather than assuming a fixed locale, so
-        // the string handed to .maskMoney('mask') always matches what that
-        // mask instance expects.
-        function formatRawForMask(raw, opts) {
-            var n = Number(raw) || 0;
-            var precision = opts.precision || 0;
-            var fixed = Math.abs(n).toFixed(precision);
-            var parts = fixed.split('.');
-            var intPart = opts.thousands
-                ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, opts.thousands)
-                : parts[0];
-            var out = precision > 0 ? intPart + (opts.decimal || '.') + parts[1] : intPart;
-            return (n < 0 ? '-' : '') + out;
-        }
-
-        function reapplyMask($fields, opts) {
-            if (!$fields.length) return;
-            $fields.maskMoney(opts);
-            $fields.each(function () {
-                var raw = $(this).data('rtRawValue') || 0;
-                $(this).val(formatRawForMask(raw, opts));
-            });
-            $fields.maskMoney('mask');
-        }
-
-        reapplyMask($allowanceOnly, optsAllowance);
-        reapplyMask($amountOnly, optsAmountInt);
-        reapplyMask($intLike, opts0);
-
-        $pane.find('tbody tr.fieldGroupDetail').each(function () {
-            applyIdrTaxMaskForRow($(this));
-        });
-        $pane.find('input.idr_rate_main').each(function () {
-            applyIdrTaxMaskForRow($(this).closest('tr'));
-        });
-    }
-  
-   
-
-    function calculateTimeDifference() {
-        let start = $("#start_time").val();
-        let end = $("#end_time").val();
-
-        if (start && end) {
-            let startTime = start.split(":");
-            let endTime = end.split(":");
-
-            let startHour = parseInt(startTime[0]);
-            let startMinute = parseInt(startTime[1]);
-
-            let endHour = parseInt(endTime[0]);
-            let endMinute = parseInt(endTime[1]);
-
-            // Konversi waktu ke menit total
-            let startTotalMinutes = startHour * 60 + startMinute;
-            let endTotalMinutes = endHour * 60 + endMinute;
-
-            // Jika waktu akhir lebih kecil, anggap keesokan harinya
-            if (endTotalMinutes < startTotalMinutes) {
-                endTotalMinutes += 24 * 60;
-            }
-
-            let diffMinutes = endTotalMinutes - startTotalMinutes;
-            let hours = Math.floor(diffMinutes / 60);
-            let minutes = diffMinutes % 60;
-
-            let res = $("#result_time").val(hours + " Hour " + minutes + " Minute");
-            
-        }
-    }
-
-    // Event listener untuk setiap perubahan input time
-    $(document).on("input", "#rt-travel-item-pane #start_time, #rt-travel-item-pane #end_time", function() {
-        calculateTimeDifference();
-    });
-
-    calculateTimeDifference();
-    
-    /** Input kurs (currency_rate[] / rate[]) ada di luar #rt-travel-item-pane — cari di form induk. */
-    function getExchangeRateFormRoot() {
-        var pane = document.getElementById('rt-travel-item-pane');
-        if (pane) {
-            var form = pane.closest('form');
-            if (form) {
-                return form;
-            }
-        }
-        return document;
-    }
-
-    function getTripRateForCurrency(currencyCode) {
-        var code = String(currencyCode || '').trim().toUpperCase();
-        if (!code || code === 'IDR') {
-            return 1;
-        }
-        var root = getExchangeRateFormRoot();
-        var currencyInputs = root.querySelectorAll('[name="currency_rate[]"]');
-        var rateInputs = root.querySelectorAll('[name="rate[]"]');
-        for (var index = 0; index < currencyInputs.length; index++) {
-            if (String(currencyInputs[index].value || '').trim().toUpperCase() === code) {
-                return parseExchangeRateNumber(rateInputs[index] ? rateInputs[index].value : '') || 0;
-            }
-        }
-        return 0;
-    }
-
-    function buildCurrencySelectOptions(selected) {
-        var seen = {};
-        var list = [];
-        var selectedCode = String(selected || '').trim().toUpperCase();
-        getExchangeRateFormRoot().querySelectorAll('[name="currency_rate[]"]').forEach(function (input) {
-            var code = String(input.value || '').trim().toUpperCase();
-            if (code && !seen[code]) {
-                seen[code] = true;
-                list.push(code);
-            }
-        });
-        if (selectedCode && !seen[selectedCode]) {
-            list.push(selectedCode);
-        }
-        var html = '<option value="">Pilih...</option>';
-        list.forEach(function (code) {
-            var sel = code === selectedCode ? ' selected' : '';
-            html += '<option value="' + code + '"' + sel + '>' + code + '</option>';
-        });
-        return html;
-    }
-
-    function refreshAllCurrencySelects() {
-        $('#rt-travel-item-pane select.currency-select').each(function () {
-            var current = $(this).val();
-            $(this).html(buildCurrencySelectOptions(current));
-        });
-    }
-
-    function enforceIdrExchangeRate($group) {
-        if (!$group || !$group.length) {
-            return;
-        }
-        var cur = String($group.find('[name="currency_rate[]"]').val() || '').trim().toUpperCase();
-        if (cur === 'IDR') {
-            $group.find('[name="rate[]"]').val('1,00');
-        }
-    }
-
-    function fetchTripRateForCurrency(code, callback) {
-        var cur = String(code || '').trim().toUpperCase();
-        if (!cur || cur === 'IDR') {
-            callback(1);
-            return;
-        }
-        var local = getTripRateForCurrency(cur);
-        if (local > 0) {
-            callback(local);
-            return;
-        }
-        var mainId = $('#rt-travel-item-pane').attr('data-main-id');
-        if (!mainId) {
-            callback(0);
-            return;
-        }
-        $.ajax({
-            url: '../../../get-currency/' + mainId + '/' + cur,
-            dataType: 'json',
-            success: function (resp) {
-                callback(parseFloat(resp.data) || 0);
-            },
-            error: function () {
-                callback(0);
-            }
-        });
-    }
-
-    function computeAllowanceInIdrAsync(allowance, currency, done) {
-        var cur = String(currency || '').trim().toUpperCase();
-        if (cur === 'IDR' || !cur) {
-            done(Number(allowance) || 0);
-            return;
-        }
-        fetchTripRateForCurrency(cur, function (rate) {
-            if (rate <= 0) {
-                alert('Please enter the ' + cur + ' exchange rate first.');
-                done(null);
-                return;
-            }
-            done((Number(allowance) || 0) * rate);
-        });
-    }
-
-    function recalculateDetailIdrRate($tr) {
-        var currency = String($tr.find('select[name="currency[]"]').val() || '').trim().toUpperCase();
-        var amount = parseTravelAmountInteger($tr.find('input[name="amount[]"]').val());
-        var cost_type = $tr.find('select[name="cost_type_id[]"]').val();
-        var paymentType = getPaymentTypeFromRow($tr);
-        if (!currency) {
-            return;
-        }
-        var rate = getTripRateForCurrency(currency);
-        var val = roundIdrForPayment(amount * (currency === 'IDR' ? 1 : rate), paymentType);
-        $tr.find('input[name="idr_rate[]"]').val(formatTravelIdrMoney(val, paymentType));
-        warnLargeTravelAmountForElement($tr.find('input[name="amount[]"]'), val, paymentType);
-        if (cost_type == 3) {
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(val * 2 / 100, paymentType));
-        } else {
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0, paymentType));
-        }
-        applyIdrTaxMaskForRow($tr);
-    }
-
-    function recalculateAllDetailIdrRates($scope) {
-        $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
-        $scope.find('tbody tr.fieldGroupDetail').each(function () {
-            recalculateDetailIdrRate($(this));
-        });
-    }
-
-    function recalculateAllowanceFromTripType($scope) {
-        $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
-        var id = $scope.find('#trip_type_id').val();
-        if (!id) {
-            $scope.find('.allowance').val(formatTravelIdrMoney(0));
-            total_nominal();
-            return;
-        }
-        $.ajax({
-            url: "../../../get-trip-type/" + id,
-            dataType: "json",
-            success: function (data) {
-                var row = data.data && data.data[0] ? data.data[0] : null;
-                if (!row) {
-                    return;
-                }
-                computeAllowanceInIdrAsync(row.allowance, row.currency, function (allowanceInIDR) {
-                    if (allowanceInIDR === null) {
-                        return;
+    // Warning (not a block) when this applicant already claimed one of these
+    // trip days on ANOTHER submission -- exclude_id keeps the submission being
+    // edited from matching its own saved dates. Scoped to the applicant on
+    // purpose; the cross-applicant check is the invoice/OCR one.
+    if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+        window.bindReimbursementDuplicateChecks({
+            formSelector: '#travel_overseas_reimbursement_form',
+            checks: [
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    params: function ($form) {
+                        var dates = $form.find('input[name^="reimburse"][name$="[date]"]').map(function () {
+                            return $(this).val();
+                        }).get().filter(function (v) { return !!v; });
+                        if (!dates.length) return null;
+                        return {
+                            reimbursement_type: 2,
+                            dates: dates,
+                            exclude_id: {{ (int) $data['0']->id }}
+                        };
                     }
-                    $scope.find('.allowance').val(formatTravelIdrMoney(allowanceInIDR));
-                    total_nominal();
-                });
-            }
+                }
+            ],
+            earlyCheckSelectors: 'input[name^="reimburse"][name$="[date]"]'
         });
-    }
-
-    function onExchangeRatesUpdated($scope) {
-        $scope = ($scope && $scope.length) ? $scope : $('#rt-travel-item-pane');
-        refreshAllCurrencySelects();
-        recalculateAllDetailIdrRates($scope);
-        total_nominal();
-        if ($scope.find('#trip_type_id').val()) {
-            recalculateAllowanceFromTripType($scope);
-        }
-    }
-
-    window.rtRecalculateAllowanceFromTripType = recalculateAllowanceFromTripType;
-    window.rtOnExchangeRatesUpdated = onExchangeRatesUpdated;
-    window.rtRefreshCurrencySelects = refreshAllCurrencySelects;
-    window.rtBuildCurrencySelectOptions = buildCurrencySelectOptions;
-    window.rtEnforceIdrExchangeRate = enforceIdrExchangeRate;
-    window.rtNormalizeAllTripRateInputs = function () {
-        $('.fieldGroup').each(function () {
-            var $group = $(this);
-            enforceIdrExchangeRate($group);
-            var $rateInput = $group.find('input.exchange-rate-input[name="rate[]"]');
-            if (!$rateInput.length) {
-                return;
-            }
-            var raw = ($rateInput.val() || '').trim();
-            if (!raw) {
-                return;
-            }
-            $rateInput.val(normalizeExchangeRateValue(raw));
-        });
-    };
-
-    function total_nominal() {
-        var $pane = $('#rt-travel-item-pane');
-        var total = parseTravelMoney($('.allowance').val());
-        $pane.find('input[name="idr_rate[]"]').each(function () {
-            total += parseTravelMoney($(this).val());
-        });
-        $('.total-nominal').val(formatTravelDayTotal(total, scopeHasBdcPayment($pane)));
-    }
-
-    window.rtNumberWithCommas = numberWithCommas;
-    window.rtTotalNominalTravel = total_nominal;
-    window.rtCalculateTimeDifference = calculateTimeDifference;
-
-    $(document).on('change', '#rt-travel-item-pane input[name="amount[]"], #rt-travel-item-pane select[name="currency[]"]', function () {
-        recalculateDetailIdrRate($(this).closest('tr'));
-        total_nominal();
-    });
-
-    $(document).on('change', '#rt-travel-item-pane select[name="payment_type[]"]', function () {
-        var $tr = $(this).closest('tr');
-        applyIdrTaxMaskForRow($tr);
-        recalculateDetailIdrRate($tr);
-        total_nominal();
-    });
-
-    $(document).on('change', '#rt-travel-item-pane select[name="cost_type_id[]"]', function () {
-        var cost_type = $(this).val();
-        var $tr = $(this).closest('tr');
-        var $idr = $tr.find('input[name="idr_rate[]"]');
-        var paymentType = getPaymentTypeFromRow($tr);
-        var val = parseTravelMoney($idr.val());
-        if (cost_type == 3) {
-            var tax = val * 2 / 100;
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(isNaN(tax) ? 0 : tax, paymentType));
-        } else {
-            $tr.find('input[name="tax[]"]').val(formatTravelIdrMoney(0, paymentType));
-        }
-        applyIdrTaxMaskForRow($tr);
-    });
-    
-    // $("#trip_type_id").change(function(){
-        
-    //     id = $('#trip_type_id').val();
-        
-    //     $.ajax({
-    //         url:"../../../get-trip-type/"+id,
-    //         dataType:"json",
-    //         success:function(data){
-    //             val = data.data;
-    //             $('.allowance ').val(numberWithCommas(val));
-    //             total_nominal();
-    //         }
-    //     })
-    // });
-
-    const notStayHotelConditionId = @json($not_stay_hotel_condition_id);
-
-    function syncNoneTripTypeFields(scopeEl) {
-        const $scope = (scopeEl && scopeEl.length) ? scopeEl : $('#rt-travel-item-pane');
-        const tripTypeInput = $scope.find('#trip_type_id').first();
-        const hotelSelect = $scope.find('#hotel_condition_id').first();
-        const startInput = $scope.find('#start_time').first();
-        const endInput = $scope.find('#end_time').first();
-        if (!tripTypeInput.length || !hotelSelect.length || !startInput.length || !endInput.length) {
-            return;
-        }
-        const tripTypeId = tripTypeInput.val();
-
-        if (!tripTypeId) {
-            const notStayOption = hotelSelect.find('option').filter(function () {
-                return $(this).text().trim().toLowerCase() === 'not stay';
-            }).first();
-
-            if (notStayOption.length) {
-                hotelSelect.val(notStayOption.val());
-            } else if (notStayHotelConditionId) {
-                hotelSelect.val(notStayHotelConditionId);
-            }
-
-            hotelSelect.prop('disabled', true);
-            startInput.prop('disabled', true).val('');
-            endInput.prop('disabled', true).val('');
-            return;
-        }
-
-        hotelSelect.prop('disabled', false);
-        startInput.prop('disabled', false);
-        endInput.prop('disabled', false);
-    }
-
-    $(document).on('change', '#rt-travel-item-pane #trip_type_id', function () {
-        var $scope = $(this).closest('#rt-travel-item-pane');
-        syncNoneTripTypeFields($scope);
-        recalculateAllowanceFromTripType($scope);
-    });
-
-    syncNoneTripTypeFields($('#rt-travel-item-pane'));
-
-    $(document).on('change', '.change-rate', function(){
-        total_nominal();
-    });
-    
-    $(document).on('change', '#rt-travel-item-pane .change-type', function(){
-        var tripType = $(this).val();
-        if (!tripType) {
-            $('.allowance').val(formatTravelIdrMoney(0));
-            total_nominal();
-            return;
-        }
-
-        total_nominal();
-        
-    });
-    
-    applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
-
-    $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
-    
-    $(".type-currency").on("keyup", function(event) {
-      var i = event.keyCode;
-      if ((i >= 48 && i <= 57) || (i >= 96 && i <= 105)) {
-        $(".type-currency").off("keyup");
-        console.log("Number pressed. Stopping...");
-      } else {
-        console.log("Non-number pressed.");
-      }
-    });
+    }   
     
     var maxGroup = 10;
     var i = 1;
-    var j = 1;
-
-    /* Exchange rate helpers: public/js/exchange-rate-parser.js */
-    /* IDR money helpers: public/js/travel-idr-money.js */
-
-    $(document).on('input', 'input.exchange-rate-input[name="rate[]"]', function () {
-        this.value = sanitizeExchangeRateInput(this.value, false);
-    });
-
-    $(".addMore").click(function(){
-        $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", false);
-        $(".warning-upload").hide();
-        i++;
-        if($('body').find('.fieldGroup').length < maxGroup){
-         
-          var fieldHTML = '<br><div class="row fieldGroup"><input type="hidden" class="id_rate" name="id_rate" value="0"><div class="col-md-3"><label for="">Currency</label><input type="text" class="form-control" name="currency_rate[]"></div><div class="col-md-6"><label for="">Exchange Rate</label><input type="text" inputmode="decimal" class="form-control exchange-rate-input" name="rate[]"></div><div class="col-md-3"><a class="btn btn-danger btn-sm remove-currency" style="color:white;margin-top:35px;cursor:pointer;background:#f05154"><i class="fa fa-trash"></i></a></div></div>';
-          $('body').find('.fieldGroup:last').after(fieldHTML);
-          applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
-      } else{
-          alert('Maximum '+maxGroup+' groups are allowed.');
-      }
-    });
     
-    // $("body").on("click",".remove-currency",function(){ 
-    //    $(this).parents(".fieldGroup").remove();
-    // });
+    @if($submitUnlocked)
+    // Edit mode that already has something submittable (stored proof, a
+    // refer/allowance-only day): keep the buttons enabled from the start.
+    $(".warning-upload").hide();
+    @else
+    $("#action_button").prop("disabled", true);
+    $("#action_button_draft").prop("disabled", true);
+    $("#action_button_item").prop("disabled", true);
+    $("#action_button_submit").prop("disabled", true);
+    $("#edit_finance").prop("disabled", true);
+    $("#edit_owner").prop("disabled", true);
+    $(".warning-upload").show();
+    @endif
+    // Tab label per hari ("Form Hari N (tanggal)") sekarang reaktif lewat
+    // Vue (v-model data.date), tidak perlu lagi disinkronkan manual via jQuery.
 
-    $("body").on("click", ".remove-currency", function () {
-        let $group = $(this).closest(".fieldGroup");
-
-        let id_rate = $group.find(".id_rate").val();
-        let reim_id = "{{Request::segment('3')}}";
-        let rate = normalizeExchangeRateValue($group.find('input[name="rate[]"]').val());
-        let currency = $group.find('input[name="currency_rate[]"]').val();
-
-        if (String(currency || '').trim().toUpperCase() === 'IDR') {
-            alert('Kurs IDR tidak dapat dihapus.');
-            return;
-        }
-
-        $.ajax({
-            url: '../../../delete-currency-options',
-            type: 'POST',
-            data: {
-                reim_id: reim_id,
-                id_rate: id_rate,
-                rate: rate,
-                currency: currency,
-                _token: $('meta[name="csrf-token"]').attr('content')
-            },
-            success: function(response) {
-                console.log("Berhasil hapus:", response);
-                $group.remove();
-                onExchangeRatesUpdated($('#rt-travel-item-pane'));
-            },
-            error: function(xhr) {
-                console.error("Gagal hapus:", xhr);
-            }
-        });
-    });
-    
-    var count = "{{count($travel_detail)}}" - 1;
-    var ct = "{{count($travel_detail)}}";
-
-    window.rtTravelDetailMaxGroup = maxGroup;
-
-    window.rtTravelAppendDetailRow = function (options) {
-        options = options || {};
-        var silent = !!options.silent;
-        var $root = $('#rt-travel-item-pane');
-        if (!$root.length) {
-            $root = $('body');
-        }
-        var currentLen = $root.find('.fieldGroupDetail').length;
-        if (currentLen >= maxGroup) {
-            if (!silent) {
-                alert('Maximum '+maxGroup+' groups are allowed.');
-            }
-            return false;
-        }
-        if (!silent) {
-            $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", true);
-            $(".warning-upload").show();
-            i++;
-        }
-        count++;
-        ct++;
-        var rowTemplate = $.trim($('#rt-detail-row-template').html() || '');
-        if (!rowTemplate) {
-            return false;
-        }
-        var fieldHTML = rowTemplate
-            .replace(/__IDX__/g, String(count))
-            .replace(/__PREVIEW__/g, String(ct));
-        $root.find('.fieldGroupDetail:last').after(fieldHTML);
-        applyTravelReimbursementCurrencyMasks($('#rt-travel-item-pane'));
-        if (typeof window.rtInitDestinationInputs === 'function') {
-            window.rtInitDestinationInputs($('#rt-travel-item-pane'));
-        }
-        if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
-            window.TravelUpload.syncDetailRowIndices($root);
-        }
-        return true;
-    };
-
-    $(document).on('click', '.addMoreDetail', function () {
-        window.rtTravelAppendDetailRow({});
-    });
-    
-     $("body").on("click",".remove-detail",function(){ 
-         $("#action_button, #action_button_draft, #action_button_submit").prop("disabled", false);
-         $(".warning-upload").hide();
-
-         var $row = $(this).closest(".fieldGroupDetail");
-         var $tbody = $row.closest("tbody");
-         var rowCount = $tbody.find('.fieldGroupDetail').length;
-
-         if (rowCount <= 1) {
-             $row.find('input[name="id_detail[]"]').val('');
-             $row.find('select[name="cost_type_id[]"]').val('');
-             $row.find('input[name="destination[]"]').val('');
-             $row.find('select[name="currency[]"]').val('');
-             $row.find('input[name="amount[]"]').val('');
-             $row.find('input[name="idr_rate[]"]').val('');
-             $row.find('input[name="tax[]"]').val('0');
-             $row.find('select[name="payment_type[]"]').val('');
-             $row.find('input.file-input[type="file"], input.camera-input[type="file"]').val('');
-             $row.find('[id^="preview_"]').empty();
-         } else {
-             $row.remove();
-         }
-
-         if (window.TravelUpload && typeof window.TravelUpload.syncDetailRowIndices === 'function') {
-             window.TravelUpload.syncDetailRowIndices($tbody.closest('#rt-travel-item-pane'));
-         }
-
-         total_nominal();
-     });
-    
-            function bindExistingPreviewThumbnails() {
-                $('[id^="preview_"] img').each(function () {
-                    const src = $(this).attr('src');
-                    if (!src || src.indexOf('flaticon.com') !== -1) return;
-                    $(this)
-                        .addClass('preview-thumbnail')
-                        .attr('data-preview-src', src)
-                        .css('cursor', 'pointer');
-                });
-            }
-
-            bindExistingPreviewThumbnails();
-
-            $('body').on('click', '.preview-thumbnail', function () {
-                var src = $(this).attr('data-preview-src') || $(this).attr('src');
-                if (!src) return;
-                var safeSrc = src;
-                var isDataOrBlob = /^data:|^blob:/i.test(src);
-                if (!isDataOrBlob) {
-                    var sep = src.indexOf('?') === -1 ? '?' : '&';
-                    safeSrc = src + sep + 'v=' + Date.now();
-                }
-                var $modalImg = $('#previewImageModalSrc');
-                $modalImg.off('error.rtPreview').on('error.rtPreview', function () {
-                    $('#previewImageModal').modal('hide');
-                    if (!isDataOrBlob && src) {
-                        window.open(src, '_blank');
-                    }
-                });
-                $modalImg.attr('src', safeSrc);
-                $('#previewImageModal').modal('show');
-            });
-
-    $(document).on('blur', 'input.exchange-rate-input[name="rate[]"]', function () {
-        var $group = $(this).closest('.fieldGroup');
-        enforceIdrExchangeRate($group);
-        var id_rate = $group.find('.id_rate').val();
-        var rate = normalizeExchangeRateValue($(this).val());
-        $(this).val(rate);
-        var currency = $group.find('input[name="currency_rate[]"]').val();
-        var reim_id = "{{Request::segment('3')}}";
-        onExchangeRatesUpdated($('#rt-travel-item-pane'));
-        $.ajax({
-            url: '../../../update-currency',
-            type: 'POST',
-            data: {
-                reim_id: reim_id,
-                id_rate: id_rate,
-                rate: rate,
-                currency: currency,
-                _token: $('meta[name="csrf-token"]').attr('content')
-            }
-        });
-    });
-
-    $(document).on('focus', '.currency-select', function () {
-        var $select = $(this);
-        $select.html(buildCurrencySelectOptions($select.val()));
-    });
-
-    $(document).on('change', 'input[name="currency_rate[]"]', function () {
-        enforceIdrExchangeRate($(this).closest('.fieldGroup'));
-        refreshAllCurrencySelects();
-    });
-
-    getExchangeRateFormRoot().querySelectorAll('.fieldGroup').forEach(function (group) {
-        enforceIdrExchangeRate($(group));
-    });
-    window.rtNormalizeAllTripRateInputs();
-    refreshAllCurrencySelects();
-    recalculateAllDetailIdrRates($('#rt-travel-item-pane'));
-    total_nominal();
   });
-  
 </script>
+@if($travelEntertainmentOcrEnabled ?? false)
+<script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
+@endif
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 <script>
-  
+  var OCR_CREATE_SUBMIT_SELECTORS = ['#action_button', '#action_button_draft', '#action_button_item', '#action_button_submit', '#edit_finance', '#edit_owner'];
+
+  function ocrCreateRowOptions($row) {
+    return {
+      row: $row,
+      badgeContainer: $row.find('[id^="preview_"]').first(),
+      submitSelectors: OCR_CREATE_SUBMIT_SELECTORS,
+      formScope: $('#travel_overseas_reimbursement_form'),
+      reimbursementType: 'travel',
+      onSameTripOffer: function (offer) {
+        if (window.ReimbursementOcrCheck) {
+          window.ReimbursementOcrCheck.showSameTripInfoModal(offer);
+        }
+      }
+    };
+  }
+
+  function runOcrCheckForCreateRow($row, file) {
+    if (!window.ReimbursementOcrCheck) {
+      return;
+    }
+    window.ReimbursementOcrCheck.verifyAndRender(
+      Object.assign({ file: file }, ocrCreateRowOptions($row))
+    );
+  }
+
+  /**
+   * Day-level evidence upload (Step 1: Upload Evidence, Sep 2026 redesign,
+   * extended for multi-file Sep 2026). Each file uploaded for a day gets its
+   * own OCR call (so a hotel receipt AND a taxi receipt on the same day are
+   * each checked for duplicates on their own merits) via
+   * rtVerifyDayFileEvidence(); only the most-recently-added file's result
+   * drives the "OCR Result" summary card auto-fill, matching the previous
+   * single-file UX for that part. Mutates the Vue instance's reactive state
+   * directly (vm.reimburses[i]) since this lives outside the Vue component
+   * definition. no_invoice/reference_reimbursement_id are resolved again
+   * server-side at store() time (see TravelReimbursementController::store())
+   * -- nothing here needs to be submitted back except the file(s) themselves,
+   * their row tags, and the optional reference invoice.
+   */
+  function rtEnableTravelSubmitButtons() {
+    OCR_CREATE_SUBMIT_SELECTORS.forEach(function (sel) { $(sel).prop('disabled', false); });
+    $('.warning-upload').hide();
+  }
+
+  /**
+   * Bootstrap modal replacing the browser's native alert()/confirm() on this form,
+   * styled like the same-trip warning modal. opts: {title, message, confirmText,
+   * cancelText (omit => single OK button), onYes, onCancel}. Callbacks run after the
+   * modal has fully hidden, so a callback can safely open another modal.
+   */
+  function rtModal(opts) {
+    var ID = 'rtGenericModal';
+    if (!document.getElementById(ID + 'Style')) {
+      var style = document.createElement('style');
+      style.id = ID + 'Style';
+      style.textContent =
+        '#' + ID + ' .modal-content{border-radius:10px;border:none;overflow:hidden;}' +
+        '#' + ID + ' .modal-header{flex-direction:column;align-items:center;border-bottom:none;padding:24px 24px 0;}' +
+        '#' + ID + ' .rt-modal-icon{width:46px;height:46px;border-radius:50%;background:#fff7e6;color:#e0a800;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;}' +
+        '#' + ID + ' .modal-title{width:100%;text-align:center;font-weight:700;color:#2b3a55;}' +
+        '#' + ID + ' .modal-body{padding:14px 24px 4px;text-align:center;}' +
+        '#' + ID + ' .rt-modal-message{color:#495057;font-size:14px;margin-bottom:16px;white-space:pre-line;}' +
+        '#' + ID + ' .modal-footer{border-top:none;padding:0 24px 24px;justify-content:center;}' +
+        '#' + ID + ' .modal-footer .btn{min-width:120px;border-radius:6px;}';
+      document.head.appendChild(style);
+    }
+    if (!$('#' + ID).length) {
+      $('body').append(
+        '<div class="modal fade" id="' + ID + '" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">' +
+          '<div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content">' +
+            '<div class="modal-header"><div class="rt-modal-icon"><i class="fa fa-exclamation-triangle"></i></div><h5 class="modal-title"></h5></div>' +
+            '<div class="modal-body"><p class="rt-modal-message"></p></div>' +
+            '<div class="modal-footer">' +
+              '<button type="button" class="btn btn-secondary js-rt-modal-cancel">Cancel</button>' +
+              '<button type="button" class="btn btn-primary js-rt-modal-yes">OK</button>' +
+            '</div>' +
+          '</div></div>' +
+        '</div>'
+      );
+    }
+    var $m = $('#' + ID);
+    var isSuccess = opts.type === 'success';
+    $m.find('.rt-modal-icon').css({ background: isSuccess ? '#e6f6ec' : '#fff7e6', color: isSuccess ? '#28a745' : '#e0a800' })
+      .find('i').attr('class', isSuccess ? 'fa fa-check-circle' : 'fa fa-exclamation-triangle');
+    $m.find('.modal-title').text(opts.title || 'Attention');
+    $m.find('.rt-modal-message').text(opts.message || '');
+    $m.find('.js-rt-modal-yes').text(opts.confirmText || 'OK');
+    var $cancel = $m.find('.js-rt-modal-cancel').text(opts.cancelText || 'Cancel').toggle(!!opts.cancelText);
+    var done = false;
+    function finish(fn) {
+      if (done) { return; }
+      done = true;
+      $m.find('.js-rt-modal-yes, .js-rt-modal-cancel').off('click');
+      $m.one('hidden.bs.modal', function () { if (typeof fn === 'function') { fn(); } });
+      $m.modal('hide');
+    }
+    $m.find('.js-rt-modal-yes').off('click').on('click', function () { finish(opts.onYes); });
+    $cancel.off('click').on('click', function () { finish(opts.onCancel); });
+    $m.modal('show');
+  }
+
+  function rtAlertModal(message, title) {
+    rtModal({ title: title || 'Attention', message: message, confirmText: 'OK' });
+  }
+
+  // Result of the last save (flashed by TravelReimbursementController): shown as a
+  // popup so an Update/Submit never finishes silently.
+  window.addEventListener('load', function () {
+    @if(session()->has('success'))
+    rtModal({ type: 'success', title: 'Success', message: @json(session('success')), confirmText: 'OK' });
+    @elseif($errors->any())
+    rtAlertModal(@json(implode("\n", $errors->all())), 'Failed');
+    @endif
+  });
+
+  /**
+   * The actual <input type="file"> elements submitted for a day's evidence
+   * are created here, one pair (file + its row-tag) per uploaded file,
+   * instead of relying on the single visible dropzone input -- that one only
+   * exists to open the file-picker dialog now (see the `multiple` file input
+   * in the template) and can't hold more than the browser's last-chosen
+   * selection anyway. Kept as plain DOM/jQuery (mirroring the established
+   * pattern in reimbursement-travel-upload.js's appendAttachmentInput())
+   * rather than trying to make Vue own real File blobs in named inputs,
+   * which it can't bind declaratively.
+   */
+  function rtDayHiddenContainer(i) {
+    var $container = $('#rt-day-hidden-' + i);
+    if (!$container.length) {
+      $container = $('<div class="rt-day-hidden-inputs" style="display:none;"></div>').attr('id', 'rt-day-hidden-' + i);
+      $('#travel_overseas_reimbursement_form').append($container);
+    }
+    return $container;
+  }
+
+  function rtAddDayHiddenFile(i, uid, file, docType) {
+    var $container = rtDayHiddenContainer(i);
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    var $fileInput = $('<input type="file">').attr({ 'class': 'rt-day-hidden-file', 'data-uid': uid, name: 'reimburse[' + i + '][files][]' });
+    $fileInput[0].files = dt.files;
+    var $tagInput = $('<input type="hidden" value="">').attr({ 'class': 'rt-day-hidden-tag', 'data-uid': uid, name: 'reimburse[' + i + '][file_row_tags][]' });
+    var $typeInput = $('<input type="hidden">').val(docType || 'invoice').attr({ 'class': 'rt-day-hidden-type', 'data-uid': uid, name: 'reimburse[' + i + '][file_types][]' });
+    $container.append($fileInput).append($tagInput).append($typeInput);
+  }
+
+  function rtSetDayHiddenTag(uid, tagValue) {
+    $('.rt-day-hidden-tag[data-uid="' + uid + '"]').val(tagValue || '');
+  }
+
+  /** Keeps the submitted reimburse[i][file_types][] entry in step with the chip's own Invoice/Proof dropdown. */
+  function rtSetDayHiddenType(uid, docType) {
+    $('.rt-day-hidden-type[data-uid="' + uid + '"]').val(docType === 'proof' ? 'proof' : 'invoice');
+  }
+
+  function rtRemoveDayHiddenFile(uid) {
+    $('.rt-day-hidden-file[data-uid="' + uid + '"], .rt-day-hidden-tag[data-uid="' + uid + '"], .rt-day-hidden-type[data-uid="' + uid + '"]').remove();
+  }
+
+  /**
+   * Modern browsers (Chrome/Edge and others) silently refuse to navigate a
+   * window.open() tab straight to a data: URI -- it opens as about:blank
+   * instead, with no error -- which is exactly why image previews (which use
+   * the FileReader-produced data: URL, `dataUrl`) were opening blank while
+   * PDF previews (which already use a blob: URL, `objectUrl`) worked fine.
+   * Converting to a blob: URL first, synchronously (no fetch()/Promise, so
+   * there's no risk of losing the click's "user activation" before
+   * window.open() runs), makes image previews behave exactly like PDFs.
+   */
+  function dataUrlToBlob(dataUrl) {
+    var comma = dataUrl.indexOf(',');
+    var meta = dataUrl.slice(0, comma);
+    var mimeMatch = /data:([^;]+);base64/.exec(meta);
+    var mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    var binary = atob(dataUrl.slice(comma + 1));
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+  }
+
+  function rtVerifyDayFileEvidence(vm, i, chip, file) {
+    var entry = vm.reimburses[i];
+    chip.ocrStatus = 'pending';
+
+    var formData = new FormData();
+    formData.append('receipt', file);
+    formData.append('_token', $('meta[name="csrf-token"]').attr('content') || '');
+    formData.append('reimbursement_type', 'travel');
+    formData.append('date', entry.date || '');
+    formData.append('range_from', vm.rangeStart || entry.date || '');
+    formData.append('range_to', vm.rangeEnd || vm.rangeStart || entry.date || '');
+
+    $.ajax({
+      url: '/reimbursement/verify-day-evidence-ocr',
+      method: 'POST',
+      data: formData,
+      processData: false,
+      contentType: false
+    }).then(function (res) {
+      res = res || {};
+      chip.ocrStatus = res.duplicate ? 'duplicate' : (res.status || 'unavailable');
+      chip.ocrMessage = res.duplicate_message || (res.extracted_no_invoice ? ('No. Invoice: ' + res.extracted_no_invoice) : '');
+      // Every file keeps its own reading, editable independently (Sep 2026
+      // feedback: "resultnya masih replace, harusnya engga" -- there used to
+      // be one shared, editable "OCR Result" panel that only ever reflected
+      // the most-recently-added file, silently overwriting whatever the
+      // previous file had shown. Now each file's OCR Result panel is its
+      // own -- see the v-for over data.dayFiles in the template -- so
+      // nothing gets replaced when a second/third file is added.
+      chip.ocrDate = res.extracted_transaction_date || '';
+      chip.ocrMerchant = res.extracted_merchant_name || '';
+      chip.ocrAmount = res.extracted_amount != null ? res.extracted_amount : '';
+      chip.ocrCurrency = res.extracted_currency || 'IDR';
+      chip.ocrInvoice = res.extracted_no_invoice || '';
+      // Same invoice uploaded twice in THIS submission (e.g. once as a PNG,
+      // once as a PDF) -- the server-side duplicate checks (against the
+      // database) can't catch this since neither file is saved yet. Flags
+      // every file sharing that invoice number across the WHOLE submission
+      // (any day), reusing the existing 'duplicate' badge/styling -- this is
+      // a visual warning only (never blocks Submit on its own, matching
+      // every other OCR check here); the real, unbypassable block is
+      // TravelReimbursementController::guardAgainstDuplicateInvoiceWithinSubmission().
+      vm.recomputeLocalInvoiceDuplicates();
+
+      // The day's own Transaction Date (Step 2) still only auto-fills once,
+      // from whichever file resolves first -- it's a single field on the day
+      // itself (not per-file), so "replace" doesn't apply the same way; this
+      // only ever sets it from empty, never overwrites a value already there
+      // (typed manually or auto-filled by an earlier file).
+      if (!entry.date && res.extracted_transaction_date) {
+        entry.date = res.extracted_transaction_date;
+      }
+
+      // A different user's invoice never auto-sets anything -- it goes
+      // through the same-trip offer/blocked/duplicate red popups below, and
+      // on Yes links allowance-only with Request Information left editable.
+      if (res.same_trip_offer && window.ReimbursementOcrCheck) {
+        vm.offerSameTripReference(i, chip, res.same_trip_offer);
+      } else if (res.same_trip_blocked && window.ReimbursementOcrCheck) {
+        window.ReimbursementOcrCheck.showSameTripInfoModal(res.same_trip_blocked);
+      } else if (res.duplicate) {
+        rtAlertModal(res.duplicate_message || 'The invoice in file "' + file.name + '" has already been used in another submission.', 'Duplicate Invoice');
+      }
+
+      rtEnableTravelSubmitButtons();
+    }).catch(function () {
+      chip.ocrStatus = 'unavailable';
+      rtEnableTravelSubmitButtons();
+    });
+  }
+
   new Vue({
       el: '#app',
       data: {
         usd_rate: 0,
         idr_rate: 0,
         jpy_rate: 0,
-        reimburses: [
-            {
-                trip: null,
-                trip_data: null,
-                trip_allowance: null,
-                travel_time: null,
-                start_time: null,
-                end_time: null,
-                details: [
-                    {
-                        cost_type: null,
-                        destination: null,
-                        currency: null,
-                        amount: null,
-                        tax: null,
-                        idr_rate: null,
-                        code: null,
-                    }
-                ],
-                total: 0
-            },
-        ],
-        rates: [
-            {
-                code: 'IDR',
-                rate: 1
-            }
-        ],
+        rangeStart: null,
+        activeDay: 0,
+        // Files shown in the row Preview gallery modal, and which one is on
+        // screen. Populated by previewRowFile(); never submitted.
+        rowPreviewFiles: [],
+        rowPreviewIndex: 0,
+        rangeEnd: null,
+        // Edit mode: day cards are prefilled from stored days (see
+        // buildTravelEditDaysPayload); the active day from the URL starts expanded.
+        reimburses: @json($editDays ?? []),
+        rates: @json($editRates ?? [['code' => 'IDR', 'rate' => '1,00']]),
         types : @json($types),
-        trip_types : @json($trip_types),
-        grandtotal: 0
+          trip_types : @json($trip_types),
+          not_stay_hotel_condition_id : @json($not_stay_hotel_condition_id),
+        grandtotal: 0,
+        // Which file chip's full OCR Result is currently shown in
+        // #rtOcrDetailModal (Sep 2026 feedback) -- read-only, just for
+        // viewing; null when the modal isn't open/no file has been clicked.
+        ocrDetailModalChip: null
       },
       mounted() {
-        // this.initSelectForm()
+        this.initSelectForm()
         self = this
-        // Jangan sinkronkan input di travel pane ke data Vue:
-        // mutasi akan memicu re-render v-for dan bisa menghilangkan state tab (add/remove).
-        var rtSkipVueTravelPane = function (event) {
-            return $(event.target).closest('#rt-travel-item-pane').length > 0;
-        };
-        var $vueMaskOutsidePane = function (selector) {
-            return $(selector).filter(function () {
-                return $(this).closest('#rt-travel-item-pane').length === 0;
-            });
-        };
-        $vueMaskOutsidePane(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
-        $vueMaskOutsidePane('.idr-rate-input').on('change', (event) => {
-            if (rtSkipVueTravelPane(event)) return;
+        $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true});
+        $('.idr-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.idr_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $vueMaskOutsidePane(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
-        $vueMaskOutsidePane('.usd-rate-input').on('change', (event) => {
-            if (rtSkipVueTravelPane(event)) return;
+        $(".usd-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        $('.usd-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.usd_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $vueMaskOutsidePane(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0});
-        $vueMaskOutsidePane('.jpy-rate-input').on('change', (event) => {
-            if (rtSkipVueTravelPane(event)) return;
+        $(".jpy-rate-input").maskMoney({ thousands:'.', decimal:',', precision:2});
+        $('.jpy-rate-input').on('change', (event) => {
             const index = $(event.target).closest('tr').index();
             self.jpy_rate = ($(event.target).val());
             self.changeAmount(0);
         });
 
-        $vueMaskOutsidePane(".amount-input").maskMoney({ thousands:'.', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
-        $vueMaskOutsidePane('.amount-input').on('change', (event) => {
-            if (rtSkipVueTravelPane(event)) return;
-            self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
+        // Amount starts blank so the user types the nominal directly -- no
+        // pre-filled "0,00" to cursor past. No allowZero (3.0.2 has no
+        // allowEmpty option; empty stays empty on blur via allowZero:false).
+        // The phantom "0,00" maskMoney injects on focus is cleared by the
+        // focusin.rtAmountBlank handler below; typing with or without ","
+        // both work, and empty is parsed as 0 everywhere.
+        // NOTE (edit mode): days arrive prefilled -- no default hotel/times
+        // reset here (the create form sets them only for its blank day).
+        // Single delegated handler for every amount-input, bound once (namespaced
+        // so a stray re-mount can't double-bind it) instead of re-registering a
+        // fresh non-delegated handler on every addDetail()/regenerateDaysFromRange()
+        // call -- that used to stack duplicate handlers and, worse, the very first
+        // one hardcoded reimburses[length-1].details[0], so editing Amount on any
+        // day/row other than "last day, first row" silently updated the wrong
+        // entry and left that row's IDR Rate stuck at 0. The day (i) and row (a)
+        // indices are parsed straight out of the input's own name attribute
+        // (reimburse[i][detail][a][amount]) so this is correct regardless of DOM
+        // position, day collapse state, or how many rows/days exist.
+        $(document).off('change.rtAmountInput').on('change.rtAmountInput', '.amount-input', function (event) {
+            var m = /reimburse\[(\d+)\]\[detail\]\[(\d+)\]\[amount\]/.exec($(event.target).attr('name') || '');
+            if (!m) {
+                return;
+            }
+            var i = parseInt(m[1], 10);
+            var a = parseInt(m[2], 10);
+            if (!self.reimburses[i] || !self.reimburses[i].details[a]) {
+                return;
+            }
+            self.reimburses[i].details[a].amount = $(event.target).val();
             self.changeAmount(0);
-            self.calculateTotal(0,0)
+            self.calculateTotal(i, a);
         });
-        // $('.number-format').maskMoney({ thousands:'.', decimal:',', precision:2});
-      
+        // maskMoney 3.0.2 masks on focus/click, so touching a blank Amount
+        // injects a phantom "0,00" whose zeros then corrupt whatever is typed
+        // (and force the cursor juggling). These run after maskMoney's own
+        // handlers (bubble order): editable inputs go back to truly empty,
+        // locked (readonly) rows show a plain "0" with no comma. The
+        // existing change handler above re-syncs the Vue model on blur.
+        $(document).off('focusin.rtAmountBlank click.rtAmountBlank').on('focusin.rtAmountBlank click.rtAmountBlank', '.amount-input', function (event) {
+            var $el = $(event.target).closest('.amount-input');
+            if (!$el.length || $el.prop('disabled')) {
+                return;
+            }
+            var v = ($el.val() || '').trim();
+            if (v === '' || parseTravelMoney(v) !== 0) {
+                return;
+            }
+            $el.val($el.prop('readonly') ? '0' : '');
+        });
+        this.$nextTick(() => {
+            this.syncRatesFromExchangeInputs();
+        });
       },
       methods : {
         changeAmount(i) {
-
+        },
+                isTripTimeDisabled(row) {
+                        const trip = row && row.trip !== undefined && row.trip !== null ? String(row.trip) : '';
+                        return trip === '' || trip === '0';
+                },
+        normalizeEuropeanNumberString(s) {
+            let x = String(s || '').trim().replace(/\s/g, '');
+            if (!x) return '0';
+            let neg = false;
+            if (x.charAt(0) === '-') {
+                neg = true;
+                x = x.slice(1);
+            } else if (x.charAt(0) === '+') {
+                x = x.slice(1);
+            }
+            if (!x) return '0';
+            const lastC = x.lastIndexOf(',');
+            const lastD = x.lastIndexOf('.');
+            let out;
+            if (lastC > lastD) {
+                x = x.replace(/\./g, '').replace(',', '.');
+                out = x.replace(/[^\d.]/g, '') || '0';
+            } else {
+                x = x.replace(/,/g, '');
+                const idx = x.lastIndexOf('.');
+                if (idx === -1) {
+                    out = x.replace(/[^\d]/g, '') || '0';
+                } else {
+                    const intRaw = x.slice(0, idx);
+                    const frac = x.slice(idx + 1).replace(/\D/g, '');
+                    const intPart = intRaw.replace(/\./g, '');
+                    if (frac.length === 3 && /^\d{3}$/.test(frac) && intPart.length >= 1) {
+                        out = intPart + frac;
+                    } else {
+                        out = (intPart || '0') + '.' + frac;
+                    }
+                }
+            }
+            if (neg && out !== '0' && out !== '') {
+                out = '-' + out;
+            }
+            return out;
+        },
+        numericRate(val) {
+            if (val === null || val === undefined || val === '') return 0;
+            const t = this.normalizeEuropeanNumberString(String(val).trim());
+            const n = parseFloat(t);
+            if (isNaN(n)) return 0;
+            return Math.round(n * 100) / 100;
+        },
+        /** Kolom Amount: desimal (2 digit), sesuai nominal di bukti/invoice. */
+        parseTravelAmountInteger(raw) {
+            return this.numericRate(raw);
+        },
+        formatIdrForPayment(num, paymentType) {
+            return formatTravelIdrMoney(roundIdrForPayment(num, paymentType), paymentType || 'Cash');
+        },
+        formatIdrInteger(num) {
+            return this.formatIdrForPayment(num, 'Cash');
+        },
+        formatRateDisplay(val) {
+            if (val === null || val === undefined || val === '') return '';
+            if (typeof val === 'string' && val.trim() === '') return '';
+            const n = this.numericRate(val);
+            if (isNaN(n)) return '';
+            return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+        logExchangeRate(action, idx, payload) {
+            try {
+                const code = this.rates[idx] ? (this.rates[idx].code || '') : '';
+                console.log('[EXCHANGE_RATE]', {
+                    action: action,
+                    index: idx,
+                    code: code,
+                    payload: payload,
+                    at: new Date().toISOString()
+                });
+            } catch (e) {
+                console.log('[EXCHANGE_RATE]', action, idx, payload);
+            }
+        },
+        onExchangeRateFocus(idx, event) {
+            this.logExchangeRate('focus', idx, { domValue: event && event.target ? event.target.value : '' });
+        },
+        onExchangeRateInput(idx, event) {
+            const raw = event && event.target ? event.target.value : '';
+            let v = String(raw).trim().replace(/\s/g, '');
+            if (!v) {
+                if (this.rates[idx]) this.$set(this.rates[idx], 'rate', '');
+                if (event && event.target) event.target.value = '';
+                this.logExchangeRate('input', idx, { raw: raw, display: '' });
+                return;
+            }
+            const lastC = v.lastIndexOf(',');
+            const lastD = v.lastIndexOf('.');
+            if (lastC > lastD) {
+                v = v.replace(/\./g, '').replace(',', '.');
+            } else {
+                v = v.replace(/,/g, '');
+            }
+            v = v.replace(/[^0-9.]/g, '');
+            const firstDot = v.indexOf('.');
+            if (firstDot !== -1) {
+                v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+            }
+            const parts = v.split('.');
+            let intPart = parts[0] || '';
+            let decPart = parts[1] || '';
+            if (decPart.length > 2) {
+                decPart = decPart.slice(0, 2);
+            }
+            const display = parts.length > 1 ? (intPart + '.' + decPart) : intPart;
+            if (this.rates[idx]) {
+                this.$set(this.rates[idx], 'rate', display);
+            }
+            if (event && event.target) {
+                event.target.value = display;
+            }
+            this.logExchangeRate('input', idx, { raw: raw, display: display });
+        },
+        onExchangeRateBlur(idx, event) {
+            const current = this.rates[idx] ? this.rates[idx].rate : '';
+            const display = this.formatRateDisplay(current);
+            if (this.rates[idx]) {
+                this.$set(this.rates[idx], 'rate', display);
+            }
+            if (event && event.target) {
+                event.target.value = display;
+            }
+            this.logExchangeRate('blur', idx, { normalized: display });
+        },
+        syncRatesFromExchangeInputs() {
+            const vm = this;
+            vm.rates = vm.rates.map(function(r, idx) {
+                const normalizedCode = (r.code || '').trim().toUpperCase();
+                const normalizedRate = vm.formatRateDisplay(r.rate);
+                vm.logExchangeRate('sync', idx, { code: normalizedCode, rate: normalizedRate });
+                return {
+                    code: normalizedCode,
+                    rate: normalizedRate
+                };
+            });
+        },
+        onTravelFormSubmit(e) {
+            this.syncRatesFromExchangeInputs();
+            if (this.reimburses.length === 0) {
+                if (e) {
+                    e.preventDefault();
+                }
+                rtAlertModal('Please add at least one day first.');
+                return false;
+            }
+            // Client-side mirror of TravelSubmissionValidator::findErrors():
+            // incomplete expense rows are reported in a warning modal WITHOUT
+            // submitting, so the page never reloads (a reload would wipe the
+            // day cards and the picked files). Draft buttons stay lenient,
+            // exactly like the server.
+            var btnName = (e && e.submitter && e.submitter.name) || '';
+            if (btnName !== 'save_draft' && btnName !== 'save_item') {
+                var badDay = this.firstIncompleteExpenseDay();
+                if (badDay.errors.length) {
+                    if (e) {
+                        e.preventDefault();
+                    }
+                    if (this.reimburses[badDay.day]) {
+                        this.reimburses[badDay.day].collapsed = false;
+                    }
+                    rtAlertModal(badDay.errors.join('\n'), 'Incomplete Expense Details');
+                    return false;
+                }
+            }
+        },
+        /** Reads one expense cell straight from the DOM (destination/remarks
+            have no v-model, and amount's model can be stale if the field was
+            never blurred) for pre-submit completeness checking. */
+        expenseCellVal(i, a, field) {
+            var el = document.querySelector('[name="reimburse[' + i + '][detail][' + a + '][' + field + ']"]');
+            return el ? (el.value || '').trim() : '';
+        },
+        /**
+         * Client-side mirror of TravelSubmissionValidator::findErrors() --
+         * same labels, same per-day exemption (refer/allowance-only/
+         * same-trip reference). Returns the first offending day only, so the
+         * modal stays focused: {day, errors}.
+         */
+        firstIncompleteExpenseDay() {
+            var labels = {
+                destination: 'Remarks / tujuan biaya',
+                currency: 'Mata uang',
+                payment_type: 'Tipe pembayaran',
+                amount: 'Jumlah'
+            };
+            var fields = ['destination', 'currency', 'payment_type', 'amount'];
+            var out = { day: -1, errors: [] };
+            for (var i = 0; i < this.reimburses.length; i++) {
+                var day = this.reimburses[i];
+                var refDay = day.referDay;
+                var isFree = !!day.allowanceOnly
+                    || (refDay !== null && refDay !== undefined && refDay !== '' && !isNaN(refDay) && parseInt(refDay, 10) < i)
+                    || ((day.referenceInvoice || '').trim() !== '');
+                if (isFree) {
+                    continue;
+                }
+                var dayErrors = [];
+                var hasDetail = false;
+                var rows = (day.details || []).length;
+                for (var a = 0; a < rows; a++) {
+                    if (this.expenseCellVal(i, a, 'cost_type_id') === '') {
+                        continue;
+                    }
+                    hasDetail = true;
+                    for (var f = 0; f < fields.length; f++) {
+                        if (this.expenseCellVal(i, a, fields[f]) === '') {
+                            dayErrors.push(labels[fields[f]] + ' pada hari ke-' + (i + 1) + ', baris rincian ke-' + (a + 1) + ' wajib diisi.');
+                        }
+                    }
+                }
+                if (!hasDetail) {
+                    dayErrors.push('Minimal satu rincian biaya (cost type) pada hari ke-' + (i + 1) + ' harus diisi lengkap.');
+                }
+                if (dayErrors.length) {
+                    out.day = i;
+                    out.errors = dayErrors;
+                    return out;
+                }
+            }
+            return out;
         },
         getRate(currency, amt) {
             self = this;
-            rate = self.rates.filter(a => a.code == currency)[0].rate
-            return parseInt(amt.replaceAll(".","")) * parseInt(`${rate}`.replaceAll(".",""));
+            var rate;
+            try {
+                rate = self.rates.filter(a => a.code == currency)[0].rate;
+            } catch (error) {
+                rate = currency == "IDR" ? 1 : 0;
+            }
+            return this.parseTravelAmountInteger(amt) * this.numericRate(rate);
              
         },
-        // initSelectForm() {
-        //   $(".addFile").on('click',function(){
-        //     $(this).parent().find(".file-input").click();
-        //     $(this).parent().find(".file-input").change(function(event) {
-        //         var file = event.target.files[0];
-                
-        //         if (file) {
-        //             var reader = new FileReader();
-                    
-        //             reader.onload = function(e) {
-        //                 $('#preview_'+$(this).parent().find(".addFile").data('idx')).empty(); // Clear previous preview
-                        
-        //                 var img = $('<img>');
-        //                 img.attr('src', e.target.result);
-        //                 img.css({ maxWidth: '100%', maxHeight: '200px' }); // Adjust height as needed
-        //                 $('#preview_'+$(this).parent().find(".addFile").data('idx')).append(img);
-        //             };
-                    
-        //             reader.readAsDataURL(file);
-        //         }
-        //     })
-        //     }) 
-        //     $(".addCamera").on('click',function(){
-        //     idx = $(this).data('idx')
-        //     fileInput = $(this).parent().find(".file-input")[0]; 
-        //     $("#modalPhoto").modal('show')
-        //     const videoElement = $('#videoElement')[0];
-        //     const canvas = $('#canvas')[0];
-        //     const context = canvas.getContext('2d');
+        initSelectForm() {
+            $(".addFile").on('click', function() {
+              let idx = $(this).attr("data-idx"); // Ambil data-idx
+              let fileInput = $(this).parent().find(".file-input");
 
-        //     // Access the webcam
-        //     if (navigator.mediaDevices.getUserMedia) {
-        //         navigator.mediaDevices.getUserMedia({ video: {
-        //             facingMode: { ideal: "environment" }
-        //         } })
-        //             .then(function(stream) {
-        //                 videoElement.srcObject = stream;
-        //                 $('#captureButton').on('click', function() {
-        //                     canvas.width = videoElement.videoWidth * 0.3;
-        //                     canvas.height = videoElement.videoHeight * 0.3;
-        //                     context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-        //                     canvas.toBlob(function(blob) {
-        //                         const file = new File([blob], "capture.png", { type: "image/png" });
+              fileInput.click();
 
-        //                         // Display the captured image in the preview div
-        //                         const dataURL = URL.createObjectURL(file);
-                            
-        //                         // Create a DataTransfer to add the file to the input element
-        //                         const dataTransfer = new DataTransfer();
-        //                         dataTransfer.items.add(file);
-        //                         fileInput.files = dataTransfer.files;
-        //                         console.log(fileInput)
-        //                     }, 'image/png'); 
-                            
-        //                     stream.getTracks().forEach(function(track) {
-        //                         return track.stop();
-        //                     });
-        //                     $("#modalPhoto").modal('hide')
+              fileInput.off("change").on("change", function(event) {
+                var file = event.target.files[0];
 
-        //                 });
-        //             })
-        //             .catch(function(err) {
-        //                 console.error("Error accessing webcam: " + err);
-        //             });
-        //     }
+                if (file) {
+                  let fileType = file.type;
+                  let previewDiv = $("#preview_" + idx);
+                  previewDiv.html(""); // Bersihkan preview sebelumnya
 
-        //     // Capture the image when the button is clicked
+                  if (fileType.startsWith("image/")) {
+                    // Preview gambar
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                      var img = $('<img>').attr('src', e.target.result).css({
+                        maxWidth: '100%',
+                        maxHeight: '200px',
+                        border: '2px solid #28a745',
+                        borderRadius: '5px',
+                        marginTop: '5px'
+                      });
+                      previewDiv.append(img);
+                    };
+                    reader.readAsDataURL(file);
+                  } else if (fileType === "application/pdf") {
+                    // Preview PDF (ikon + link ke file PDF)
+                    var fileURL = URL.createObjectURL(file);
+                    var pdfIcon = 'https://cdn-icons-png.flaticon.com/512/337/337946.png'; // Ganti dengan lokal jika perlu
+                    var link = $('<a>').attr({
+                      href: fileURL,
+                      target: '_blank',
+                      title: 'Click to view the PDF'
+                    }).append(
+                      $('<img>').attr({
+                        src: pdfIcon,
+                        alt: 'PDF File'
+                      }).css({
+                        maxWidth: '50px',
+                        maxHeight: '50px',
+                        border: '2px solid #007bff',
+                        borderRadius: '5px',
+                        marginTop: '5px'
+                      })
+                    );
+                    previewDiv.append(link);
+                  } else {
+                    // File tidak didukung
+                    previewDiv.append('<p style="color:red;">File type not supported</p>');
+                  }
+
+                  // Aktifkan tombol aksi
+                  $(".warning-upload").hide();
+                  $("#action_button").prop("disabled", false);
+                  $("#action_button_draft").prop("disabled", false);
+                  $("#action_button_item").prop("disabled", false);
+
+                  runOcrCheckForCreateRow($(this).closest('tr'), file);
+                }
+              });
+            });
+          
+            $(".addCamera").on('click', function() {
+                let idx = $(this).attr("data-idx"); // Ambil data-idx
+                let $row = $(this).closest('tr');
+                let fileInput = $(this).parent().find(".file-input")[0];
+
+                $("#modalPhoto").modal("show");
+                const videoElement = $("#videoElement")[0];
+
+                if (navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },   // minta resolusi HD
+                            height: { ideal: 720 },
+                            facingMode: "environment"
+                        }
+                    })
+                    .then(function(stream) {
+                        videoElement.srcObject = stream;
+
+                        $("#captureButton").off("click").on("click", function() {
+                            const canvas = document.createElement("canvas");
+                            const context = canvas.getContext("2d");
+
+                            // Pakai resolusi HD (fallback kalau kamera support rendah)
+                            const outputWidth = videoElement.videoWidth || 1280;
+                            const outputHeight = videoElement.videoHeight || 720;
+                            canvas.width = outputWidth;
+                            canvas.height = outputHeight;
+
+                            context.drawImage(videoElement, 0, 0, outputWidth, outputHeight);
+
+                            // Simpan ke JPEG kualitas 85%
+                            canvas.toBlob(function(blob) {
+                                const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+
+                                const dataTransfer = new DataTransfer();
+                                dataTransfer.items.add(file);
+                                fileInput.files = dataTransfer.files;
+
+                                $("#preview_" + idx).html(""); // Bersihkan preview sebelumnya
+                                var img = $('<img>')
+                                    .attr('src', URL.createObjectURL(blob))
+                                    .css({ maxWidth: '100%', maxHeight: '200px', border: '2px solid #28a745', borderRadius: '5px' });
+                                $("#preview_" + idx).append(img);
+
+                                runOcrCheckForCreateRow($row, file);
+                            }, "image/jpeg", 0.85);
+
+                            // Stop kamera setelah capture
+                            stream.getTracks().forEach(track => track.stop());
+                            $("#modalPhoto").modal("hide");
+                            $(".warning-upload").hide();
+                            $("#action_button").prop("disabled", false);
+                            $("#action_button_draft").prop("disabled", false);
+                            $("#action_button_item").prop("disabled", false);
+                        });
+                    })
+                    .catch(err => console.error("Error accessing webcam: " + err));
+                }
+            });
+
+
+
+
             
-        //     })
-        // },
-        
-        changeAllowance(i) {
-            this.calculateTotal(i,0)
-            
+
+        },
+        changeTrip(i) {
+            const id = this.reimburses[i].trip;
+            const self = this;
+
+            if (String(id) === '0') {
+                this.reimburses[i].trip_allowance = '0';
+                this.reimburses[i].hotel_condition = this.not_stay_hotel_condition_id;
+                this.reimburses[i].start_time = null;
+                this.reimburses[i].end_time = null;
+                this.reimburses[i].travel_time = null;
+                this.calculateTotal(i, 0);
+                return;
+            }
+
+            if (!id) {
+                this.reimburses[i].trip_allowance = '0';
+                this.reimburses[i].hotel_condition = this.not_stay_hotel_condition_id;
+                this.reimburses[i].start_time = null;
+                this.reimburses[i].end_time = null;
+                this.reimburses[i].travel_time = null;
+                this.calculateTotal(i, 0);
+                return;
+            }
+
+            const selectedTrip = self.trip_types.find(a => a.id == id);
+            if (!selectedTrip) {
+                this.reimburses[i].trip_allowance = '0';
+                this.calculateTotal(i, 0);
+                return;
+            }
+
+            const currency = selectedTrip.currency;
+            const allowance = selectedTrip.allowance;
+
+            this.reimburses[i].trip_allowance = '';
+
+            if (currency === 'IDR') {
+                this.reimburses[i].trip_allowance = allowance.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            } else {
+                const foundRate = this.rates.find(rate => rate.code == currency);
+                if (!foundRate) {
+                    alert('Please enter the ' + currency + ' exchange rate first, below the IDR exchange rate.');
+                    return;
+                }
+                const rate = this.numericRate(foundRate.rate);
+                if (rate <= 0) {
+                    alert('Please enter the ' + currency + ' exchange rate first, below the IDR exchange rate.');
+                    return;
+                }
+                const totalAllowance = allowance * rate;
+                this.reimburses[i].trip_allowance = totalAllowance.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // Hitung total (jika kamu punya logic tambahan di sini)
+            this.calculateTotal(i, 0);
         },
         changeTime(i) {
 
@@ -1221,38 +1851,57 @@ $(document).ready(function(){
             data = this.reimburses[i]
             let time1 = data.start_time;
             let time2 = data.end_time;
-
-            // Parse the input values to Date objects (using a dummy date)
             let date1 = new Date('1970-01-01T' + time1 + 'Z');
             let date2 = new Date('1970-01-01T' + time2 + 'Z');
-
-            // Calculate the difference in milliseconds
             let timeDifference = Math.abs(date2 - date1);
-
-            // Convert the difference to hours and minutes
             let hoursDifference = Math.floor(timeDifference / 1000 / 60 / 60);
             let minutesDifference = Math.floor((timeDifference / 1000 / 60) % 60);
-
-            // Display the difference
             let differenceMessage = `Time difference: ${hoursDifference} hours and ${minutesDifference} minutes.`;
             this.reimburses[i].travel_time = `${hoursDifference} Hours and ${minutesDifference} minutes.`;
         },
         addRate() {
+            this.syncRatesFromExchangeInputs();
             this.rates.push({
                 code: null,
                 rate: null
-            })
+            });
+            this.$nextTick(() => {
+                this.syncRatesFromExchangeInputs();
+            });
+        },
+        removeRate(i) {
+            if (i <= 0 || !Array.isArray(this.rates) || this.rates.length <= 1) {
+                return;
+            }
+            this.syncRatesFromExchangeInputs();
+            this.rates.splice(i, 1);
+            this.$nextTick(() => {
+                this.syncRatesFromExchangeInputs();
+            });
         },
         addTravel() {
             this.reimburses.push({
+                trip: null,
+                hotel_condition: null,
                 trip_allowance: null,
                 travel_time: null,
-                trip_data: null,
+                date: null,
+                dayFiles: [],
+                referenceInvoice: '',
+                referDay: null,
+                allowanceOnly: false,
+                uploadType: 'invoice',
+                sameTripRef: null,
+                referenceFeedback: { message: '', color: '' },
+                ocrStatus: null,
+                ocrSummary: null,
+                ocrEditing: false,
+                messRelation: null,
                 details: [
                     {
                         cost_type: null,
                         destination: null,
-                        currency: null,
+                        currency: 'IDR',
                         amount: null,
                         tax: null,
                         code: null,
@@ -1263,90 +1912,1049 @@ $(document).ready(function(){
             });
             self = this
             this.$nextTick(() => {
-              // self.initSelectForm();
+              self.initSelectForm();
 
-              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
-              $('.amount-input').on('change', (event) => {
-                if ($(event.target).closest('#rt-travel-item-pane').length) return;
-                self.reimburses[self.reimburses.length - 1].details[0].amount = ($(event.target).val());
-                self.changeAmount(0);
-                self.calculateTotal(self.reimburses.length - 1,0)
-              });
+              // Amount input changes are handled by the single delegated
+              // change.rtAmountInput listener bound once in mounted() -- no
+              // per-call re-bind needed (and re-binding here used to hardcode
+              // the wrong day/row, see that listener's comment).
             })
 
         },
         removeTravel(i) {
             this.reimburses.splice(i, 1)
+            this.calculateTotal(i,0)
         },
         addDetail(i) {
+            // Only block submitting while this day still has NO evidence at all.
+            // Adding a row used to always disable the buttons (back when every
+            // row had its own upload cell), which left Submit/Draft stuck off
+            // after a user uploaded in Step 1 and THEN added a row -- nothing
+            // re-enables them except another upload. Already-saved proof counts
+            // too, as does a day that needs no evidence (isExpenseLocked).
+            this.refreshSubmitButtonsFor(i);
             this.reimburses[i].details.push({
+                id_detail: '',
                 cost_type: null,
                 destination: null,
-                currency: null,
+                currency: 'IDR',
                 amount: null,
                 tax: null,
+                idr_rate: null,
+                payment_type: null,
                 code: null,
             });
+            // Files uploaded BEFORE this row existed stayed "General" because
+            // there was no row to auto-tag them to; hand the oldest such file
+            // to this brand-new row so the pairing still happens by itself.
+            this.autoTagFirstUntaggedFile(i);
             self = this
             this.$nextTick(() => {
-              // self.initSelectForm();
-              $(".amount-input").maskMoney({ thousands:'', decimal:',', precision:2, allowZero: true, affixesStay: false, allowNegative: true});
-              $('.amount-input').on('change', (event) => {
-                if ($(event.target).closest('#rt-travel-item-pane').length) return;
-                const index = $(event.target).closest('tr').index();
-                this.reimburses[i].details[index].amount = ($(event.target).val());
-                self.changeAmount(0);
-                self.calculateTotal(i,index)
-
-              });
+              self.initSelectForm();
+              // Amount input changes are handled by the single delegated
+              // change.rtAmountInput listener bound once in mounted().
             })
         },
+        /**
+         * Enables Submit/Draft when day i already has evidence (or needs none),
+         * disables them otherwise. Used by addDetail() so adding a row no longer
+         * strands the buttons in the disabled state after a Step 1 upload.
+         */
+        refreshSubmitButtonsFor(i) {
+            var entry = this.reimburses[i];
+            var hasEvidence = !!entry && (
+                (entry.dayFiles || []).length > 0
+                || (entry.existingFiles || []).length > 0
+                || this.isExpenseLocked(entry)
+            );
+            if (hasEvidence) {
+                rtEnableTravelSubmitButtons();
+                return;
+            }
+            $("#action_button").prop("disabled", true);
+            $("#action_button_draft").prop("disabled", true);
+            $("#action_button_item").prop("disabled", true);
+            $(".warning-upload").show();
+        },
+        /**
+         * Gives the newest (last) Expense Detail row the first still-General
+         * file, so uploading files first and adding rows afterwards ends up
+         * tagged exactly like adding rows first and uploading afterwards.
+         */
+        autoTagFirstUntaggedFile(i) {
+            var entry = this.reimburses[i];
+            if (!entry || !entry.details || !entry.details.length) {
+                return;
+            }
+            var newRowTag = String(entry.details.length - 1);
+            var pool = (entry.existingFiles || []).concat(entry.dayFiles || []);
+            var alreadyTaken = pool.some(function (f) { return String(f.rowTag) === newRowTag; });
+            if (alreadyTaken) {
+                return;
+            }
+            var free = pool.filter(function (f) { return !f.rowTag; })[0];
+            if (!free) {
+                return;
+            }
+            free.rowTag = newRowTag;
+            rtSetDayHiddenTag(free.uid, free.rowTag);
+        },
         calculateTotal(i,a) {
-            subtotal = 0
-            self = this
-            currency = this.reimburses[i].details[a].currency
-            amount = this.reimburses[i].details[a].amount
-            id = this.reimburses[i].details[a].cost_type
-            paymentType = this.reimburses[i].details[a].payment_type
-
+            var self = this;
             try {
-                tax = self.types.filter(a => a.id == id)[0].tax
-                const idrVal = roundIdrForPayment(this.getRate(currency, amount), paymentType)
-                this.reimburses[i].details[a].idr_rate = formatTravelIdrMoney(idrVal, paymentType)
-                this.reimburses[i].details[a].tax = formatTravelIdrMoney(idrVal * tax / 100, paymentType)
+                var currency = this.reimburses[i].details[a].currency
+                var amount = this.reimburses[i].details[a].amount
+                var id = this.reimburses[i].details[a].cost_type
+                var paymentType = this.reimburses[i].details[a].payment_type
+
+                // IDR Rate/Pph23 for THIS row must not depend on Trip Type being
+                // picked yet -- it used to be computed only after
+                // `allowance.toLocaleString(...)` below, and allowance
+                // (trip_allowance) is null until a Trip Type is selected, so that
+                // line threw a TypeError that the catch block silently swallowed,
+                // leaving IDR Rate/Pph23 permanently blank whenever a row's
+                // Amount was filled in before its Trip Type. Compute these first,
+                // unconditionally.
+                var typeMatch = self.types.filter(t => t.id == id)[0]
+                var tax = typeMatch ? typeMatch.tax : 0
+                var idrVal = roundIdrForPayment(this.getRate(currency, amount), paymentType)
+                this.reimburses[i].details[a].idr_rate = this.formatIdrForPayment(idrVal, paymentType)
+                this.reimburses[i].details[a].tax = this.formatIdrForPayment(idrVal * tax / 100, paymentType)
+                warnLargeTravelAmount('reimburse-' + i + '-' + a, idrVal, paymentType)
+
+                // Total: sum of every row's IDR Rate plus this day's allowance --
+                // allowance can still be null/empty here (Trip Type not chosen
+                // yet), so treat it as 0 via parseTravelMoney() instead of doing
+                // arithmetic directly on null.
+                var subtotal = 0
+                var hasBdc = (this.reimburses[i].details || []).some(function (d) {
+                    return isBdcPayment(d.payment_type);
+                });
                 this.reimburses[i].details.forEach(element => {
                     subtotal += parseTravelMoney(element.idr_rate)
                 });
+                var allowance = parseTravelMoney(self.reimburses[i].trip_allowance)
+                var total = +subtotal + +allowance
+                this.reimburses[i].total = formatTravelDayTotal(total, hasBdc)
             } catch (error) {
-                
+                console.error('[calculateTotal] failed for day ' + i + ' row ' + a, error)
             }
-      
-
-            // allowance_currency = self.trip_types.filter(a => a.id == self.reimburses[i].trip)[0].currency
-
-            // allowance = self.getRate(allowance_currency,self.reimburses[i].trip_allowance.replaceAll(".",""))
-
-            // subtotal += allowance
-            // this.reimburses[i].total = subtotal.toLocaleString('de-DE')
+   
+            
         },        
         removeDetail(i,a) {
+            
             this.reimburses[i].details.splice(a,1)
+            this.calculateTotal(i,0)
         },
         changeCost(i,a) {
             id = this.reimburses[i].details[a].cost_type
             self = this
-            // alert(self.trip_types.filter(a => a.id == id)[0].allowance)
             this.reimburses[i].details[a].code = self.types.filter(a => a.id == id)[0].type
             this.calculateTotal(i,a)
+        },
+        /** A blank "Form Hari" entry pre-filled with a date -- used for each day generated from the date range. */
+        buildBlankDayEntry(dateStr, expanded) {
+            return {
+                // No travel_id yet: updateAllItems creates this day on save.
+                travel_id: 0,
+                trip: null,
+                hotel_condition: null,
+                trip_allowance: null,
+                travel_time: null,
+                start_time: null,
+                end_time: null,
+                date: dateStr || null,
+                collapsed: !expanded,
+                dayFiles: [],
+                existingFiles: [],
+                referenceInvoice: '',
+                referDay: null,
+                allowanceOnly: false,
+                uploadType: 'invoice',
+                sameTripRef: null,
+                referenceFeedback: { message: '', color: '' },
+                ocrStatus: null,
+                ocrSummary: null,
+                ocrEditing: false,
+                messRelation: null,
+                details: [
+                    {
+                        cost_type: null,
+                        destination: null,
+                        currency: 'IDR',
+                        amount: null,
+                        tax: null,
+                        idr_rate: null,
+                        code: null,
+                    }
+                ],
+                total: 0,
+            };
+        },
+        /**
+         * True if this "Form Hari" entry has anything a user would be upset
+         * to lose -- an uploaded file, a picked Trip Type, a typed reference
+         * invoice, or any expense-detail row with a cost type/destination/
+         * amount filled in. Purpose isn't checked here (it has no v-model,
+         * see the plain <input> in the template -- Vue doesn't track it
+         * reactively), but the fields checked cover every case that matters
+         * in practice: nobody fills expense rows without first picking a
+         * Trip Type or uploading evidence.
+         */
+        dayHasData(entry) {
+            if (entry.dayFiles && entry.dayFiles.length > 0) {
+                return true;
+            }
+            if (entry.sameTripRef) {
+                return true;
+            }
+            if (entry.allowanceOnly) {
+                return true;
+            }
+            if (entry.referDay !== null && entry.referDay !== undefined) {
+                return true;
+            }
+            if (entry.referenceInvoice && String(entry.referenceInvoice).trim() !== '') {
+                return true;
+            }
+            if (entry.trip !== null && entry.trip !== undefined && String(entry.trip).trim() !== '') {
+                return true;
+            }
+            var details = entry.details || [];
+            for (var d = 0; d < details.length; d++) {
+                var det = details[d] || {};
+                if (det.cost_type || (det.destination && String(det.destination).trim() !== '') || (det.amount !== null && det.amount !== undefined && String(det.amount).trim() !== '')) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        /**
+         * Date range (Step 0, above the day cards) -> one "Form Hari N" card
+         * per calendar day in the range, each with its own full Step 1/2/3
+         * (upload evidence, trip type, expense details) -- replacing manual
+         * one-at-a-time "Add New Item" clicks. Regenerating replaces
+         * `reimburses` entirely, so re-running it after already filling some
+         * days in loses that data -- this used to happen silently; now it
+         * asks for confirmation first whenever any existing day actually has
+         * something in it (see dayHasData()), instead of only in a code
+         * comment nobody using the form ever sees.
+         */
+        regenerateDaysFromRange() {
+            if (!this.rangeStart || !this.rangeEnd) {
+                rtAlertModal('Please fill in the start date and end date first.');
+                return;
+            }
+            var start = new Date(this.rangeStart + 'T00:00:00');
+            var end = new Date(this.rangeEnd + 'T00:00:00');
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                rtAlertModal('Invalid date.');
+                return;
+            }
+            if (end < start) {
+                rtAlertModal('The end date must be the same as or after the start date.');
+                return;
+            }
+
+            var days = [];
+            var cursor = new Date(start);
+            while (cursor <= end) {
+                var mm = String(cursor.getMonth() + 1).padStart(2, '0');
+                var dd = String(cursor.getDate()).padStart(2, '0');
+                days.push(cursor.getFullYear() + '-' + mm + '-' + dd);
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            if (days.length > 15) {
+                rtAlertModal('A maximum of 15 days can be generated at once in one submission.');
+                return;
+            }
+
+            var vm = this;
+            var generate = function () {
+                vm.activeDay = 0;
+                vm.reimburses = days.map(function (d, idx) {
+                    return vm.buildBlankDayEntry(d, idx === 0);
+                });
+
+                // amount-input already has @change="calculateTotal(i,a)" bound in the
+                // template itself -- only the maskMoney plugin needs (re)binding here.
+                vm.$nextTick(function () {
+                    vm.initSelectForm();
+                });
+            };
+            if (this.reimburses.some(this.dayHasData)) {
+                rtModal({
+                    title: 'Replace Day Forms?',
+                    message: 'Day forms that are already filled in (proof/expense details) will be LOST and replaced with empty cards for the new date range. Continue?',
+                    confirmText: 'Yes, Continue', cancelText: 'Cancel', onYes: generate
+                });
+                return;
+            }
+            generate();
+        },
+        /**
+         * Deletes one "Form Hari" (e.g. a wrongly-dated card). The hidden file
+         * inputs and their names are keyed by day index (see
+         * rtAddDayHiddenFile()), so they are re-numbered for every later day
+         * to keep reimburse[i][...] contiguous; refer_day pointers follow.
+         */
+        removeDay(i) {
+            if (this.reimburses.length <= 1) {
+                return;
+            }
+            var vm = this;
+            var entry = this.reimburses[i];
+            var label = 'Day ' + (i + 1) + ' form' + (entry.date ? ' (' + entry.date + ')' : '');
+            rtModal({
+                title: 'Delete Day Form?',
+                message: 'Delete ' + label + '?' + (this.dayHasData(entry) ? ' The data already entered in this form will be lost.' : ''),
+                confirmText: 'Yes, Delete', cancelText: 'Cancel',
+                onYes: function () { vm.doRemoveDay(i); }
+            });
+        },
+        doRemoveDay(i) {
+            var entry = this.reimburses[i];
+            if (!entry) {
+                return;
+            }
+            (entry.dayFiles || []).forEach(function (f) {
+                if (f.objectUrl) {
+                    URL.revokeObjectURL(f.objectUrl);
+                }
+                rtRemoveDayHiddenFile(f.uid);
+            });
+            $('#rt-day-hidden-' + i).remove();
+
+            // Re-number hidden inputs of every later day: j -> j-1.
+            for (var j = i + 1; j < this.reimburses.length; j++) {
+                var $c = $('#rt-day-hidden-' + j);
+                $c.attr('id', 'rt-day-hidden-' + (j - 1));
+                $c.find('.rt-day-hidden-file').attr('name', 'reimburse[' + (j - 1) + '][files][]');
+                $c.find('.rt-day-hidden-tag').attr('name', 'reimburse[' + (j - 1) + '][file_row_tags][]');
+                $c.find('.rt-day-hidden-type').attr('name', 'reimburse[' + (j - 1) + '][file_types][]');
+            }
+
+            this.reimburses.splice(i, 1);
+            if (this.activeDay > i || this.activeDay >= this.reimburses.length) {
+                this.activeDay = Math.max(0, Math.min(this.activeDay - (this.activeDay > i ? 1 : 0), this.reimburses.length - 1));
+            }
+            if (this.reimburses[this.activeDay]) {
+                this.reimburses[this.activeDay].collapsed = false;
+            }
+
+            // Days that referred to the deleted day lose their refer; later sources shift down by one.
+            var vm = this;
+            this.reimburses.forEach(function (r) {
+                if (r.referDay === null || r.referDay === undefined) {
+                    return;
+                }
+                if (r.referDay === i) {
+                    vm.$set(r, 'referDay', null);
+                } else if (r.referDay > i) {
+                    vm.$set(r, 'referDay', r.referDay - 1);
+                }
+            });
+            this.pruneBrokenRefers();
+            this.recomputeLocalInvoiceDuplicates();
+            this.$nextTick(function () {
+            });
+        },
+        selectDay(i) {
+            this.activeDay = i;
+            if (this.reimburses[i]) {
+                this.reimburses[i].collapsed = false;
+            }
+        },
+        /** "Add New Item": a blank day (date picked in Step 2), opened as the active tab. */
+        addNewDay() {
+            if (this.reimburses.length >= 15) {
+                alert('A maximum of 15 days is allowed in one submission.');
+                return;
+            }
+            var vm = this;
+            this.reimburses.push(this.buildBlankDayEntry(null, true));
+            this.activeDay = this.reimburses.length - 1;
+            this.$nextTick(function () {
+                vm.initSelectForm();
+            });
+        },
+        toggleDayCollapse(i) {
+            this.reimburses[i].collapsed = !this.reimburses[i].collapsed;
+        },
+        /**
+         * Step 1: Upload Evidence -- MULTIPLE files per day (Sep 2026 multi-file
+         * redesign). Each newly picked/dropped file is APPENDED to dayFiles
+         * (not replacing the previous one), read via readAsDataURL for the
+         * chip thumbnail + its own OCR check. Each file can optionally be
+         * tagged to a specific Expense Detail row (see the row-tag <select>
+         * in the template / onFileRowTagChange()) -- untagged files stay
+         * "day-level", same as the old single-shared-file behaviour.
+         */
+        addDayFiles(i, fileList) {
+            if (!fileList || !fileList.length) {
+                return;
+            }
+            var vm = this;
+            var entry = vm.reimburses[i];
+            // FileList is live -- the input gets reset after `change`, so copy it first.
+            var files = Array.prototype.slice.call(fileList);
+            var addAll = function () {
+                files.forEach(function (file) {
+                    vm.addSingleDayFile(i, file);
+                });
+            };
+            // Uploading its own evidence replaces any refer / allowance-only state of this day.
+            var message = null;
+            var clear = null;
+            if (entry.sameTripRef) {
+                message = 'The reference to the invoice of ' + entry.sameTripRef.owner_name + ' will be cancelled and this day will use its own proof. Continue?';
+                clear = function () { vm.clearSameTripRef(i); };
+            } else if (entry.allowanceOnly) {
+                message = 'The "Travel Allowance only" option will be turned off because you are uploading proof. Continue?';
+                clear = function () { vm.$set(entry, 'allowanceOnly', false); };
+            } else if (entry.referDay !== null && entry.referDay !== undefined) {
+                message = 'The refer to Day ' + (entry.referDay + 1) + ' will be cancelled and Day ' + (i + 1) + ' will use its own invoice. Continue?';
+                clear = function () { vm.clearReferDay(i); };
+            }
+            if (message) {
+                rtModal({
+                    title: 'Use Your Own Proof?',
+                    message: message,
+                    confirmText: 'Yes, Continue', cancelText: 'Cancel',
+                    onYes: function () { clear(); addAll(); }
+                });
+                return;
+            }
+            addAll();
+        },
+        addSingleDayFile(i, file) {
+            if (!file) {
+                return;
+            }
+            var vm = this;
+            var entry = vm.reimburses[i];
+            var isImage = file.type && file.type.indexOf('image/') === 0;
+            var uid = 'day_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+            // The actual <input type="file"> submitted for this file -- created
+            // once per file so several can coexist (see rtAddDayHiddenFile()).
+            // New files start as Invoice / Receipt and are re-marked per file on
+            // the chip itself (see create.blade.php).
+            var isProof = false;
+            rtAddDayHiddenFile(i, uid, file, 'invoice');
+
+            var pushChip = function (dataUrl) {
+                var objectUrl = (!isImage) ? URL.createObjectURL(file) : null;
+                var chip = {
+                    uid: uid,
+                    name: file.name,
+                    dataUrl: dataUrl,
+                    objectUrl: objectUrl,
+                    // Drives the gallery modal's <iframe> vs <img> choice; a PDF
+                    // rendered into an <img> would just show as broken.
+                    isPdf: !isImage,
+                    rowTag: '',
+                    docType: isProof ? 'proof' : 'invoice',
+                    // Held so re-marking a Supporting Proof back to Invoice /
+                    // Receipt can re-run OCR without a re-upload.
+                    rawFile: file,
+                    ocrStatus: isProof ? 'proof' : 'pending',
+                    ocrMessage: '',
+                    // Populated per-file in rtVerifyDayFileEvidence() -- present
+                    // here (even blank) so Vue 2's reactivity picks up later
+                    // assignments to them (a plain object's properties must
+                    // exist at push() time for the array to observe them).
+                    ocrDate: '',
+                    ocrMerchant: '',
+                    ocrAmount: '',
+                    ocrCurrency: '',
+                    ocrInvoice: '',
+                    // Per-file OCR Result panel edit toggle (Sep 2026 feedback:
+                    // each file gets its own editable panel, not one shared one
+                    // that gets replaced by whichever file was added last).
+                    ocrEditing: false
+                };
+                // Auto-tag to the next row that has no file yet, so the user
+                // never has to touch the dropdown (they still can, to override).
+                chip.rowTag = vm.nextUntaggedRowTag(entry);
+                entry.dayFiles.push(chip);
+                rtSetDayHiddenTag(chip.uid, chip.rowTag);
+                if (isProof) {
+                    rtEnableTravelSubmitButtons();
+                } else {
+                    rtVerifyDayFileEvidence(vm, i, chip, file);
+                }
+            };
+
+            if (isImage) {
+                var reader = new FileReader();
+                reader.onload = function (e) { pushChip(e.target.result); };
+                reader.readAsDataURL(file);
+            } else {
+                pushChip(null);
+            }
+        },
+        /**
+         * Auto-tag for a freshly added file (Sep 2026 feedback: "user tidak mau
+         * manual set tag nya, maunya otomatis"): returns the index of the first
+         * Expense Detail row that no other file is tagged to yet, so file 1 ->
+         * Baris 1, file 2 -> Baris 2, and so on without anyone touching the
+         * dropdown. Returns '' (General/all rows, the old behaviour) when every
+         * row already has its own file -- we never create rows here, so extra
+         * files simply stay day-level. The dropdown still works for overriding.
+         */
+        nextUntaggedRowTag(entry) {
+            var rows = (entry.details || []).length;
+            if (!rows) {
+                return '';
+            }
+            var taken = {};
+            (entry.existingFiles || []).concat(entry.dayFiles || []).forEach(function (f) {
+                if (f.rowTag !== '' && f.rowTag !== null && f.rowTag !== undefined) {
+                    taken[String(f.rowTag)] = true;
+                }
+            });
+            for (var r = 0; r < rows; r++) {
+                if (!taken[String(r)]) {
+                    return String(r);
+                }
+            }
+            return '';
+        },
+        /** 1.A: which Expense Detail row (if any) this file belongs to -- kept in sync onto the actual submitted hidden input, since Vue can't name a real file input's sibling declaratively here. */
+        onFileRowTagChange(i, chip) {
+            rtSetDayHiddenTag(chip.uid, chip.rowTag);
+        },
+        /**
+         * Per-file Invoice-vs-Proof change. Marking a file as Supporting Proof
+         * drops it out of the OCR/duplicate checks and clears its stale
+         * reading; marking it back re-runs OCR on the held File. Mirrors
+         * create.blade.php.
+         */
+        onFileDocTypeChange(i, chip) {
+            var isProof = chip.docType === 'proof';
+            rtSetDayHiddenType(chip.uid, isProof ? 'proof' : 'invoice');
+
+            if (isProof) {
+                chip.ocrStatus = 'proof';
+                chip.ocrMessage = '';
+                chip.ocrDate = '';
+                chip.ocrMerchant = '';
+                chip.ocrAmount = '';
+                chip.ocrCurrency = '';
+                chip.ocrInvoice = '';
+                chip.ocrEditing = false;
+                this.recomputeLocalInvoiceDuplicates();
+                rtEnableTravelSubmitButtons();
+                return;
+            }
+
+            if (chip.rawFile) {
+                rtVerifyDayFileEvidence(this, i, chip, chip.rawFile);
+                return;
+            }
+
+            chip.ocrStatus = 'unavailable';
+            rtEnableTravelSubmitButtons();
+        },
+        /**
+         * Opens the webcam in #modalPhoto and adds the captured frame to day i
+         * as a normal evidence file.
+         *
+         * Mirrors Entertainment's camera, which users already know, but routes
+         * the result through addSingleDayFile() rather than stuffing a hidden
+         * <input type=file> like the old table UI did -- that input and its
+         * #preview_<idx> target no longer exist in this form.
+         *
+         * The stream is always stopped on the way out (capture, Cancel, or the
+         * modal being dismissed any other way), otherwise the camera light
+         * stays on and the device stays locked for other apps.
+         */
+        openDayCamera(i) {
+            var vm = this;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                rtAlertModal('This browser cannot access the camera. Please use "Browse File" instead.', 'Camera Unavailable');
+                return;
+            }
+
+            var $modal = $('#modalPhoto');
+            var video = document.getElementById('videoElement');
+            var activeStream = null;
+
+            var stopCamera = function () {
+                if (activeStream) {
+                    activeStream.getTracks().forEach(function (t) { t.stop(); });
+                    activeStream = null;
+                }
+                if (video) {
+                    video.srcObject = null;
+                }
+            };
+
+            // Runs for every close path, including the X and the backdrop.
+            $modal.off('hidden.bs.modal.rtcam').on('hidden.bs.modal.rtcam', function () {
+                $('#captureButton').off('click.rtcam');
+                stopCamera();
+            });
+
+            navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+            }).then(function (stream) {
+                activeStream = stream;
+                video.srcObject = stream;
+                $modal.modal('show');
+
+                $('#captureButton').off('click.rtcam').on('click.rtcam', function () {
+                    var w = video.videoWidth || 1280;
+                    var h = video.videoHeight || 720;
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+
+                    canvas.toBlob(function (blob) {
+                        if (!blob) {
+                            return;
+                        }
+                        // A unique name keeps each shot distinct in the chip
+                        // list and in the duplicate-file check.
+                        var name = 'camera-' + Date.now() + '.jpg';
+                        var photo = new File([blob], name, { type: 'image/jpeg' });
+                        vm.addSingleDayFile(i, photo);
+                        rtEnableTravelSubmitButtons();
+                    }, 'image/jpeg', 0.85);
+
+                    $modal.modal('hide');
+                });
+            }).catch(function () {
+                // Permission denied, no camera, or a non-HTTPS origin (browsers
+                // only expose getUserMedia on https:// or localhost).
+                rtAlertModal('The camera could not be opened. Check the browser\'s camera permission, or use "Browse File" instead.', 'Camera Unavailable');
+            });
+        },
+        onDayFileInputChange(i, event) {
+            this.addDayFiles(i, event.target.files);
+            // Allow picking the exact same file(s) again later (e.g. after removing one).
+            event.target.value = '';
+        },
+        /** Drag-and-drop doesn't touch the real <input type="file">, so files are read straight from the drop event's own FileList. */
+        onDayFileDrop(i, event) {
+            var files = event.dataTransfer && event.dataTransfer.files;
+            this.addDayFiles(i, files);
+        },
+        removeDayFile(i, fileIndex) {
+            var entry = this.reimburses[i];
+            var removed = entry.dayFiles[fileIndex];
+            if (removed) {
+                if (removed.objectUrl) {
+                    URL.revokeObjectURL(removed.objectUrl);
+                }
+                rtRemoveDayHiddenFile(removed.uid);
+            }
+            entry.dayFiles.splice(fileIndex, 1);
+            this.pruneBrokenRefers();
+            if (entry.dayFiles.length === 0) {
+                // OCR Result panels are per-file now (see readOcrFiles()) and
+                // simply disappear along with their file automatically; only
+                // messRelation (Stay(MESS) auto-detection) is day-level state
+                // that still needs clearing when the last file is removed.
+                this.$set(entry, 'messRelation', null);
+            }
+            // Removing a file can resolve a same-invoice conflict with a
+            // sibling file elsewhere in the submission -- let that sibling's
+            // 'duplicate' flag clear if so.
+            this.recomputeLocalInvoiceDuplicates();
+        },
+        /** Deletes an already-stored proof chip (edit mode) -- its keep id
+            disappears with the chip, so updateAllItems drops that attachment;
+            brand-new uploads on the same day are untouched. */
+        removeExistingFile(i, fileIndex) {
+            var entry = this.reimburses[i];
+            if (!entry || !entry.existingFiles || !entry.existingFiles[fileIndex]) {
+                return;
+            }
+            entry.existingFiles.splice(fileIndex, 1);
+            this.pruneBrokenRefers();
+            this.recomputeLocalInvoiceDuplicates();
+        },
+        /** Opens one file chip in a new tab -- image via its data URL, PDF via a blob object URL (createObjectURL), so both are actually viewable instead of just alert()-ing the file name. */
+        previewFileChip(chip) {
+            if (!chip) {
+                return;
+            }
+            // Already-stored proof (edit mode): open the stored file directly.
+            if (chip.existingUrl) {
+                window.open(chip.existingUrl, '_blank');
+                return;
+            }
+            if (chip.dataUrl) {
+                // Convert to a blob: URL first -- window.open() on a raw
+                // data: URI opens about:blank in modern browsers instead of
+                // the image (see dataUrlToBlob()'s comment above).
+                var url = URL.createObjectURL(dataUrlToBlob(chip.dataUrl));
+                window.open(url, '_blank');
+                // Give the new tab a full minute to actually load the image
+                // before freeing the blob -- revoking too early can blank out
+                // a tab that hasn't finished rendering yet.
+                setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+            } else if (chip.objectUrl) {
+                window.open(chip.objectUrl, '_blank');
+            } else {
+                alert(chip.name);
+            }
+        },
+        /** Opens #rtOcrDetailModal showing this ONE file's full OCR reading, read-only -- lets every uploaded file's result actually be seen instead of only the day's latest file (which is all the single editable OCR Result panel on the right can show, since only one no_invoice/merchant_name is ever submitted per day). */
+        showOcrDetailModal(chip) {
+            this.ocrDetailModalChip = chip;
+            $('#rtOcrDetailModal').modal('show');
+        },
+        /** Every file for this day that actually got an OCR reading -- what the redesigned per-file OCR Result panel (Sep 2026 feedback) loops over, and what "OCR will read" hint's v-else falls back to when this is empty. */
+        readOcrFiles(data) {
+            return (data.dayFiles || []).filter(function (f) { return f.ocrStatus === 'read'; });
+        },
+        /**
+         * Flags every file, across the WHOLE submission (every day, not just
+         * one), that shares its No. Invoice/Receipt with another file also in
+         * this submission -- e.g. the same physical receipt uploaded once as
+         * a PNG and again as a PDF (Sep 2026 feedback: "upload invoice yang
+         * sama... seharusnya gabisa"). None of the other duplicate checks
+         * catch this: they all compare against rows/files already saved in
+         * the database, and neither file here has been saved yet. Reuses the
+         * existing 'duplicate' status/badge -- visual warning only, never
+         * blocks Submit by itself (same fail-open pattern as every other OCR
+         * check); the real block is
+         * TravelReimbursementController::guardAgainstDuplicateInvoiceWithinSubmission()
+         * at save time. Re-run after every OCR read, every manual edit of a
+         * file's Invoice field, and every file removal, so a resolved
+         * conflict (file removed/corrected) reverts back to 'read' instead of
+         * staying stuck on 'duplicate'.
+         */
+        recomputeLocalInvoiceDuplicates() {
+            var groups = {};
+            this.reimburses.forEach(function (day) {
+                (day.dayFiles || []).forEach(function (f) {
+                    if (f.ocrStatus !== 'read' && f.ocrStatus !== 'duplicate') {
+                        return;
+                    }
+                    var inv = String(f.ocrInvoice || '').trim().toUpperCase();
+                    if (!inv) {
+                        return;
+                    }
+                    if (!groups[inv]) {
+                        groups[inv] = [];
+                    }
+                    groups[inv].push(f);
+                });
+            });
+            Object.keys(groups).forEach(function (inv) {
+                var group = groups[inv];
+                if (group.length > 1) {
+                    group.forEach(function (f) {
+                        f.ocrStatus = 'duplicate';
+                        f.ocrMessage = 'This invoice number is the same as ' + (group.length - 1) + ' other file(s) in this submission.';
+                    });
+                } else if (group[0].ocrStatus === 'duplicate') {
+                    // Was flagged, no longer conflicts with anything (sibling
+                    // removed/edited) -- revert to a normal "read" file.
+                    group[0].ocrStatus = 'read';
+                    group[0].ocrMessage = group[0].ocrInvoice ? ('No. Invoice: ' + group[0].ocrInvoice) : '';
+                }
+            });
+        },
+        /**
+         * Which ONE file's OCR reading becomes the day's own no_invoice/
+         * merchant_name/etc (the hidden reimburse[i][...] inputs actually
+         * submitted to the server -- see TravelReimbursementController::
+         * store(), which still only has one such field per day). Prefers a
+         * file explicitly left untagged ("General (all rows)", i.e. meant to
+         * apply to the whole day) over one tagged to a specific row, then
+         * falls back to the first file read at all. This no longer depends
+         * on upload order (previously: whichever was added last), so it
+         * doesn't change to a different file's data just because another
+         * file got uploaded afterward.
+         */
+        primaryOcrFile(data) {
+            var read = this.readOcrFiles(data);
+            if (!read.length) {
+                return null;
+            }
+            return read.filter(function (f) { return !f.rowTag; })[0] || read[0];
+        },
+        /** Step 3 "Preview" button for a specific Expense Detail row: shows the file tagged to THIS row, falling back to any untagged ("Umum") day-level file -- preserving the old single-shared-file behaviour when nothing has been tagged yet. */
+        /**
+         * Which Step 1 file (if any) this Expense Detail row's Preview button
+         * actually links to -- a row tagged to a specific file wins, else the
+         * first untagged ("Umum") file, else (once at least one file exists)
+         * the most recently added one, matching previewRowFile()'s own
+         * fallback order exactly. Returns null only when there are no files
+         * at all yet.
+         */
+        /** Step 1 files for a day, already-stored proof (edit mode) first then
+            new uploads -- matches the numbering shown on the chips, and keeps a
+            saved file's number stable when another file is uploaded. */
+        dayFilePool(entry) {
+            return (entry.existingFiles || []).concat(entry.dayFiles || []);
+        },
+        matchedFileForRow(i, a) {
+            return this.matchedFilesForRow(i, a)[0] || null;
+        },
+        /**
+         * EVERY file belonging to this Expense Detail row, not just the first
+         * one (Oct 2026 feedback: "di preview tetap 1 gambar aja yang bisa
+         * dicek?"). A row can now carry several evidence files -- e.g. the
+         * invoice/receipt plus a supporting email screenshot -- and the old
+         * single-file lookup silently hid every one after the first.
+         *
+         * Returns the files tagged to THIS row PLUS the untagged ones, since
+         * "General (all rows)" means exactly that -- it covers every row, so it
+         * belongs in the row's preview alongside the row's own files. Returning
+         * only the tagged ones hid day-level evidence from Preview: on the edit
+         * form a saved day-level file comes back as rowTag '' while a saved
+         * row-level file comes back as '0', so a row holding one of each showed
+         * just a single file even though the chip list showed two (Oct 2026
+         * bug report).
+         *
+         * Order follows the chip list (saved files first, then new uploads), so
+         * the Preview opens them in the same order they are displayed. Falls
+         * back to the most recently added file when a row matches nothing at
+         * all, preserving the pre-tagging behaviour.
+         */
+        matchedFilesForRow(i, a) {
+            var entry = this.reimburses[i];
+            var pool = this.dayFilePool(entry) || [];
+            if (!pool.length) {
+                return [];
+            }
+            var tag = String(a);
+            var matched = pool.filter(function (f) {
+                return f.rowTag === tag || !f.rowTag;
+            });
+            return matched.length ? matched : [pool[pool.length - 1]];
+        },
+        /** How many files this row's Preview will open -- drives the "+N" hint when a row carries more than one evidence file. */
+        matchedFileCountForRow(i, a) {
+            return this.matchedFilesForRow(i, a).length;
+        },
+        /** Tooltip for the Preview button, naming every file it opens so it's clear before clicking. */
+        previewRowTitle(i, a) {
+            var matched = this.matchedFilesForRow(i, a);
+            if (!matched.length) {
+                return 'No proof linked yet';
+            }
+            if (matched.length === 1) {
+                return 'View proof: ' + matched[0].name;
+            }
+            return 'View all ' + matched.length + ' evidence files of this row: '
+                + matched.map(function (f) { return f.name; }).join(', ');
+        },
+        /** 1-based position of matchedFileForRow() within Step 1's file list -- shown on the Preview button (Sep 2026 feedback: "preview nomor 1 nge-link ke file nomor 1 yang diupload") so it's visible at a glance which numbered file a row's Preview actually opens, instead of an unlabelled eye icon. */
+        matchedFileNumberForRow(i, a) {
+            var entry = this.reimburses[i];
+            var matched = this.matchedFileForRow(i, a);
+            if (!matched) {
+                return null;
+            }
+            return this.dayFilePool(entry).indexOf(matched) + 1;
+        },
+        /**
+         * Shows every file linked to this row in one gallery modal.
+         *
+         * This used to call window.open() once per file. Only the FIRST of
+         * those runs under the click's own user activation -- the staggered
+         * ones lose it, so popup blockers allowed some tabs and silently
+         * dropped others: "kadang kebuka 1 proof doang kadang kebuka semua"
+         * (Oct 2026). A modal renders in-page, so it can never be blocked and
+         * every file of the row is always reachable, in the same order as the
+         * chip list. A single file opens the same modal -- one predictable
+         * behaviour rather than two.
+         */
+        previewRowFile(i, a) {
+            var matched = this.matchedFilesForRow(i, a);
+            if (!matched.length) {
+                return;
+            }
+            this.rowPreviewFiles = matched;
+            this.rowPreviewIndex = 0;
+            $('#rtRowPreviewModal').modal('show');
+        },
+        /** Gallery navigation; wraps around so paging never dead-ends. */
+        rowPreviewGo(step) {
+            var total = this.rowPreviewFiles.length;
+            if (!total) {
+                return;
+            }
+            this.rowPreviewIndex = ((this.rowPreviewIndex + step) % total + total) % total;
+        },
+        /** The file currently shown in the gallery modal. */
+        rowPreviewCurrent() {
+            return this.rowPreviewFiles[this.rowPreviewIndex] || null;
+        },
+        /**
+         * Best displayable URL for a chip, whichever shape it has: a saved
+         * attachment (existingUrl), a freshly picked image (dataUrl) or a
+         * freshly picked PDF (objectUrl).
+         */
+        rowPreviewSrc(chip) {
+            if (!chip) {
+                return '';
+            }
+            return chip.existingUrl || chip.dataUrl || chip.objectUrl || '';
+        },
+        /** Opens the currently shown file in its own tab -- a single, user-initiated window.open(), so it is never popup-blocked. */
+        rowPreviewOpenCurrent() {
+            var chip = this.rowPreviewCurrent();
+            if (chip) {
+                this.previewFileChip(chip);
+            }
+        },
+        /**
+         * Drops every refer whose source day no longer has evidence (its file was
+         * removed), cascading through chains (Hari 3 -> 2 -> 1), and tells the user.
+         */
+        pruneBrokenRefers() {
+            var vm = this;
+            var cleared = [];
+            var changed = true;
+            while (changed) {
+                changed = false;
+                vm.reimburses.forEach(function (r, idx) {
+                    if (r.referDay !== null && r.referDay !== undefined && !vm.canReferDay(r.referDay)) {
+                        vm.$set(r, 'referDay', null);
+                        cleared.push(idx + 1);
+                        changed = true;
+                    }
+                });
+            }
+            if (cleared.length) {
+                rtAlertModal('Refer cancelled for Day ' + cleared.join(', ') + ' because its source document no longer exists. Choose a refer again or upload your own invoice.', 'Refer Cancelled');
+            }
+        },
+        /**
+         * Same-trip popup result. Cancel: the uploaded file is discarded, nothing is linked.
+         * Yes, Continue: the file is discarded too (the duplicate invoice must not be
+         * re-attached) and the day is linked to the owner's claim by invoice number --
+         * server-side this goes through resolveReferencedRowInvoice(), expenses stay 0.
+         */
+        offerSameTripReference(i, chip, offer) {
+            var vm = this;
+            var dropChip = function () {
+                var idx = vm.reimburses[i] ? vm.reimburses[i].dayFiles.indexOf(chip) : -1;
+                if (idx > -1) {
+                    vm.removeDayFile(i, idx);
+                }
+            };
+            window.ReimbursementOcrCheck.showSameTripConfirmModal(offer, function () {
+                dropChip();
+                var entry = vm.reimburses[i];
+                if (!entry) {
+                    return;
+                }
+                vm.$set(entry, 'referenceInvoice', offer.no_invoice);
+                vm.$set(entry, 'sameTripRef', { no_invoice: offer.no_invoice, owner_name: offer.owner_name, ticket_number: offer.ticket_number });
+                vm.$set(entry, 'allowanceOnly', false);
+                vm.$set(entry, 'referDay', null);
+                for (var a = 0; a < entry.details.length; a++) {
+                    entry.details[a].amount = '0';
+                    vm.calculateTotal(i, a);
+                }
+                rtEnableTravelSubmitButtons();
+            }, dropChip);
+        },
+        clearSameTripRef(i) {
+            this.$set(this.reimburses[i], 'sameTripRef', null);
+            this.$set(this.reimburses[i], 'referenceInvoice', '');
+        },
+        isExpenseLocked(entry) {
+            return !!entry.allowanceOnly || !!entry.sameTripRef || (entry.referDay !== null && entry.referDay !== undefined);
+        },
+        /** "Hanya Travel Allowance": nothing to upload or expense -- zero the rows and let the form be submitted. */
+        onAllowanceOnlyChange(i) {
+            var entry = this.reimburses[i];
+            if (!entry.allowanceOnly) {
+                return;
+            }
+            for (var a = 0; a < entry.details.length; a++) {
+                entry.details[a].amount = '0';
+                this.calculateTotal(i, a);
+            }
+            rtEnableTravelSubmitButtons();
+        },
+        /** A day can be referred to only if it has its own evidence (or itself refers/references one). */
+        canReferDay(srcIdx) {
+            var src = this.reimburses[srcIdx];
+            if (!src) {
+                return false;
+            }
+            return (src.dayFiles.length + ((src.existingFiles || []).length)) > 0 || src.referDay !== null || $.trim(src.referenceInvoice || '') !== '';
+        },
+        /** Travel-Allowance-only claim for day i, re-using day srcIdx's evidence (no re-upload). */
+        referToDay(i, srcIdx) {
+            var entry = this.reimburses[i];
+            var label = srcIdx === 0 ? 'pertama' : 'sebelumnya';
+            var vm = this;
+            rtModal({
+                title: 'Document Already Used',
+                message: 'This document has already been used.\n\nUse the same document (Day ' + (srcIdx + 1) + ') for the Travel Allowance of Day ' + (i + 1) + '?\n\nNote: the same document cannot be used to claim the same expense more than once, so this day expense amount is set to 0 (' + label + ' day).',
+                confirmText: 'Yes, Continue', cancelText: 'Cancel',
+                onYes: function () {
+                    vm.$set(entry, 'referDay', srcIdx);
+                    for (var a = 0; a < entry.details.length; a++) {
+                        entry.details[a].amount = '0';
+                        vm.calculateTotal(i, a);
+                    }
+                    rtEnableTravelSubmitButtons();
+                }
+            });
+        },
+        clearReferDay(i) {
+            this.$set(this.reimburses[i], 'referDay', null);
+        },
+        checkDayReferenceInvoice(i) {
+            var vm = this;
+            var entry = vm.reimburses[i];
+            var value = $.trim(entry.referenceInvoice || '');
+
+            if (value === '') {
+                vm.$set(entry, 'referenceFeedback', { message: '', color: '' });
+                return;
+            }
+
+            vm.$set(entry, 'referenceFeedback', { message: 'Memeriksa…', color: '#6c757d' });
+
+            $.ajax({
+                url: '/reimbursement/check-evidence-reference',
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    _token: $('meta[name="csrf-token"]').attr('content') || '',
+                    no_invoice: value
+                }
+            }).then(function (res) {
+                res = res || {};
+                if (res.found) {
+                    vm.$set(entry, 'referenceFeedback', { message: res.message || 'Ditemukan.', color: '#1e7e42' });
+                    rtEnableTravelSubmitButtons();
+                } else {
+                    vm.$set(entry, 'referenceFeedback', { message: res.message || 'Not found.', color: '#c0392b' });
+                }
+            }).catch(function () {
+                vm.$set(entry, 'referenceFeedback', { message: 'Unable to check right now.', color: '#c0392b' });
+            });
         }
       },
       watch: {
-       
+
       },
   });
 
+  // No standalone date-only duplicate popup here -- a duplicate is only
+  // flagged when tanggal + No Invoice + Nominal ALL match an existing claim
+  // (business decision, Sep 2026), which is checked per cost-line row via
+  // the OCR badge (see reimbursement-ocr-check.js) and enforced server-side
+  // at save time.
+
 </script>
-<script src="{{ asset('js/reimbursement-travel-tabs.js') }}?v={{ @filemtime(public_path('js/reimbursement-travel-tabs.js')) }}"></script>
 
 @endpush
 @endsection

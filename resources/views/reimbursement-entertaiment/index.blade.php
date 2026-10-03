@@ -28,6 +28,150 @@
         width: 80px !important;
       }
   }
+
+  /* Evidence upload, restyled to match the Travel reimbursement form's
+     dropzone look (Sep 2026 feedback: "tampilan entertainment belum
+     berubah, sesuaikan dengan tampilan travel") -- same visual language,
+     kept inside Entertainment's existing per-row table structure rather
+     than switching to Travel's day-card layout. The actual upload/OCR
+     wiring is unchanged: still public/js/reimbursement-driver-upload.js
+     (bound on .addFile/.addCamera) + reimbursement-ocr-check.js for the
+     badge -- this only adds a drag-and-drop target on top of it.
+     Compact version (Sep 2026 feedback: "buat lebih rapih") -- the dropzone
+     started out full-size like Travel's, but that's disproportionate inside
+     a narrow table cell (lots of empty dashed box + a wordy "Upload" label +
+     the camera button stacked awkwardly below). Here it's a small square
+     icon target with the camera button sitting right beside it instead. */
+  /* Per-row upload/camera buttons are hidden: uploading happens once, in
+     Step 1 (Sep 2026 feedback: "satu aja upload nya jadi yang diatas aja").
+     Only the BUTTONS go -- the row's hidden <input type="file"> stays in the
+     DOM and is still what Step 1's dropzone fills via
+     DriverUpload.processAndAppendFile(), so removing it would break uploading
+     altogether. The Evidence column header is hidden too (see .et-col-evidence)
+     since nothing visible is left in it. */
+  .et-evidence-cell { display: none; }
+  /* The Evidence column itself now holds nothing visible -- only the hidden
+     file inputs Step 1 writes into -- so the column is collapsed rather than
+     left as a confusing empty gap. The inputs stay in the DOM and are still
+     submitted normally; display:none on a cell does not stop that. */
+  .et-col-evidence, td.file-proof { display: none; }
+  .et-dropzone {
+    width: 40px; height: 40px; border: 2px dashed #cfd8e3; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: border-color .15s, background .15s; flex: none;
+  }
+  .et-dropzone:hover, .et-dropzone.is-dragover { border-color: #28a745; background: #f4fff7; }
+  .et-dropzone i { font-size: 15px; color: #8a94a6; }
+  .et-camera-btn { width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center; flex: none; }
+  /* Preview: the shared renderFilePreview()/reimbursement-ocr-check.js badge
+     markup (from public/js/reimbursement-driver-upload.js, also used by
+     Driver reimbursement) renders a bulky bordered box with a solid red
+     "x" BUTTON and an OCR badge that can overflow this narrow column (Sep
+     2026 feedback: "dibikin rapih jangan kayak gitu"). Overridden here,
+     scoped to .et-preview only so Driver's own look is untouched, to match
+     Travel's compact preview-card pattern instead: a small round "x"
+     overlaid on the corner of the thumbnail (see
+     reimbursement-travel-upload.js's .preview-card-remove) rather than a
+     separate filled button sitting beside it, and the OCR badge/thumbnail
+     both pinned to the same 96px column width so nothing pokes out into
+     the Remark/Action columns next to it. */
+  .et-preview { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 96px; }
+  .et-preview .pending-attachment-item, .et-preview .preview-card {
+    position: relative; width: 64px; margin: 0 !important; border: none !important; padding: 0 !important;
+  }
+  .et-preview .pending-attachment-item > div { display: block !important; }
+  .et-preview .preview-thumbnail { width: 64px !important; height: 64px !important; max-width: 64px !important; max-height: 64px !important; object-fit: cover; }
+  .et-preview .remove-pending-attachment {
+    position: absolute !important; top: -6px !important; right: -6px !important;
+    width: 18px !important; height: 18px !important; padding: 0 !important; margin: 0 !important;
+    line-height: 16px !important; font-size: 12px !important; border-radius: 50% !important;
+    background: #fff !important; border: 1px solid #dc3545 !important; color: #dc3545 !important;
+    box-shadow: none !important;
+  }
+  .et-preview .remove-pending-attachment:hover { background: #dc3545 !important; color: #fff !important; }
+  .et-preview .ocr-check-badge { width: 96px !important; max-width: 96px !important; }
+
+  /* Same numbered step badges / section-card look as the Travel reimbursement
+     form (Sep 2026 feedback: "samain designnya kayak di reimbursement
+     travel") -- applied on top of Entertainment's existing single-row-per-
+     expense table instead of switching to Travel's per-day card layout,
+     since the two forms model different things (one line item per guest/
+     attendance here vs. one card per travel day there). Modal body gets a
+     light grey backdrop (matching the page background Travel's cards sit
+     on) so the white .et-section-card panels actually stand out instead of
+     blending into the modal's own white background. */
+  #formModal .modal-content { background: #f4f5f7; }
+  #formModal .modal-header, #formModal .modal-footer { background: #fff; }
+  .et-step-title { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; }
+  .et-step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%; background: #28a745; color: #fff;
+    font-weight: 700; font-size: 13px; flex: none;
+  }
+  .et-step-title h5 { margin: 0; font-weight: 700; }
+  .et-section-card { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 18px 20px; margin-bottom: 20px; }
+
+  /* Step 1: Upload Evidence -- a general dropzone at the top of the form,
+     matching Travel's Step 1 (Sep 2026 feedback: "yang di entertainment
+     form nya samain kayak di travel buat di atas untuk uploadnya"). Each
+     file dropped here becomes its own new row via .addMore, with the file
+     attached to that row's own Evidence cell/OCR check -- the per-row
+     dropzone in the table (see .et-dropzone above) still exists for adding
+     more evidence to an existing row or when rows are added manually first. */
+  .et-tips-trigger { padding: 0; margin-left: auto; color: #c99a1a; font-size: 15px; }
+  .et-tips-trigger:hover { color: #8a6416; }
+  .et-tips-modal-body { background: #fffbea; border: 1px solid #ffe9a8; border-radius: 8px; padding: 14px 16px; font-size: 13px; }
+  .et-top-dropzone {
+    border: 2px dashed #cfd8e3; border-radius: 8px; padding: 22px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .et-top-dropzone:hover, .et-top-dropzone.is-dragover { border-color: #28a745; background: #f4fff7; }
+  .et-top-dropzone i { font-size: 22px; color: #8a94a6; display: block; margin-bottom: 6px; }
+  .et-top-dropzone span { font-size: 12.5px; color: #495057; }
+  .et-top-dropzone small { display: block; font-size: 10.5px; color: #8a94a6; margin-top: 4px; }
+  /* "Take Photo" under the Step 1 dropzone: the per-row camera button still
+     exists in the markup but its whole column is hidden (see .et-col-evidence),
+     so this is the only camera the redesigned form actually shows. */
+  .et-top-camera-btn { margin-top: 10px; width: 100%; }
+  .et-top-evidence-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .et-top-evidence-item {
+    display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d9d9d9;
+    border-radius: 6px; padding: 6px 10px; font-size: 11.5px; max-width: 220px;
+  }
+  /* Delete control on a Step 1 chip. flex:none keeps it at its own size while
+     the text column absorbs the slack, so it always sits inside the chip. */
+  .et-top-evidence-remove {
+    flex: none; width: 20px; height: 20px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; color: #c0392b;
+    font-size: 16px; line-height: 1; cursor: pointer; border-radius: 50%;
+  }
+  .et-top-evidence-remove:hover { background: #fdecea; }
+  .et-top-evidence-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: none; }
+  /* The text column must be allowed to shrink: a flex item defaults to
+     min-width:auto, so a long file name would push the X button past the
+     chip's max-width instead of being ellipsised. */
+  .et-top-evidence-item .et-top-evidence-text { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .et-top-evidence-item .et-top-evidence-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .et-top-evidence-item .et-top-evidence-row { display: block; font-size: 10px; color: #1e7e34; font-weight: 600; }
+  .et-top-evidence-item .et-top-evidence-num { flex: none; font-weight: 700; color: #6c757d; margin-right: 2px; }
+  /* Preview column now shows the file NUMBER(s) attached to that row instead
+     of a thumbnail -- the pictures live in Step 1. */
+  /* The shared uploader still renders a thumbnail card into .et-preview; it is
+     hidden here because this column shows numbers now. It stays in the DOM (it
+     carries the hidden file input and the OCR badge hooks) -- only its visual
+     part is suppressed. */
+  .et-preview .pending-attachment-item { display: none; }
+  .et-preview-num {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    height: 30px; padding: 0 11px; margin: 2px;
+    background: #e8f7ee; color: #1e7e34; border: 1px solid #b7e2c6;
+    border-radius: 15px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .et-preview-num:hover { background: #d4f0de; }
+  /* Eye a touch larger than the digit: at the same size it read as a smudge
+     rather than an icon (Sep 2026 feedback: "icon nya gedein dikit"). */
+  .et-preview-num i { font-size: 15px; line-height: 1; }
 </style>
 
 <div class="page-content" id="app">
@@ -130,9 +274,28 @@
                 </div>
                 </div>
                 @if(session()->has('success'))
-                    <div class="alert alert-success">
-                        {{ session()->get('success') }}
+                    {{-- Popup rather than an inline banner (same as Travel), so a
+                         finished create/update is never missed -- especially on a
+                         phone, where a banner above the table scrolls out of view. --}}
+                    <div class="modal fade" id="etSuccessModal" tabindex="-1" role="dialog" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered" role="document">
+                            <div class="modal-content" style="border-radius:10px;border:none;">
+                                <div class="modal-body text-center" style="padding:28px 24px 8px;">
+                                    <div style="width:46px;height:46px;border-radius:50%;background:#e6f6ec;color:#28a745;display:inline-flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:10px;"><i class="fa fa-check-circle"></i></div>
+                                    <h5 style="font-weight:700;color:#2b3a55;">Success</h5>
+                                    <p style="color:#495057;font-size:14px;white-space:pre-line;">{{ session()->get('success') }}</p>
+                                </div>
+                                <div class="modal-footer" style="border-top:none;justify-content:center;padding:0 24px 24px;">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal" style="min-width:120px;">OK</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+                    <script>
+                        window.addEventListener('load', function () {
+                            if (window.jQuery && jQuery.fn.modal) { jQuery('#etSuccessModal').modal('show'); }
+                        });
+                    </script>
                 @endif
                 @if ($errors->any())
                     @foreach ($errors->all() as $error)
@@ -182,8 +345,35 @@
               </div>
 
               <div class="modal-body py-3">
-              <div class="row my-3"> 
-                
+
+              <div class="et-section-card">
+              <div class="et-step-title">
+                  <span class="et-step-badge">1</span>
+                  <h5>Upload Evidence (Invoice / Receipt)</h5>
+                  <button type="button" class="btn btn-link btn-sm et-tips-trigger" title="Tips" data-toggle="modal" data-target="#etEvidenceTipsModal">
+                      <i class="fa fa-lightbulb"></i>
+                  </button>
+              </div>
+              <p class="text-muted" style="margin-top:-8px;margin-bottom:14px;font-size:12.5px;">Upload struk/invoice di sini untuk langsung membuat baris baru di Detail Reimbursement -- atau upload manual per baris di kolom Evidence pada tabel di bawah.</p>
+              <div class="et-top-dropzone" id="etTopDropzone" title="Klik atau drag &amp; drop file di sini">
+                  <i class="fa fa-cloud-upload-alt"></i>
+                  <span>Drag &amp; drop file di sini atau <b>klik untuk pilih file</b></span>
+                  <small>JPG, PNG, PDF -- bisa lebih dari satu file sekaligus, tiap file jadi satu baris baru</small>
+              </div>
+              <input type="file" id="etTopFileInput" accept="image/*,.pdf,application/pdf" multiple style="display:none">
+              <button type="button" id="etTopCameraBtn" class="btn btn-outline-success btn-sm et-top-camera-btn">
+                  <i class="fa fa-camera"></i> Take Photo
+              </button>
+              <div id="etTopEvidenceList" class="et-top-evidence-list"></div>
+              </div>
+
+              <div class="et-section-card">
+              <div class="et-step-title">
+                  <span class="et-step-badge">2</span>
+                  <h5>Informasi Reimbursement</h5>
+              </div>
+              <div class="row my-3">
+
                   <div class="col-md-3">
                     <div class="form-group">
                        <label for="exampleFormControlInput1">Employee</label>
@@ -227,10 +417,15 @@
                     </div>
                   </div>
 
-                  <hr>
-               
                 </div>
-                <label class="modal-title clr-green" id="exampleModalCenterTitle">Detail Reimbursement</label>
+              </div>
+
+              <div class="et-section-card">
+              <div class="et-step-title">
+                  <span class="et-step-badge">3</span>
+                  <h5>Detail Reimbursement</h5>
+              </div>
+              <p class="text-muted" style="margin-top:-8px;margin-bottom:14px;font-size:12.5px;">Isi setiap baris kehadiran/tamu dan upload bukti (invoice/struk) untuk masing-masing baris.</p>
 <div class="respon respon-big table-responsive">
                 <table  id="dynamic_field" class="" cellpadding=3 cellspacing=3
             align=center width="1400">
@@ -246,7 +441,7 @@
                           <td>Type</td>
                           <td>Payment</td>
                           <td>Amount</td>
-                          <td width="100">Evidence</td>
+                          <td width="100" class="et-col-evidence">Evidence</td>
                           <td>Preview</td>
                           <td>Remark</td>
                           <th align="center">Action</th>
@@ -290,17 +485,19 @@
                             <input type="text" class="form-control amount-input currency amount1 change-amount input-style" name="amount[]"  placeholder="">
                           </td>
                           <td class="file-proof">
-                              <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
-                                  <i class="fa fa-upload"></i>
-                              </button>
-                              <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera">
-                                  <i class="fa fa-camera"></i>
-                              </button>
+                              <div class="et-evidence-cell">
+                                  <div class="et-dropzone addFile" data-idx="1" title="Klik atau drag & drop file di sini">
+                                      <i class="fa fa-cloud-upload-alt"></i>
+                                  </div>
+                                  <button type="button" data-idx="1" class="btn btn-outline-secondary btn-sm et-camera-btn addCamera" title="Ambil foto">
+                                      <i class="fa fa-camera"></i>
+                                  </button>
+                              </div>
                               <input type="file" accept="image/*,.pdf,application/pdf" name="file[]" style="display: none;" class="file-input file1">
                               <input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;">
                           </td>
                           <td>
-                              <div id="preview_1"></div>
+                              <div id="preview_1" class="et-preview"></div>
                           </td>
                           
                           <td>
@@ -314,13 +511,19 @@
                 </table>
 
 </div>
-<br>
-                <label class="modal-title" id="exampleModalCenterTitle" style="color:green; font-size:10px;">Nominal</label>
+              </div>
+
+              <div class="et-section-card">
+              <div class="et-step-title">
+                  <span class="et-step-badge">4</span>
+                  <h5>Total</h5>
+              </div>
                 <div class="form-group">
                 <label for="exampleFormControlInput1">Total Inquiry</label>
                 <input type="text" v-model="grandtotal" class="form-control number-format" id="sum" style="border-radius: 10px;" name="total_pengajuan" readonly placeholder="">
                 </div>
 
+              </div>
               </div>
 
               <span style="color:#62d49e;text-align:right;" class="warning-upload">The button is disabled until a file is uploaded.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
@@ -360,6 +563,29 @@
 
 
 </div>
+
+<!-- Tips for Step 1 "Upload Evidence" at the top of the create form. -->
+<div class="modal fade" id="etEvidenceTipsModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-lightbulb" style="color:#c99a1a;"></i> Tips Upload Evidence</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <i class="material-icons">close</i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="et-tips-modal-body">
+                    Gunakan foto yang jelas dan terbaca. Pastikan seluruh invoice/struk terlihat dalam foto.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Mengerti</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal -->
 <div class="modal fade" id="modalPhoto"  data-backdrop="static" tabindex="-1" role="dialog" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
@@ -380,8 +606,20 @@
       </div>
   </div>
   </div>
+</div>
 
 <!-- End Modal -->
+
+<!-- Closes the #app / page-content wrapper opened at the top of this file.
+     That closing tag was missing entirely (a pre-existing bug, not
+     introduced in this change), which meant the #app element's outerHTML
+     (what Vue's el:'#app' mount compiles as its template, since no Vue
+     `template` option is given) never actually closed anywhere on this
+     page. That left every element after this point, including the
+     scripts pushed below, inside Vue's template -- exactly what produces
+     the "avoid placing tags with side-effects such as script" console
+     warning. -->
+</div>
 
 @push('scripts')
 @if($travelEntertainmentOcrEnabled ?? false)
@@ -407,6 +645,339 @@ $(document).ready(function(){
     // claim (business decision, Sep 2026), which is checked per cost-line
     // row via the OCR badge (see reimbursement-ocr-check.js) and enforced
     // server-side at save time.
+
+    // Drag & drop onto the Evidence dropzone (Sep 2026 restyle to match the
+    // Travel form's look). Delegated on 'body' since rows are added
+    // dynamically by .addMore. Click-to-browse and the actual upload/OCR
+    // pipeline are untouched -- this only adds a second way to feed the same
+    // row's .file-input, via DriverUpload.processAndAppendFile() (the exact
+    // function .addFile's click handler already uses in
+    // reimbursement-driver-upload.js), so both paths behave identically.
+    $('body').on('dragover', '.et-dropzone', function (e) {
+        e.preventDefault();
+        $(this).addClass('is-dragover');
+    });
+    $('body').on('dragleave', '.et-dropzone', function () {
+        $(this).removeClass('is-dragover');
+    });
+    $('body').on('drop', '.et-dropzone', function (e) {
+        e.preventDefault();
+        $(this).removeClass('is-dragover');
+        var file = e.originalEvent.dataTransfer && e.originalEvent.dataTransfer.files && e.originalEvent.dataTransfer.files[0];
+        if (!file || !window.DriverUpload) {
+            return;
+        }
+        var $row = $(this).closest('tr');
+        window.DriverUpload.processAndAppendFile($row, file);
+    });
+
+    /**
+     * Step 1 "Upload Evidence" -- a general dropzone at the top of the form
+     * (Sep 2026 feedback: "yang di entertainment form nya samain kayak di
+     * travel buat di atas untuk uploadnya"), mirroring Travel's Step 1.
+     * Each file dropped/picked here gets its own row: the very first file
+     * reuses the form's single still-empty starting row (so opening the
+     * modal and immediately uploading doesn't leave a pointless blank row
+     * above it); every file after that clicks .addMore to create a fresh
+     * row, then attaches to it via the exact same
+     * DriverUpload.processAndAppendFile() the per-row dropzone/camera/drag-
+     * drop already use, so preview + OCR check behave identically either
+     * way. A small confirmation chip per file (thumbnail + which row number
+     * it landed on) is appended to #etTopEvidenceList for feedback, since
+     * the file's real preview lives down in that row's own Evidence column.
+     */
+    /**
+     * Where the next Step 1 file should land: the FIRST row that has no file
+     * yet, whichever it is -- only adding a new row when every existing one is
+     * already taken.
+     *
+     * It used to reuse a row only when there was exactly one and it was empty,
+     * so pressing (+) first, or deleting a photo and re-uploading, always
+     * appended yet another row (Sep 2026 feedback: "saya pencet (+) ... trus
+     * upload foto, fotonya jadi no 3 dan line nya nambah jadi 3" and "saya
+     * hapus dari dua-duanya, lalu upload ulang tapi malah nambah line 3").
+     */
+    function etTopDropzoneTargetRow() {
+        var $rows = $('#dynamic_field tbody tr.fieldGroup');
+        var $free = $rows.filter(function () {
+            return $(this).find('.et-preview').children().length === 0;
+        }).first();
+
+        if ($free.length) {
+            return $free;
+        }
+
+        $('.addMore').trigger('click');
+        return $('#dynamic_field tbody tr.fieldGroup').last();
+    }
+
+    /**
+     * Renumbers every chip (1., 2., 3. ...) and re-binds each file to the row
+     * at the SAME position: file 1 -> row 1, file 2 -> row 2, and so on. There
+     * is no row picker any more (Sep 2026: "gausah ada baris 1 atau sejenisnya
+     * langsung sesuai urutan aja") -- order is the whole rule, so deleting a
+     * file shifts everything after it up automatically.
+     */
+    function etRefreshTopEvidenceChips() {
+        $('#etTopEvidenceList .et-top-evidence-item').each(function (i) {
+            var $chip = $(this);
+            $chip.find('.et-top-evidence-num').text((i + 1) + '.');
+            etBindChipToRow($chip, i + 1);
+        });
+        etSyncPreviewNumbers();
+    }
+
+    /**
+     * Moves the chip's real <input type="file"> into row `rowNo` and renames it
+     * to that row's index. The server binds a file to its row purely by the
+     * index in the input name (attachments[<rowIndex>][]) -- see
+     * EntertaimentReimbursementController -- so this is what actually makes
+     * "file N belongs to row N" true on save, not just on screen.
+     */
+    function etBindChipToRow($chip, rowNo) {
+        $chip.attr('data-row', String(rowNo));
+        var uid = $chip.attr('data-uid');
+        if (!uid) {
+            return;
+        }
+        var $target = $('#dynamic_field tbody tr.fieldGroup').eq(rowNo - 1);
+        var $input = $('.pending-attachment-input[data-uid="' + uid + '"]');
+        if (!$target.length || !$input.length) {
+            return;
+        }
+        var $box = $target.find('.attachment-inputs').first();
+        if (!$box.length) {
+            $box = $('<div class="attachment-inputs" style="display:none;"></div>');
+            $target.find('.file-proof').first().append($box);
+        }
+        $input.attr('name', 'attachments[' + (rowNo - 1) + '][]').appendTo($box);
+    }
+
+    /**
+     * The Detail table's Preview column shows the NUMBER of each file attached
+     * to that row (Sep 2026: "preview nya nggk perlu gambar foto lagi tapi
+     * angka aja"), so the table stays compact and the pictures live in Step 1.
+     */
+    function etSyncPreviewNumbers() {
+        $('#dynamic_field tbody tr.fieldGroup').each(function (idx) {
+            var rowNo = idx + 1;
+            var nums = [];
+            $('#etTopEvidenceList .et-top-evidence-item').each(function (i) {
+                if (String($(this).attr('data-row')) === String(rowNo)) {
+                    nums.push(i + 1);
+                }
+            });
+            var $cell = $(this).find('.et-preview').first();
+            // Only the number badges are rebuilt -- NOT .empty(), which would
+            // also destroy the hidden .pending-attachment-item cards that carry
+            // the real file inputs and OCR hooks.
+            $cell.find('.et-preview-num').remove();
+            nums.forEach(function (n) {
+                // Eye icon so it reads as clickable (Sep 2026: "harusnya
+                // preview nya ada icon mata gitu biar user tau bisa dipencet").
+                $('<button type="button" class="et-preview-num" title="Lihat file ' + n + '">')
+                    .attr('data-file-no', n)
+                    .append($('<i class="fa fa-eye">'))
+                    .append($('<span>').text(n))
+                    .appendTo($cell);
+            });
+        });
+    }
+
+    /**
+     * @param {string} uid ties this chip to the row's real hidden file input,
+     *   so the X button can delete the actual attachment and not just the chip.
+     */
+    function etAddTopEvidenceChip(file, $row, uid) {
+        var $item = $('<div class="et-top-evidence-item">');
+        if (uid) {
+            $item.attr('data-uid', uid);
+        }
+        if (file.type && file.type.indexOf('image/') === 0) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                $item.prepend($('<img>').attr('src', e.target.result));
+                // Kept on the chip so the Preview eye button can open this
+                // exact file without re-reading it.
+                $item.attr('data-src', e.target.result).attr('data-kind', 'image');
+            };
+            reader.readAsDataURL(file);
+        } else {
+            $item.prepend($('<i class="fa fa-file-pdf" style="color:#dc3545;font-size:22px;">'));
+            try {
+                $item.attr('data-src', URL.createObjectURL(file)).attr('data-kind', 'pdf');
+            } catch (e) { /* preview simply unavailable */ }
+        }
+        $item.append(
+            $('<div class="et-top-evidence-text">').append(
+                $('<span class="et-top-evidence-num">').text('0.'),
+                $('<span class="et-top-evidence-name">').text(file.name)
+            )
+        );
+        // Delete control (Sep 2026 feedback: "nggk ada tombol x (silang) yg
+        // biasa digunakan untuk hapus foto"). Removes the real attachment on
+        // the row too, not just this chip -- see the handler below.
+        $item.append(
+            $('<button type="button" class="et-top-evidence-remove" title="Hapus file ini">&times;</button>')
+        );
+        $('#etTopEvidenceList').append($item);
+        etRefreshTopEvidenceChips();
+        return $item;
+    }
+
+    function etHandleTopEvidenceFiles(fileList) {
+        if (!fileList || !fileList.length || !window.DriverUpload) {
+            return;
+        }
+        Array.prototype.forEach.call(fileList, function (file) {
+            var $row = etTopDropzoneTargetRow();
+            // The chip goes up right away (so the file is visible while it is
+            // still being compressed/OCR'd) and is tied to its attachment once
+            // processAndAppendFile resolves with the uid.
+            var $chip = etAddTopEvidenceChip(file, $row);
+            window.DriverUpload.processAndAppendFile($row, file).then(function (processed) {
+                if ($chip && processed && processed.attachmentUid) {
+                    $chip.attr('data-uid', processed.attachmentUid);
+                }
+            });
+        });
+    }
+
+    // X on a Step 1 chip deletes the real attachment as well: the chip is only
+    // a receipt for a file that actually lives in its row's Evidence cell, so
+    // removing the chip alone would leave the file silently attached.
+    $('body').on('click', '.et-top-evidence-remove', function () {
+        var $chip = $(this).closest('.et-top-evidence-item');
+        var uid = $chip.attr('data-uid');
+        if (uid && window.DriverUpload && window.DriverUpload.removePendingPreview) {
+            var $item = $('.pending-attachment-item[data-uid="' + uid + '"]');
+            if ($item.length) {
+                window.DriverUpload.removePendingPreview($item);
+            } else {
+                // Preview not rendered (yet): drop the hidden input directly so
+                // the file still doesn't get submitted.
+                $('.pending-attachment-input[data-uid="' + uid + '"]').remove();
+            }
+        }
+        $chip.remove();
+        etRefreshTopEvidenceChips();
+    });
+
+    /** Opens file number N (the chip at that position) full size. */
+    $('body').on('click', '.et-preview-num', function () {
+        var n = parseInt($(this).attr('data-file-no'), 10);
+        var $chip = $('#etTopEvidenceList .et-top-evidence-item').eq(n - 1);
+        var src = $chip.attr('data-src');
+        if (!src) {
+            return;
+        }
+        if ($chip.attr('data-kind') === 'pdf') {
+            window.open(src, '_blank');
+            return;
+        }
+        if (!$('#etImageLightbox').length) {
+            $('body').append(
+                '<div id="etImageLightbox" style="display:none;position:fixed;inset:0;z-index:2000;' +
+                     'background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">' +
+                  '<img style="max-width:100%;max-height:100%;border-radius:6px;">' +
+                '</div>'
+            );
+            $('body').on('click', '#etImageLightbox', function () { $(this).hide(); });
+        }
+        $('#etImageLightbox img').attr('src', src);
+        $('#etImageLightbox').css('display', 'flex');
+    });
+
+    $('#etTopDropzone').on('click', function () {
+        $('#etTopFileInput').trigger('click');
+    });
+    $('#etTopFileInput').on('change', function (e) {
+        etHandleTopEvidenceFiles(e.target.files);
+        e.target.value = '';
+    });
+
+    /**
+     * Step 1 "Take Photo": opens the webcam in #modalPhoto and feeds the
+     * captured frame into etHandleTopEvidenceFiles() -- the same entry point
+     * the dropzone and drag-drop use -- so the photo becomes a normal row
+     * attachment with the same preview, OCR and submit behaviour.
+     *
+     * The stream is stopped on every way out (capture, Cancel, the X, or a
+     * backdrop click); otherwise the camera light stays on and the device
+     * stays locked for other apps.
+     */
+    $('#etTopCameraBtn').on('click', function () {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Browser ini tidak bisa mengakses kamera. Silakan pakai "klik untuk pilih file".');
+            return;
+        }
+
+        var $modal = $('#modalPhoto');
+        var video = document.getElementById('videoElement');
+        var activeStream = null;
+
+        var stopCamera = function () {
+            if (activeStream) {
+                activeStream.getTracks().forEach(function (t) { t.stop(); });
+                activeStream = null;
+            }
+            if (video) {
+                video.srcObject = null;
+            }
+        };
+
+        $modal.off('hidden.bs.modal.etcam').on('hidden.bs.modal.etcam', function () {
+            $('#captureButton').off('click.etcam');
+            stopCamera();
+        });
+
+        navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+        }).then(function (stream) {
+            activeStream = stream;
+            video.srcObject = stream;
+            $modal.modal('show');
+
+            $('#captureButton').off('click.etcam').on('click.etcam', function () {
+                var w = video.videoWidth || 1280;
+                var h = video.videoHeight || 720;
+                var canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+
+                canvas.toBlob(function (blob) {
+                    if (!blob) {
+                        return;
+                    }
+                    // A unique name keeps each shot distinct in the chip list
+                    // and in the duplicate-file check.
+                    var name = 'camera-' + Date.now() + '.jpg';
+                    var photo = new File([blob], name, { type: 'image/jpeg' });
+                    etHandleTopEvidenceFiles([photo]);
+                }, 'image/jpeg', 0.85);
+
+                $modal.modal('hide');
+            });
+        }).catch(function () {
+            // Permission denied, no camera, or a non-HTTPS origin (browsers
+            // only expose getUserMedia on https:// or localhost).
+            alert('Kamera tidak bisa dibuka. Cek izin kamera di browser, atau pakai "klik untuk pilih file".');
+        });
+    });
+    $('#etTopDropzone').on('dragover', function (e) {
+        e.preventDefault();
+        $(this).addClass('is-dragover');
+    });
+    $('#etTopDropzone').on('dragleave', function () {
+        $(this).removeClass('is-dragover');
+    });
+    $('#etTopDropzone').on('drop', function (e) {
+        e.preventDefault();
+        $(this).removeClass('is-dragover');
+        var files = e.originalEvent.dataTransfer && e.originalEvent.dataTransfer.files;
+        etHandleTopEvidenceFiles(files);
+    });
 
     function numberWithCommas(x) {
         return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ".");
@@ -483,6 +1054,27 @@ $(document).ready(function(){
 
     $('.nominal_pengajuan').maskMoney({ thousands:'.', decimal:',', precision:0});
     // $('#sum').maskMoney({ thousands:'.', decimal:',', precision:0});
+
+    // Warning (not a block) when this applicant already submitted a claim for
+    // this date. Scoped to the applicant on purpose -- the cross-applicant
+    // check is the invoice/OCR one, which stays a separate, harder gate.
+    if (typeof window.bindReimbursementDuplicateChecks === 'function') {
+        window.bindReimbursementDuplicateChecks({
+            formSelector: '#sample_form',
+            earlyCheckSelectors: 'input[name="date"]',
+            checks: [
+                {
+                    url: '{{ url('/reimbursement/check-duplicate-date') }}',
+                    warnOnly: true,
+                    params: function ($form) {
+                        var date = $form.find('input[name="date"]').val();
+                        if (!date) return null;
+                        return { reimbursement_type: 3, dates: [date] };
+                    }
+                }
+            ]
+        });
+    }
     
     $('select[name="status"]').on('change', function(){
         var status = $(this).val();
@@ -526,12 +1118,21 @@ $(document).ready(function(){
             );
             if($('body').find('.fieldGroup').length < maxGroup){
              
-              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+i+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="'+i+'" class="btn btn-success btn-sm addCamera"><i class="fa fa-camera"></i></button><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
+              var fieldHTML = '<tr class="fieldGroup"><td><input type="text" class="form-control" name="empty_zone[]" placeholder=""></td><td><input type="text" class="form-control" name="attendance[]" placeholder=""></td><td><input type="text" class="form-control" name="position[]" placeholder=""></td><td><input type="text" class="form-control" name="place[]" placeholder=""></td><td><input type="text" class="form-control" name="guest[]" placeholder=""></td><td><input type="text" class="form-control" name="guest_position[]" placeholder=""></td><td><input type="text" class="form-control" name="company[]" placeholder=""></td><td><input type="text" class="form-control" name="type[]" placeholder=""></td><td><select name="payment_type[]" class="form-control" required><option value="" selected disabled>Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><input type="text" class="form-control amount-input currency amount'+i+' change-amount" name="amount[]"  placeholder=""></td><td class="file-proof"><div class="et-evidence-cell"><div class="et-dropzone addFile" data-idx="'+i+'" title="Klik atau drag & drop file di sini"><i class="fa fa-cloud-upload-alt"></i></div><button type="button" data-idx="'+i+'" class="btn btn-outline-secondary btn-sm et-camera-btn addCamera" title="Ambil foto"><i class="fa fa-camera"></i></button></div><input type="file" accept="image/*,.pdf,application/pdf" name="file[]"  style="display: none;" class="file-input file'+i+'"><input type="file" accept="image/*,.pdf,application/pdf" name="proof[]" capture="camera" class="camera-input" style="display: none;"></td><td><div id="preview_'+i+'" class="et-preview"></div></td><td><input type="text" class="form-control" name="remark[]" placeholder="Remark"></td><td><button  type="button" name="add" id="add" class="btn btn-danger full-width remove-item">-</button></td></tr>';
               
               $('body').find('.fieldGroup:last').after(fieldHTML);
+              // New row available: chip dropdowns must offer it.
+              if (typeof etRefreshTopEvidenceChips === 'function') {
+                  etRefreshTopEvidenceChips();
+              }
               
               $("body").on("click",".remove-item",function(){ 
                  $(this).parents(".fieldGroup").remove();
+                 // Row list changed: chip dropdowns and the Preview numbers
+                 // must be rebuilt against the rows that remain.
+                 if (typeof etRefreshTopEvidenceChips === 'function') {
+                     etRefreshTopEvidenceChips();
+                 }
                  
                     if ($(".amount1").val()) {
                         var amount1 = $(".amount1").val().split(".").join("");

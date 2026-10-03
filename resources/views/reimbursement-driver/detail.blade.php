@@ -121,7 +121,13 @@ if (!function_exists('driver_attachment_rows')) {
     <div class="row">
         <div class="col-lg-12">
             <div class="card">
-                <a href="{!!url('reimbursement-driver')!!}" class="btn btn-primary" style="float:left;"><i class="fa fa-arrow-circle-left"></i> Back </a>
+                {{-- Goes back one step in history so the approval list reappears with the
+                     filters still applied (status, period, employee ...) -- those live in
+                     the page's Vue state, not the URL, so a plain link to the list would
+                     reset them (Oct 2026 feedback). Falls back to the list itself when
+                     there is no history to return to, e.g. a link opened in a new tab. --}}
+                <a href="{!!url('reimbursement-driver')!!}" class="btn btn-primary" style="float:left;"
+                   onclick="if (document.referrer && history.length > 1) { history.back(); return false; }"><i class="fa fa-arrow-circle-left"></i> Back </a>
             </div>
         </div>
     </div>
@@ -694,7 +700,10 @@ if (!function_exists('driver_attachment_rows')) {
                         </div>
                       </div>
                       <div class="modal-footer">
-                          <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
+        {{-- "Back", not "Cancel": this closes the edit modal and returns to the
+                       submission detail behind it -- one step back, which is where an
+                       approver continues the approval after editing (Oct 2026 feedback). --}}
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-arrow-circle-left"></i> Back</button>
                           @php
                             $approverJForModal = ['Direktur Operasional', 'Finance', 'HR GA', 'Finance Supervisor', 'Finance Manager', 'Owner', 'superadmin', 'admin'];
                             $conflictVerifierModal = $isOwnSubmission

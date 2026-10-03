@@ -1148,7 +1148,7 @@ $(document).ready(function(){
 
             if (currency === 'IDR') {
                 // Jika IDR langsung pakai allowance saja
-                this.reimburses[i].trip_allowance = allowance.toLocaleString('de-DE');
+                this.reimburses[i].trip_allowance = allowance.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             } else {
                 // Selain IDR, cek apakah currency code sudah ada di rates
                 const foundRate = this.rates.find(rate => rate.code == currency);
@@ -1159,7 +1159,7 @@ $(document).ready(function(){
 
                 // Hitung allowance x exchange rate
                 const totalAllowance = allowance * foundRate.rate;
-                this.reimburses[i].trip_allowance = totalAllowance.toLocaleString('de-DE');
+                this.reimburses[i].trip_allowance = totalAllowance.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
 
             // Panggil fungsi hitung total jika ada

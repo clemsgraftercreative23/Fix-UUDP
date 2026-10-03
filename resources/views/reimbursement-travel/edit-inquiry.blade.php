@@ -2,11 +2,51 @@
 
 @section('content')
 
-<?php 
+<?php
 function rupiah($angka){
 	return number_format((float) $angka, 2, ',', '.');
 }
 ?>
+
+<style>
+    /* --- Step wizard look (Sep 2026 redesign: single evidence per day) --- */
+    .rt-step-title { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .rt-step-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; border-radius: 50%; background: #28a745; color: #fff;
+        font-weight: 700; font-size: 13px; flex: none;
+    }
+    .rt-step-title h5 { margin: 0; font-weight: 700; }
+    .rt-step-desc { color: #6c757d; font-size: 12.5px; margin: 0 0 14px 36px; }
+    .rt-evidence-card { background: #f8f9fb; border: 1px solid #e2e5ea; border-radius: 8px; padding: 16px 18px; margin-bottom: 18px; }
+    .rt-dropzone {
+        border: 2px dashed #c9d3e0; border-radius: 8px; background: #fff; text-align: center;
+        padding: 26px 14px; cursor: pointer; transition: border-color .15s;
+    }
+    .rt-dropzone:hover, .rt-dropzone.is-dragover { border-color: #28a745; background: #f4fff7; }
+    .rt-dropzone i { font-size: 26px; color: #8a94a6; margin-bottom: 6px; display: block; }
+    .rt-dropzone small { display: block; color: #8a94a6; margin-top: 6px; }
+    .rt-ocr-hint { background: #eef7f0; border: 1px solid #cdeadb; border-radius: 8px; padding: 12px 14px; font-size: 12.5px; height: 100%; }
+    .rt-ocr-hint .rt-ocr-hint-title { font-weight: 700; color: #1e7e34; margin-bottom: 6px; }
+    .rt-ocr-hint ul { list-style: none; padding: 0; margin: 0; }
+    .rt-ocr-hint li { margin-bottom: 4px; }
+    .rt-ocr-hint li i { color: #28a745; margin-right: 6px; }
+    .rt-tips-box { background: #fffbea; border: 1px solid #ffe9a8; border-radius: 8px; padding: 12px 14px; font-size: 12.5px; height: 100%; }
+    .rt-tips-box .rt-tips-title { font-weight: 700; color: #8a6416; margin-bottom: 6px; }
+    .rt-file-chip {
+        display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d9d9d9;
+        border-radius: 6px; padding: 6px 10px; margin-top: 10px; font-size: 12.5px;
+    }
+    .rt-file-chip img.rt-file-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 4px; }
+    .rt-file-chip .rt-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rt-file-chip .rt-file-remove { color: #dc3545; cursor: pointer; }
+    .rt-reference-wrap { margin-top: 14px; }
+    .rt-ocr-summary { margin-top: 16px; background: #fff; border: 1px solid #d9e6ff; border-radius: 8px; padding: 14px 16px; }
+    .rt-ocr-summary-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .rt-ocr-summary-head b { color: #0a58ca; }
+    .rt-ocr-summary label { font-size: 11px; color: #6c757d; margin-bottom: 2px; }
+    .rt-mess-note { margin-top: 10px; font-size: 12px; border-radius: 6px; padding: 8px 10px; background: #f1fff5; border: 1px solid #bfe8cd; color: #1e7e34; }
+</style>
 
 <div class="page-content" id="app">
     @if ($errors->any())
@@ -109,10 +149,90 @@ function rupiah($angka){
                         <!--        <button class="btn btn-danger text-right" @click="removeTravel(i)"><i class="fa fa-trash"></i> Remove</button>-->
                         <!--    </div>-->
                         <!--</div>-->
+
+                        <div class="rt-step-title">
+                            <span class="rt-step-badge">1</span>
+                            <h5>Upload Evidence (Invoice / Receipt)</h5>
+                        </div>
+                        <p class="rt-step-desc">Upload your invoice or receipt to automatically read the information (OCR).</p>
+                        <div class="rt-evidence-card">
+                            <div class="row">
+                                <div class="col-md-5">
+                                    <div class="rt-dropzone" id="rt-day-dropzone">
+                                        <i class="fa fa-cloud-upload-alt"></i>
+                                        Drag &amp; drop file here or<br>
+                                        <button type="button" class="btn btn-outline-success btn-sm" style="margin-top:8px;" id="rt-day-browse-btn">Browse File</button>
+                                        <small>Supported file: JPG, PNG, PDF (Max 10MB)</small>
+                                    </div>
+                                    <input type="file" id="rt-day-file-input" name="day_file" accept="image/*,.pdf" style="display:none">
+                                    <input type="hidden" id="rt-day-merchant-name" name="merchant_name" value="">
+
+                                    <div id="rt-day-file-list"></div>
+
+                                    <div class="rt-reference-wrap">
+                                        <label style="font-size:12px;color:#6c757d;">atau masukkan No. Invoice rekan setrip</label>
+                                        <input type="text" class="form-control form-control-sm" autocomplete="off" id="rt-day-reference-invoice" name="day_reference_invoice" placeholder="mis. INV-88213">
+                                        <div id="rt-day-reference-feedback" style="font-size:11px;margin-top:3px;color:#6c757d;"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="rt-ocr-hint">
+                                        <div class="rt-ocr-hint-title">OCR will read:</div>
+                                        <ul>
+                                            <li><i class="fa fa-check-circle"></i> Transaction Date</li>
+                                            <li><i class="fa fa-check-circle"></i> Merchant / Hotel Name</li>
+                                            <li><i class="fa fa-check-circle"></i> Amount</li>
+                                            <li><i class="fa fa-check-circle"></i> Currency</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="rt-tips-box">
+                                        <div class="rt-tips-title"><i class="fa fa-lightbulb"></i> Tips:</div>
+                                        Use a clear and readable image. Ensure the whole invoice is visible.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rt-ocr-summary" id="rt-day-ocr-summary" style="display:none;">
+                                <div class="rt-ocr-summary-head">
+                                    <b>OCR Result (Auto-filled)</b>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="rt-day-ocr-edit-toggle">
+                                        <i class="fa fa-pencil-alt"></i> Edit
+                                    </button>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label>Transaction Date</label>
+                                        <input type="date" class="form-control form-control-sm" id="rt-day-ocr-date" readonly>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label>Merchant / Hotel</label>
+                                        <input type="text" class="form-control form-control-sm" id="rt-day-ocr-merchant" readonly>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label>Amount</label>
+                                        <input type="text" class="form-control form-control-sm" id="rt-day-ocr-amount" readonly>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label>Currency</label>
+                                        <input type="text" class="form-control form-control-sm" id="rt-day-ocr-currency" readonly>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rt-mess-note" id="rt-day-mess-note" style="display:none;"></div>
+                        </div>
+
+                        <div class="rt-step-title">
+                            <span class="rt-step-badge">2</span>
+                            <h5>Request Information</h5>
+                        </div>
+                        <p class="rt-step-desc">Please complete the additional information below.</p>
                         <div class="row">
                             <div class="col-md-3">
                                 <label for="">Transaction Date</label>
-                                <input type="date" name="date" class="form-control" required value="{{$data['0']->date}}">
+                                <input type="date" name="date" id="rt-day-date-field" class="form-control" required value="{{$data['0']->date}}">
                             </div>
                             <div class="col-md-3">
                                 <label for="">Purpose</label>
@@ -165,6 +285,11 @@ function rupiah($angka){
                             </div>                     
                         </div>
                         <hr>
+                        <div class="rt-step-title">
+                            <span class="rt-step-badge">3</span>
+                            <h5>Expense Details</h5>
+                        </div>
+                        <p class="rt-step-desc">Add expense details based on the uploaded evidence or add manually.</p>
                         <div class="row">
                             <div class="col-xl">
                                 <table class="table full-width" style="width: 100%;overflow-x: auto;white-space: nowrap;display:block">
@@ -178,7 +303,7 @@ function rupiah($angka){
                                             <th width="200">IDR Rate</th>
                                             <th width="200">Pph23</th>
                                             <th width="200">Payment</th>
-                                            <th width="200">File</th>
+                                            <th width="150">Preview</th>
                                             <th width="200">Action</th>
                                         </tr>
                                     </thead>
@@ -224,22 +349,15 @@ function rupiah($angka){
                                                 </select>
                                             </td>
                                             <td>
-                                                <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
-                                                    <i class="fa fa-upload"></i>
-                                                  </button>
-                                                  
-                                                  <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera" >
-                                                    <i class="fa fa-camera"></i>
-                                                  </button>
-                                                  <input type="file" accept="image/*" name="file[]"  style="display: none; " class="file-input">
-                                                  <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
-                                                  <div id="preview_1"></div>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm rt-preview-day-evidence" title="Lihat bukti (Step 1)">
+                                                    <i class="fa fa-eye"></i>
+                                                </button>
                                             </td>
                                             <td>
                                                 <button type="button" class="btn btn-info addMoreDetail"><i class="fa fa-plus"></i></button>
-                                            </td>                                                                         
+                                            </td>
                                         </tr>
-                                        
+
                                         @foreach ($travel_detail as $key => $row)
                                         @if($key > 0)
                                         <tr class="fieldGroupDetail">
@@ -283,16 +401,9 @@ function rupiah($angka){
                                                 </select>
                                             </td>
                                             <td>
-                                                <button type="button" data-idx="1" class="btn btn-success btn-sm addFile">
-                                                    <i class="fa fa-upload"></i>
-                                                  </button>
-                                                  
-                                                  <button type="button" data-idx="1" class="btn btn-success btn-sm addCamera" >
-                                                    <i class="fa fa-camera"></i>
-                                                  </button>
-                                                  <input type="file" accept="image/*" name="file[]"  style="display: none; " class="file-input">
-                                                  <input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;">
-                                                  <div id="preview_1"></div>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm rt-preview-day-evidence" title="Lihat bukti (Step 1)">
+                                                    <i class="fa fa-eye"></i>
+                                                </button>
                                             </td>
                                             <td>
                                                 <!--<button type="button" class="btn btn-info"><i class="fa fa-plus"></i></button>-->
@@ -373,7 +484,13 @@ function ocrEditInquiryRowOptions($row) {
         badgeContainer: $row.find('[id^="preview_"]').first(),
         submitSelectors: OCR_EDIT_INQUIRY_SUBMIT_SELECTORS,
         formScope: $('#travel_edit_inquiry_form'),
-        excludeId: OCR_EDIT_INQUIRY_EXCLUDE_ID
+        excludeId: OCR_EDIT_INQUIRY_EXCLUDE_ID,
+        reimbursementType: 'travel',
+        onSameTripOffer: function (offer) {
+            if (window.ReimbursementOcrCheck) {
+                window.ReimbursementOcrCheck.showSameTripInfoModal(offer);
+            }
+        }
     };
 }
 
@@ -386,7 +503,173 @@ function runOcrCheckForEditInquiryRow($row, file) {
     );
 }
 
+/**
+ * Day-level evidence upload (Step 1: Upload Evidence, Sep 2026 redesign) --
+ * one OCR call per day instead of per expense-line row. Plain jQuery (this
+ * page has no Vue instance despite the leftover v-for markup). no_invoice/
+ * reference_reimbursement_id are resolved again server-side at
+ * updateInquiry() time -- this is feedback-only.
+ */
+function rtEnableTravelSubmitButtons() {
+    OCR_EDIT_INQUIRY_SUBMIT_SELECTORS.forEach(function (sel) { $(sel).prop('disabled', false); });
+    $('.warning-upload').hide();
+}
+
+function rtRenderDayFileChip(file, dataUrl) {
+    var $list = $('#rt-day-file-list');
+    $list.empty();
+    var $chip = $('<div class="rt-file-chip"></div>');
+    if (dataUrl) {
+        $chip.append($('<img class="rt-file-thumb">').attr('src', dataUrl));
+    } else {
+        $chip.append('<i class="fa fa-file-pdf" style="color:#dc3545;"></i>');
+    }
+    $chip.append($('<span class="rt-file-name">').text(file.name));
+    $chip.append($('<i class="fa fa-times rt-file-remove"></i>').on('click', function () {
+        $('#rt-day-file-input').val('');
+        $list.empty();
+        $('#rt-day-ocr-summary').hide();
+        $('#rt-day-mess-note').hide();
+    }));
+    $list.append($chip);
+}
+
+function rtVerifyDayEvidence(file) {
+    var formData = new FormData();
+    formData.append('receipt', file);
+    formData.append('_token', $('meta[name="csrf-token"]').attr('content') || '');
+    formData.append('reimbursement_type', 'travel');
+    formData.append('date', $('#rt-day-date-field').val() || '');
+    formData.append('exclude_id', OCR_EDIT_INQUIRY_EXCLUDE_ID);
+
+    $.ajax({
+        url: '/reimbursement/verify-day-evidence-ocr',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false
+    }).then(function (res) {
+        res = res || {};
+        $('#rt-day-ocr-summary').show();
+        $('#rt-day-ocr-merchant').val(res.extracted_merchant_name || '');
+        $('#rt-day-ocr-amount').val(res.extracted_amount != null ? res.extracted_amount : '');
+        $('#rt-day-ocr-currency').val(res.extracted_currency || 'IDR');
+        $('#rt-day-merchant-name').val(res.extracted_merchant_name || '');
+
+        if (!$('#rt-day-date-field').val() && res.extracted_transaction_date) {
+            $('#rt-day-date-field').val(res.extracted_transaction_date).trigger('change');
+        }
+        $('#rt-day-ocr-date').val($('#rt-day-date-field').val());
+
+        if (res.mess_relation) {
+            $('#rt-day-mess-note').show().text('✔ Trip Type otomatis: Stay(MESS) -- ' + res.mess_relation.message);
+            $('#trip_type_id').val(String(res.mess_relation.trip_type_id || '')).prop('disabled', true).trigger('change');
+        } else {
+            $('#rt-day-mess-note').hide();
+            $('#trip_type_id').prop('disabled', false);
+            if (res.same_trip_offer && window.ReimbursementOcrCheck) {
+                window.ReimbursementOcrCheck.showSameTripInfoModal(res.same_trip_offer);
+            } else if (res.duplicate) {
+                alert(res.duplicate_message || 'Invoice ini sudah pernah digunakan pada pengajuan lain.');
+            }
+        }
+
+        rtEnableTravelSubmitButtons();
+    }).catch(function () {
+        rtEnableTravelSubmitButtons();
+    });
+}
+
+function rtHandleDayFile(file) {
+    if (!file) {
+        return;
+    }
+    if (file.type && file.type.indexOf('image/') === 0) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            rtRenderDayFileChip(file, e.target.result);
+            rtVerifyDayEvidence(file);
+        };
+        reader.readAsDataURL(file);
+    } else {
+        rtRenderDayFileChip(file, null);
+        rtVerifyDayEvidence(file);
+    }
+}
+
 $(document).ready(function () {
+    $('#rt-day-browse-btn, #rt-day-dropzone').on('click', function () {
+        $('#rt-day-file-input')[0].click();
+    });
+    $('#rt-day-file-input').on('change', function (e) {
+        rtHandleDayFile(e.target.files && e.target.files[0]);
+    });
+    $('#rt-day-dropzone').on('dragover', function (e) {
+        e.preventDefault();
+        $(this).addClass('is-dragover');
+    }).on('dragleave', function () {
+        $(this).removeClass('is-dragover');
+    }).on('drop', function (e) {
+        e.preventDefault();
+        $(this).removeClass('is-dragover');
+        var file = e.originalEvent.dataTransfer && e.originalEvent.dataTransfer.files[0];
+        if (file) {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            $('#rt-day-file-input')[0].files = dt.files;
+            rtHandleDayFile(file);
+        }
+    });
+    $('#rt-day-ocr-edit-toggle').on('click', function () {
+        var editing = $('#rt-day-ocr-date').prop('readonly');
+        $('#rt-day-ocr-date, #rt-day-ocr-merchant, #rt-day-ocr-amount, #rt-day-ocr-currency').prop('readonly', !editing);
+        $(this).html(editing ? '<i class="fa fa-pencil-alt"></i> Edit' : '<i class="fa fa-check"></i> Done');
+    });
+    $(document).on('click', '.rt-preview-day-evidence', function () {
+        var $input = $('#rt-day-file-input')[0];
+        if ($input.files && $input.files[0]) {
+            window.open(URL.createObjectURL($input.files[0]), '_blank');
+        } else {
+            alert('Belum ada bukti yang di-upload ulang pada sesi ini.');
+        }
+    });
+
+    var refTimer = null;
+    $('#rt-day-reference-invoice').on('input', function () {
+        var $input = $(this);
+        clearTimeout(refTimer);
+        refTimer = setTimeout(function () {
+            var value = $.trim($input.val());
+            var $fb = $('#rt-day-reference-feedback');
+            if (value === '') {
+                $fb.text('').css('color', '#6c757d');
+                return;
+            }
+            $fb.text('Memeriksa…').css('color', '#6c757d');
+            $.ajax({
+                url: '/reimbursement/check-evidence-reference',
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    _token: $('meta[name="csrf-token"]').attr('content') || '',
+                    no_invoice: value,
+                    exclude_id: OCR_EDIT_INQUIRY_EXCLUDE_ID
+                }
+            }).then(function (res) {
+                res = res || {};
+                if (res.found) {
+                    $fb.text(res.message || 'Ditemukan.').css('color', '#1e7e42');
+                    rtEnableTravelSubmitButtons();
+                } else {
+                    $fb.text(res.message || 'Tidak ditemukan.').css('color', '#c0392b');
+                }
+            }).catch(function () {
+                $fb.text('Tidak dapat memeriksa saat ini.').css('color', '#c0392b');
+            });
+        }, 500);
+    });
+
+    // No standalone date-only duplicate popup here -- a duplicate is only
     // No standalone date-only duplicate popup here -- a duplicate is only
     // flagged when tanggal + No Invoice + Nominal ALL match an existing
     // claim (business decision, Sep 2026), which is checked per cost-line
@@ -558,7 +841,7 @@ $(document).ready(function(){
         count++;
         if($('body').find('.fieldGroupDetail').length < maxGroup){
          
-          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><input type="text" class="form-control remarks-input" name="remarks[]"></td><td><select class="form-control currency'+count+'" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><button type="button" data-idx="1" class="btn btn-success btn-sm addFile"><i class="fa fa-upload"></i></button><button type="button" data-idx="1" class="btn btn-success btn-sm addCamera" ><i class="fa fa-camera"></i></button><input type="file" accept="image/*" name="file[]"  style="display: none; " class="file-input"><input type="file" accept="image/*" name="proof[]" capture="camera" class="camera-input" style="display: none;"><div id="preview_1"></div></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
+          var fieldHTML = '<tr class="fieldGroupDetail"><td><input type="hidden" name="id_detail[]"><select class="form-control cost_type_id'+count+'" name="cost_type_id[]"><option value="">Pilih...</option>@foreach ($types as $item)<option value="{{$item->id}}">{{$item->name}}</option>@endforeach</select></td><td><input type="text" class="form-control" name="destination[]"></td><td><input type="text" class="form-control remarks-input" name="remarks[]"></td><td><select class="form-control currency'+count+'" name="currency[]" style="width:130%"><option value="">Pilih...</option>@foreach ($currency as $item)<option value="{{$item->currency}}">{{$item->currency}}</option>@endforeach</select></td><td><input type="text" class="form-control amount-input currency amount'+count+'" name="amount[]"></td><td><input type="text" class="form-control number-format currency idr_rate_'+count+' change-rate" name="idr_rate[]" readonly></td><td><input type="text" class="form-control number-format currency tax'+count+'" readonly name="tax[]"></td><td><select class="form-control" name="payment_type[]" style="width:130%"><option value="">Select...</option><option value="BDC">BDC</option><option value="Cash">Cash</option></select></td><td><button type="button" class="btn btn-outline-secondary btn-sm rt-preview-day-evidence" title="Lihat bukti (Step 1)"><i class="fa fa-eye"></i></button></td><td><button type="button" class="btn btn-danger remove-detail"><i class="fa fa-trash"></i></button></td></tr>';
           $('body').find('.fieldGroupDetail:last').after(fieldHTML);
           $('.currency').not('input[name="idr_rate[]"], input[name="tax[]"], input[name="rate[]"], input[name="amount[]"]').mask("#.##0", {
               reverse: true
@@ -1702,8 +1985,8 @@ $(document).ready(function(){
 
             try {
                 tax = self.types.filter(a => a.id == id)[0].tax
-                this.reimburses[i].details[a].idr_rate = this.getRate(currency, amount).toLocaleString("de-DE")
-                this.reimburses[i].details[a].tax = (this.getRate(currency, amount) * tax / 100).toLocaleString('de-DE')
+                this.reimburses[i].details[a].idr_rate = this.getRate(currency, amount).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                this.reimburses[i].details[a].tax = (this.getRate(currency, amount) * tax / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 warnLargeTravelAmount('reimburse-' + i + '-' + a, this.getRate(currency, amount), null)
                 this.reimburses[i].details.forEach(element => {
                     subtotal += parseTravelMoney(element.idr_rate)

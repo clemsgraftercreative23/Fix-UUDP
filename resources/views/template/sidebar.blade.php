@@ -80,6 +80,9 @@
                              <li>
                                <a href="/reimbursement-entertaiment">Entertainment</a>
                              </li>
+                             <li>
+                               <a href="{{url('pencairan-reimbursement')}}">Settlement</a>
+                             </li>
                              {{-- <li>
                                <a href="/reimbursement-medical">Medical</a>
                              </li> --}}
@@ -174,13 +177,13 @@
                                @else
                                   <li>
                                @endif
-                                   <a href="{{url('pengaturan-fitur')}}">Pengaturan Fitur</a>
+                                   <a href="{{url('pengaturan-fitur')}}">Feature Settings</a>
                                </li>
                            </ul>
                        </li>
                         <li>
                         <li>
-                          <a href="{{url('accurate/authorize')}}" target="_blank" title="Konfigurasi API Token di .env"><i class="material-icons">share</i>Accurate API</a>
+                          <a href="{{url('accurate/authorize')}}" target="_blank" title="API token configuration in .env"><i class="material-icons">share</i>Accurate API</a>
                         </li>
                             <br><br><br><br>
                             <a href="{{ route('logout') }}" class="btn btn-primary btn-lg btn-block" onclick="event.preventDefault(); document.getElementById('frm-logout').submit();">
@@ -427,7 +430,7 @@
                             <a href="{{url('profile')}}"><i class="material-icons">account_circle</i>Profil</a>
                         </li>
                         <!--<li>-->
-                        <!--  <a href="{{url('accurate/authorize')}}" target="_blank" title="Konfigurasi API Token di .env"><i class="material-icons">share</i>Accurate API</a>-->
+                        <!--  <a href="{{url('accurate/authorize')}}" target="_blank" title="API token configuration in .env"><i class="material-icons">share</i>Accurate API</a>-->
                         <!--</li>                    -->
                         <li>
                             <br><br><br><br>
@@ -506,7 +509,7 @@
                     <!--    <a href="{{url('pencairan-reimbursement')}}"><i class="material-icons">download</i>Settlement Reimb</a>-->
                     <!--</li>-->
                     <li>
-                        <a href="{{url('accurate/authorize')}}" target="_blank" title="Konfigurasi API Token di .env"><i class="material-icons">share</i>Accurate API</a>
+                        <a href="{{url('accurate/authorize')}}" target="_blank" title="API token configuration in .env"><i class="material-icons">share</i>Accurate API</a>
                     </li>  
                     @if($segment1 == 'activity-log')
                     <li class="active-page">
