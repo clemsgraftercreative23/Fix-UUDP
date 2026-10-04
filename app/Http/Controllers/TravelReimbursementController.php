@@ -595,29 +595,27 @@ class TravelReimbursementController extends Controller
         // pernah ditegakkan di mana pun -- file 11MB tetap diterima.
         // Pengecekan di browser bisa dilewati, jadi penolakan yang
         // sebenarnya harus terjadi di sini.
+        // ValidationException::withMessages() dipakai di sini (pola yang sama
+        // dengan LoginController) karena membangun ValidationException dari
+        // validator kosong menghasilkan HTTP 500 "Whoops", bukan pesan yang
+        // terbaca user.
         if ($file->getSize() > self::MAX_EVIDENCE_BYTES) {
-            throw new \Illuminate\Validation\ValidationException(
-                validator([], []),
-                redirect()->back()->withErrors([
-                    'file' => 'Ukuran file bukti maksimal '
-                        . self::MAX_EVIDENCE_MB . 'MB. File "'
-                        . $file->getClientOriginalName() . '" berukuran '
-                        . number_format($file->getSize() / 1048576, 1)
-                        . 'MB dan tidak disimpan.',
-                ])
-            );
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'file' => ['Ukuran file bukti maksimal '
+                    . self::MAX_EVIDENCE_MB . 'MB. File "'
+                    . $file->getClientOriginalName() . '" berukuran '
+                    . number_format($file->getSize() / 1048576, 1)
+                    . 'MB dan tidak disimpan.'],
+            ]);
         }
 
         // Tipe file juga hanya dibatasi di browser lewat accept="image/*,.pdf".
         if (!in_array((string) $file->getMimeType(), self::ALLOWED_EVIDENCE_MIMES, true)) {
-            throw new \Illuminate\Validation\ValidationException(
-                validator([], []),
-                redirect()->back()->withErrors([
-                    'file' => 'Tipe file bukti harus JPG, PNG, atau PDF. File "'
-                        . $file->getClientOriginalName() . '" ('
-                        . $file->getMimeType() . ') tidak disimpan.',
-                ])
-            );
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'file' => ['Tipe file bukti harus JPG, PNG, atau PDF. File "'
+                    . $file->getClientOriginalName() . '" ('
+                    . $file->getMimeType() . ') tidak disimpan.'],
+            ]);
         }
 
         $targetDir = public_path('images/file_bukti');
