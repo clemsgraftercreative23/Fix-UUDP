@@ -1126,6 +1126,21 @@ $(document).ready(function(){
   }
 
   /**
+   * Evidence upload size cap. Kept in sync with the "Max 10MB" the dropzone
+   * advertises and with the server-side check in
+   * TravelReimbursementController::storeTravelEvidenceFile().
+   */
+  var RT_MAX_EVIDENCE_MB = 10;
+  var RT_MAX_EVIDENCE_BYTES = RT_MAX_EVIDENCE_MB * 1024 * 1024;
+
+  function rtFormatFileSize(bytes) {
+    if (!bytes && bytes !== 0) { return '?'; }
+    if (bytes >= 1024 * 1024) { return (bytes / (1024 * 1024)).toFixed(1) + 'MB'; }
+    if (bytes >= 1024) { return Math.round(bytes / 1024) + 'KB'; }
+    return bytes + 'B';
+  }
+
+  /**
    * The actual <input type="file"> elements submitted for a day's evidence
    * are created here, one pair (file + its row-tag) per uploaded file,
    * instead of relying on the single visible dropzone input -- that one only
@@ -2432,6 +2447,30 @@ $(document).ready(function(){
             var entry = vm.reimburses[i];
             // FileList is live -- the input gets reset after `change`, so copy it first.
             var files = Array.prototype.slice.call(fileList);
+
+            // Enforce the "Max 10MB" the dropzone advertises. Checked here so
+            // it covers both Browse File and drag & drop, and before any
+            // refer/allowance state is cleared -- an oversized file must not
+            // silently discard the day's existing setup.
+            var oversized = files.filter(function (f) {
+                return f && f.size > RT_MAX_EVIDENCE_BYTES;
+            });
+            if (oversized.length) {
+                var names = oversized.map(function (f) {
+                    return f.name + ' (' + rtFormatFileSize(f.size) + ')';
+                }).join(', ');
+                rtAlertModal(
+                    'Maximum file size is ' + RT_MAX_EVIDENCE_MB + 'MB. '
+                    + 'These files were not attached: ' + names + '.',
+                    'File Too Large'
+                );
+                files = files.filter(function (f) {
+                    return !f || f.size <= RT_MAX_EVIDENCE_BYTES;
+                });
+                if (!files.length) {
+                    return;
+                }
+            }
             var addAll = function () {
                 files.forEach(function (file) {
                     vm.addSingleDayFile(i, file);

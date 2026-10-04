@@ -31,6 +31,24 @@ use App\Support\TravelDayTotal;
 
 class TravelReimbursementController extends Controller
 {
+    /**
+     * Evidence upload limits.
+     *
+     * The create page advertises "Supported file: JPG, PNG, PDF (Max 10MB)",
+     * but nothing used to enforce either rule server-side: the browser's
+     * accept="image/*,.pdf" and the dropzone caption were the only checks, and
+     * both are trivially bypassed. Keep these in sync with
+     * RT_MAX_EVIDENCE_MB in resources/views/reimbursement-travel/create.blade.php.
+     *
+     * Note PHP's own upload_max_filesize must be at least this large, or large
+     * uploads fail earlier with a generic error instead of this message.
+     */
+    private const MAX_EVIDENCE_MB = 10;
+    private const MAX_EVIDENCE_BYTES = self::MAX_EVIDENCE_MB * 1024 * 1024;
+    private const ALLOWED_EVIDENCE_MIMES = [
+        'image/jpeg', 'image/pjpeg', 'image/png', 'application/pdf',
+    ];
+
     /** OCR read results keyed by spl_object_id(UploadedFile), populated by extractReceiptInvoiceNumber(). */
     private array $ocrResultsByFileId = [];
 
@@ -571,6 +589,35 @@ class TravelReimbursementController extends Controller
         // saat object upload sudah invalid/terproses ulang.
         if (!$file->isValid()) {
             return '';
+        }
+
+        // Batas ukuran yang tertulis di UI ("Max 10MB") sebelumnya tidak
+        // pernah ditegakkan di mana pun -- file 11MB tetap diterima.
+        // Pengecekan di browser bisa dilewati, jadi penolakan yang
+        // sebenarnya harus terjadi di sini.
+        if ($file->getSize() > self::MAX_EVIDENCE_BYTES) {
+            throw new \Illuminate\Validation\ValidationException(
+                validator([], []),
+                redirect()->back()->withErrors([
+                    'file' => 'Ukuran file bukti maksimal '
+                        . self::MAX_EVIDENCE_MB . 'MB. File "'
+                        . $file->getClientOriginalName() . '" berukuran '
+                        . number_format($file->getSize() / 1048576, 1)
+                        . 'MB dan tidak disimpan.',
+                ])
+            );
+        }
+
+        // Tipe file juga hanya dibatasi di browser lewat accept="image/*,.pdf".
+        if (!in_array((string) $file->getMimeType(), self::ALLOWED_EVIDENCE_MIMES, true)) {
+            throw new \Illuminate\Validation\ValidationException(
+                validator([], []),
+                redirect()->back()->withErrors([
+                    'file' => 'Tipe file bukti harus JPG, PNG, atau PDF. File "'
+                        . $file->getClientOriginalName() . '" ('
+                        . $file->getMimeType() . ') tidak disimpan.',
+                ])
+            );
         }
 
         $targetDir = public_path('images/file_bukti');
