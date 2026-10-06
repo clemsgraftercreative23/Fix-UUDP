@@ -142,6 +142,24 @@ class TravelReimbursementController extends Controller
         return Schema::hasTable('reimbursement_attachments');
     }
 
+    /**
+     * Whether the allowance_only column exists yet.
+     *
+     * Same guard as attachmentTableReady(): the app must keep working on an
+     * environment where its migration has not been run, falling back to the
+     * old derived value instead of failing on an unknown column. Cached per
+     * request because a day loop asks once per row.
+     */
+    private function allowanceOnlyColumnReady(): bool
+    {
+        static $ready = null;
+        if ($ready === null) {
+            $ready = Schema::hasColumn('reimbursement_travel', 'allowance_only');
+        }
+
+        return $ready;
+    }
+
     private function resolveListkasbankName($kode): string
     {
         if ($kode === null || $kode === '') {
@@ -2368,8 +2386,18 @@ class TravelReimbursementController extends Controller
 
             DB::commit();
 
-            $return = redirect('reimbursement-travel/add-item/' . $reimbursement->id)
-                ->with(['success' => 'Days successfully added']);
+            // Draft keeps the user on the form so they can carry on editing;
+            // a real submit is finished work, so it returns to the list where
+            // the submission can be seen with its new status.
+            $actions = $this->parseTravelFormActions();
+            $isDraft = (bool) ($actions['save_draft'] ?? false)
+                || (bool) ($actions['save_item'] ?? false);
+
+            $return = $isDraft
+                ? redirect('reimbursement-travel/add-item/' . $reimbursement->id)
+                    ->with(['success' => 'Draft saved'])
+                : redirect()->route('reimbursement-travel.index')
+                    ->with(['success' => 'Days successfully added']);
 
             return $this->respondAfterTravelSave($request, $return);
         } catch (ValidationException $e) {
@@ -3050,10 +3078,13 @@ class TravelReimbursementController extends Controller
                 'existingFiles' => $existingFiles,
                 'referenceInvoice' => $referenceInvoice,
                 'referDay' => $referDay,
-                // "Travel Allowance only" is a transient create-form state (no
-                // column stored); re-derive it: no evidence at all and every
-                // expense row is zero.
-                'allowanceOnly' => empty($existingFiles) && !empty($detailModels) && !$hasNonZeroAmount,
+                // Read the stored choice. Rows saved before the allowance_only
+                // column existed fall back to the old guess (no evidence, some
+                // expense rows, every amount zero) so historical days still
+                // show the box ticked where it clearly applied.
+                'allowanceOnly' => isset($d->allowance_only)
+                    ? (bool) $d->allowance_only
+                    : (empty($existingFiles) && !empty($detailModels) && !$hasNonZeroAmount),
                 'uploadType' => 'invoice',
                 'sameTripRef' => $sameTripRef,
                 'referenceFeedback' => ['message' => '', 'color' => ''],
@@ -3426,7 +3457,7 @@ class TravelReimbursementController extends Controller
         $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
         $computedAllowance = $this->computeAllowanceInIdr((int) $tripTypeId, $idMain);
 
-        ReimbursementTravel::where('id', $travelId)->update([
+        $dayUpdate = [
             'date' => $value['date'] ?? $dayRow->date,
             'purpose' => $value['purpose'] ?? '',
             'trip_type_id' => $tripTypeId,
@@ -3437,7 +3468,19 @@ class TravelReimbursementController extends Controller
             'no_invoice' => $dayInvoice['no_invoice'],
             'reference_reimbursement_id' => $dayInvoice['reference_reimbursement_id'],
             'merchant_name' => $touchedEvidence ? ($value['merchant_name'] ?? $dayRow->merchant_name) : $dayRow->merchant_name,
-        ]);
+        ];
+
+        // Store the user's actual choice. It used to be re-derived on load
+        // ("no evidence AND some expense rows AND all amounts zero"), but
+        // ticking the box clears the expense rows and rows without a cost type
+        // are skipped when saving, so the day came back with no detail rows and
+        // the guess failed -- the checkbox silently un-ticked itself after
+        // saving a draft.
+        if ($this->allowanceOnlyColumnReady()) {
+            $dayUpdate['allowance_only'] = $allowanceOnlyRaw ? 1 : 0;
+        }
+
+        ReimbursementTravel::where('id', $travelId)->update($dayUpdate);
 
         // Drop the day-level files the user removed BEFORE appending new uploads:
         // the delete below keeps only the ids the form posted back, so running

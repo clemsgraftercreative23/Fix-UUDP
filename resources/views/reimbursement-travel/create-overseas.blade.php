@@ -106,6 +106,12 @@
         padding: 26px 14px; cursor: pointer; transition: border-color .15s;
     }
     .rt-dropzone:hover, .rt-dropzone.is-dragover { border-color: #28a745; background: #f4fff7; }
+    /* Supporting-Proof mode: a different colour so the dropzone itself shows
+       which type the next upload will get, not just the buttons above it. */
+    .rt-dropzone.is-proof-mode { border-color: #adb5bd; background: #f8f9fa; }
+    .rt-dropzone.is-proof-mode:hover, .rt-dropzone.is-proof-mode.is-dragover {
+        border-color: #6c757d; background: #f1f3f5;
+    }
     .rt-dropzone i { font-size: 26px; color: #8a94a6; margin-bottom: 6px; display: block; }
     .rt-dropzone small { display: block; color: #8a94a6; margin-top: 6px; }
     .rt-ocr-hint { background: #eef7f0; border: 1px solid #cdeadb; border-radius: 8px; padding: 12px 14px; font-size: 12.5px; height: 100%; }
@@ -406,20 +412,55 @@
                                     <div class="col-md-8">
                                         <!-- Per-file Invoice-vs-Proof choice on each chip below instead of one
                                              day-level radio -- see the same block in create.blade.php. -->
-                                        <div class="rt-upload-type" style="margin-bottom:8px;font-size:12px;color:#6c757d;">
-                                            Upload the invoice/receipt plus any supporting proof. Mark each file below as
-                                            <b>Invoice / Receipt</b> (read by OCR) or <b>Supporting Proof</b> (email screenshot,
-                                            ticket, assignment letter &mdash; attached only, no OCR).
+                                        <!-- Pick the type BEFORE browsing (Oct 2026 request): users were
+                                             confused by uploading a ticket or email screenshot, seeing OCR
+                                             flag it as "not an invoice", and only then finding the dropdown.
+                                             The choice applies to the next upload only, so a day can still
+                                             mix invoices and proofs, and each chip's own dropdown still
+                                             corrects a file afterwards. -->
+                                        <div class="rt-upload-type" style="margin-bottom:8px;">
+                                            <div style="font-size:12px;color:#6c757d;margin-bottom:6px;">
+                                                Pilih jenis dokumen dulu, lalu upload filenya.
+                                            </div>
+                                            <div class="btn-group btn-group-sm" role="group" aria-label="Jenis dokumen">
+                                                <button type="button"
+                                                        class="btn"
+                                                        :class="(data.nextDocType || 'invoice') === 'invoice' ? 'btn-success' : 'btn-outline-success'"
+                                                        @click="setNextDocType(i, 'invoice')">
+                                                    <i class="fa fa-file-invoice"></i> Invoice / Receipt
+                                                </button>
+                                                <button type="button"
+                                                        class="btn"
+                                                        :class="data.nextDocType === 'proof' ? 'btn-secondary' : 'btn-outline-secondary'"
+                                                        @click="setNextDocType(i, 'proof')">
+                                                    <i class="fa fa-paperclip"></i> Supporting Proof
+                                                </button>
+                                            </div>
+                                            <small style="display:block;margin-top:6px;color:#6c757d;">
+                                                <template v-if="data.nextDocType === 'proof'">
+                                                    Bukti pendukung (tiket, email, surat tugas) &mdash; tidak dibaca OCR.
+                                                </template>
+                                                <template v-else>
+                                                    Struk / invoice &mdash; akan dibaca OCR otomatis.
+                                                </template>
+                                            </small>
                                         </div>
                                         <div class="rt-dropzone"
+                                             :class="data.nextDocType === 'proof' ? 'is-proof-mode' : ''"
                                              @click="$refs['dayFileInput'+i][0].click()"
                                              @dragover.prevent="$event.currentTarget.classList.add('is-dragover')"
                                              @dragleave.prevent="$event.currentTarget.classList.remove('is-dragover')"
                                              @drop.prevent="$event.currentTarget.classList.remove('is-dragover'); onDayFileDrop(i, $event)">
                                             <i class="fa fa-cloud-upload-alt"></i>
                                             Drag &amp; drop file here or<br>
-                                            <button type="button" class="btn btn-outline-success btn-sm" style="margin-top:8px;" @click.stop="$refs['dayFileInput'+i][0].click()">Browse File</button>
-                                            <small>Supported file: JPG, PNG, PDF (Max 10MB)</small>
+                                            <button type="button" class="btn btn-outline-success btn-sm" style="margin-top:8px;" @click.stop="$refs['dayFileInput'+i][0].click()">
+                                                Browse File
+                                            </button>
+                                            <small>
+                                                Upload sebagai
+                                                <b>@{{ data.nextDocType === 'proof' ? 'Supporting Proof' : 'Invoice / Receipt' }}</b>
+                                                &middot; JPG, PNG, PDF (Max 10MB)
+                                            </small>
                                         </div>
                                         <!-- Multiple files per day (Sep 2026 redesign): the real <input type=file>
                                              elements actually submitted are created dynamically per file (see
@@ -1885,6 +1926,9 @@ $(document).ready(function(){
                 referenceInvoice: '',
                 referDay: null,
                 allowanceOnly: false,
+                // Type applied to the NEXT upload in this day; the chip
+                // dropdown still overrides it per file afterwards.
+                nextDocType: 'invoice',
                 uploadType: 'invoice',
                 sameTripRef: null,
                 referenceFeedback: { message: '', color: '' },
@@ -2059,6 +2103,9 @@ $(document).ready(function(){
                 referenceInvoice: '',
                 referDay: null,
                 allowanceOnly: false,
+                // Type applied to the NEXT upload in this day; the chip
+                // dropdown still overrides it per file afterwards.
+                nextDocType: 'invoice',
                 uploadType: 'invoice',
                 sameTripRef: null,
                 referenceFeedback: { message: '', color: '' },
@@ -2460,8 +2507,11 @@ $(document).ready(function(){
             // once per file so several can coexist (see rtAddDayHiddenFile()).
             // New files start as Invoice / Receipt and are re-marked per file on
             // the chip itself (see create.blade.php).
-            var isProof = false;
-            rtAddDayHiddenFile(i, uid, file, 'invoice');
+            // The file takes the type chosen above the dropzone before browsing
+            // (data.nextDocType); the chip's own dropdown still corrects it
+            // afterwards, so a mistake costs one click rather than a re-upload.
+            var isProof = entry.nextDocType === 'proof';
+            rtAddDayHiddenFile(i, uid, file, isProof ? 'proof' : 'invoice');
 
             var pushChip = function (dataUrl) {
                 var objectUrl = (!isImage) ? URL.createObjectURL(file) : null;
@@ -2651,6 +2701,20 @@ $(document).ready(function(){
                 // only expose getUserMedia on https:// or localhost).
                 rtAlertModal('The camera could not be opened. Check the browser\'s camera permission, or use "Browse File" instead.', 'Camera Unavailable');
             });
+        },
+        /**
+         * Choose the type the NEXT upload of this day gets.
+         *
+         * Set before browsing so a ticket or email screenshot is never run
+         * through OCR and flagged "not an invoice". Per-file dropdowns on the
+         * chips still override this afterwards.
+         */
+        setNextDocType(i, type) {
+            var entry = this.reimburses[i];
+            if (!entry) {
+                return;
+            }
+            this.$set(entry, 'nextDocType', type === 'proof' ? 'proof' : 'invoice');
         },
         onDayFileInputChange(i, event) {
             this.addDayFiles(i, event.target.files);
