@@ -574,6 +574,7 @@
                                              earlier day's evidence (same submission) instead of re-uploading it. -->
                                         <div class="rt-reference-wrap" v-if="i > 0 && !data.dayFiles.length && !data.existingFiles.length">
                                             <input type="hidden" :name="'reimburse['+i+'][refer_day]'" :value="data.referDay === null ? '' : data.referDay">
+                                            <input type="hidden" :name="'reimburse['+i+'][refer_cancelled]'" :value="data.referCancelled ? 1 : ''">
                                             <div v-if="data.referDay !== null" class="alert alert-warning" style="font-size:12px;padding:8px 12px;margin:8px 0 0;">
                                                 <i class="fa fa-link"></i> The document of <b>Day @{{ data.referDay + 1 }}</b> is used for this day's <b>Travel Allowance</b>. No expense is claimed today (amount 0).
                                                 <button type="button" class="btn btn-link btn-sm" @click="clearReferDay(i)">Cancel</button>
@@ -1889,6 +1890,7 @@ $(document).ready(function(){
                 dayFiles: [],
                 referenceInvoice: '',
                 referDay: null,
+                referCancelled: false,
                 allowanceOnly: false,
                 uploadType: 'invoice',
                 sameTripRef: null,
@@ -2070,6 +2072,7 @@ $(document).ready(function(){
                 existingFiles: [],
                 referenceInvoice: '',
                 referDay: null,
+                referCancelled: false,
                 allowanceOnly: false,
                 uploadType: 'invoice',
                 sameTripRef: null,
@@ -2899,6 +2902,7 @@ $(document).ready(function(){
                 confirmText: 'Yes, Continue', cancelText: 'Cancel',
                 onYes: function () {
                     vm.$set(entry, 'referDay', srcIdx);
+                    vm.$set(entry, 'referCancelled', false);
                     for (var a = 0; a < entry.details.length; a++) {
                         entry.details[a].amount = '0';
                         vm.calculateTotal(i, a);
@@ -2909,6 +2913,7 @@ $(document).ready(function(){
         },
         clearReferDay(i) {
             this.$set(this.reimburses[i], 'referDay', null);
+            this.$set(this.reimburses[i], 'referCancelled', true);
         },
         checkDayReferenceInvoice(i) {
             var vm = this;

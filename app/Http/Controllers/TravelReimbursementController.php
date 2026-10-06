@@ -3026,6 +3026,22 @@ class TravelReimbursementController extends Controller
                         break;
                     }
                 }
+                if ($referDay === null) {
+                    // Fallback: the source day's invoice may have been edited
+                    // after this refer was saved, so the string match above
+                    // fails even though the linkage is still valid. Point at
+                    // the earliest earlier day carrying evidence instead of
+                    // dropping the refer state -- dropping it forced a
+                    // "refer ulang" on untouched days and, on save, wiped
+                    // the linkage server-side (Oct 2026 report: editing day
+                    // 1 orphaned days 2 & 3).
+                    foreach ($invoiceByIndex as $srcIdx => $srcInvoice) {
+                        if ($srcInvoice !== '') {
+                            $referDay = $srcIdx;
+                            break;
+                        }
+                    }
+                }
             }
             $invoiceByIndex[$index] = $dayInvoice;
 
@@ -3443,15 +3459,57 @@ class TravelReimbursementController extends Controller
             $zeroExpenseDay = $dayInvoice['reference_reimbursement_id'] !== null
                 || ($allowanceOnlyRaw && empty($ocrCandidateFiles));
         } else {
-            // Nothing evidence-related submitted. When the stored day still
-            // carries a reference here, the user cancelled it in the UI
-            // (a kept refer/same-trip link always re-submits its signal), so
-            // drop the linkage instead of silently zeroing edited expenses.
-            $dayInvoice = [
-                'no_invoice' => (string) ($dayRow->no_invoice ?? ''),
-                'reference_reimbursement_id' => null,
-            ];
-            $zeroExpenseDay = false;
+            // Nothing evidence-related submitted for this day. Preserve a
+            // previously-saved same-submission refer ("refer day") when the
+            // day was clearly left untouched: no explicit refer cancel, no
+            // kept/new day-level files and no non-zero expense claimed.
+            // Previously the linkage was unconditionally dropped here on the
+            // assumption that a kept refer always re-sends its signal -- but
+            // the edit form re-derives the refer target by matching invoice
+            // strings, so editing the source day's invoice orphaned every
+            // untouched refer day and forced a "refer ulang" on days the
+            // user never meant to change (Oct 2026 report). An explicit
+            // cancel is still honoured: cancelling to claim own
+            // expenses/files either takes the evidence path above or submits
+            // non-zero expense rows, both of which clear the link.
+            $wasSelfRefer = (int) ($dayRow->reference_reimbursement_id ?? 0) === $idMain
+                && (int) ($dayRow->reference_reimbursement_id ?? 0) > 0;
+            $referCancelled = !empty($value['refer_cancelled']);
+            $keptDayFiles = (array) ($value['keep_day_attachment_ids'] ?? []);
+            $submittedDetails = isset($value['detail']) && is_array($value['detail']) ? $value['detail'] : [];
+            $hasNonZeroExpense = false;
+            foreach ($submittedDetails as $detailValue) {
+                if (!is_array($detailValue) || trim((string) ($detailValue['cost_type_id'] ?? '')) === '') {
+                    continue;
+                }
+                if (abs($this->normalizeTravelAmountValue($detailValue['amount'] ?? '')) > 0.00001) {
+                    $hasNonZeroExpense = true;
+                    break;
+                }
+            }
+            if ($wasSelfRefer && !$referCancelled && empty($keptDayFiles) && empty($dayUploadFiles) && empty($rowTaggedFiles) && !$hasNonZeroExpense) {
+                // Refresh the stored invoice copy from the earliest
+                // already-saved earlier day so a source-day invoice edit
+                // doesn't leave a stale copy behind.
+                $sourceInvoice = '';
+                foreach ($dayInvoiceByKey as $srcInvoice) {
+                    if (trim((string) $srcInvoice) !== '') {
+                        $sourceInvoice = (string) $srcInvoice;
+                        break;
+                    }
+                }
+                $dayInvoice = [
+                    'no_invoice' => $sourceInvoice !== '' ? $sourceInvoice : (string) ($dayRow->no_invoice ?? ''),
+                    'reference_reimbursement_id' => $idMain,
+                ];
+                $zeroExpenseDay = true;
+            } else {
+                $dayInvoice = [
+                    'no_invoice' => (string) ($dayRow->no_invoice ?? ''),
+                    'reference_reimbursement_id' => null,
+                ];
+                $zeroExpenseDay = false;
+            }
         }
 
         $tripTypeId = $this->normalizeTripTypeId($value['trip_type_id'] ?? null);
