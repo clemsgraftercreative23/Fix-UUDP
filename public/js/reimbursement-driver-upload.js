@@ -185,6 +185,28 @@ window.DriverUpload = (function () {
           $wrap.append($inner);
           resolve($wrap);
         };
+        // Without this the promise never settles when FileReader fails (a
+        // locked, moved or unreadable file), and because the caller only
+        // enables Submit/Draft in .then(), the buttons stay disabled forever
+        // with "The button is disabled until a file is uploaded" still showing
+        // even though the files are attached. Resolve with a placeholder so
+        // the upload still counts; the hidden input carrying the real file is
+        // created before this runs, so the attachment itself is unaffected.
+        reader.onerror = function () {
+          $inner.append(
+            $('<span>').text(file.name || 'File').css({
+              fontSize: '12px',
+              maxWidth: '100px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'inline-block'
+            })
+          );
+          $inner.append($remove);
+          $wrap.append($inner);
+          resolve($wrap);
+        };
         reader.readAsDataURL(file);
       } else if (isPdfFile(file)) {
         var fileURL = URL.createObjectURL(file);
@@ -347,6 +369,16 @@ window.DriverUpload = (function () {
         // uid exposed so a caller that renders its own chip elsewhere (e.g.
         // Entertainment's Step 1 list) can tie it to this exact attachment
         // and remove both together. Callers that ignore it are unaffected.
+        processed.attachmentUid = uid;
+        return processed;
+      }).catch(function (err) {
+        // The file IS attached by this point (appendAttachmentInput ran above),
+        // so a failure to draw its thumbnail must not leave Submit/Draft
+        // disabled -- that stranded the whole form with files visibly uploaded.
+        if (window.console && console.warn) {
+          console.warn('Preview failed, attachment kept:', err);
+        }
+        enableSubmitButtons();
         processed.attachmentUid = uid;
         return processed;
       });

@@ -169,6 +169,41 @@
     border-radius: 15px; font-size: 12.5px; font-weight: 700; cursor: pointer;
   }
   .et-preview-num:hover { background: #d4f0de; }
+  /* The digit is now a COUNT of files, not a file number, so it is set in a
+     darker pill against the badge to read as a quantity. */
+  .et-preview-num span {
+      background: #1e7e34; color: #fff; border-radius: 9px;
+      min-width: 18px; height: 18px; padding: 0 5px; font-size: 11px;
+      display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Row evidence gallery -- same shape as the Travel row preview. */
+  #etGalleryModal .et-gallery-wrap { position: relative; }
+  #etGalleryModal .et-gallery-stage {
+      background: #f1f3f5; border-radius: 8px; min-height: 320px;
+      display: flex; align-items: center; justify-content: center; padding: 10px;
+  }
+  #etGalleryModal .et-gallery-stage img { max-width: 100%; max-height: 62vh; object-fit: contain; }
+  #etGalleryModal .et-gallery-stage iframe { width: 100%; height: 62vh; border: 0; background: #fff; }
+  #etGalleryModal .et-gallery-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(0,0,0,.45); color: #fff; border: 0; border-radius: 50%;
+      width: 36px; height: 36px; display: flex; align-items: center;
+      justify-content: center; cursor: pointer;
+  }
+  #etGalleryModal .et-gallery-nav:hover { background: rgba(0,0,0,.68); }
+  #etGalleryModal .et-gallery-prev { left: 10px; }
+  #etGalleryModal .et-gallery-next { right: 10px; }
+  #etGalleryModal .et-gallery-meta { margin-top: 10px; font-size: 12px; color: #495057; }
+  #etGalleryModal .et-gallery-thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  #etGalleryModal .et-gallery-thumb {
+      width: 52px; height: 52px; border-radius: 6px; overflow: hidden;
+      border: 2px solid transparent; cursor: pointer; background: #f1f3f5;
+      display: flex; align-items: center; justify-content: center;
+  }
+  #etGalleryModal .et-gallery-thumb.is-active { border-color: #28a745; }
+  #etGalleryModal .et-gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  #etGalleryModal .et-gallery-thumb i { font-size: 20px; color: #868e96; }
   /* Eye a touch larger than the digit: at the same size it read as a smudge
      rather than an icon (Sep 2026 feedback: "icon nya gedein dikit"). */
   .et-preview-num i { font-size: 15px; line-height: 1; }
@@ -621,6 +656,47 @@
      warning. -->
 </div>
 
+{{-- Row evidence gallery. Deliberately OUTSIDE the Vue root above, like the
+     rest of the modals here, so Vue never tries to compile it. Mirrors the
+     Travel row preview: one stage, prev/next, and a thumbnail strip. --}}
+<div class="modal fade" id="etGalleryModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="etGalleryTitle">
+          <i class="fa fa-images"></i> EVIDENCE
+        </h6>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="et-gallery-wrap">
+          <button type="button" class="et-gallery-nav et-gallery-prev" id="etGalleryPrev"
+                  aria-label="Sebelumnya">
+            <i class="fa fa-chevron-left"></i>
+          </button>
+          <div class="et-gallery-stage" id="etGalleryStage"></div>
+          <button type="button" class="et-gallery-nav et-gallery-next" id="etGalleryNext"
+                  aria-label="Berikutnya">
+            <i class="fa fa-chevron-right"></i>
+          </button>
+        </div>
+        <div class="et-gallery-meta">
+          <span id="etGalleryName" class="et-gallery-name"></span>
+        </div>
+        <div class="et-gallery-thumbs" id="etGalleryThumbs"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="etGalleryOpenTab">
+          <i class="fa fa-external-link-alt"></i> Open in new tab
+        </button>
+        <button type="button" class="btn btn-success btn-sm" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @push('scripts')
 @if($travelEntertainmentOcrEnabled ?? false)
 <script src="{{ asset('js/reimbursement-ocr-check.js') }}?v={{ @filemtime(public_path('js/reimbursement-ocr-check.js')) }}"></script>
@@ -722,7 +798,15 @@ $(document).ready(function(){
         $('#etTopEvidenceList .et-top-evidence-item').each(function (i) {
             var $chip = $(this);
             $chip.find('.et-top-evidence-num').text((i + 1) + '.');
-            etBindChipToRow($chip, i + 1);
+            // Re-bind to the row this chip already belongs to, NOT to position
+            // i+1. The old rule was "file N -> row N", which forced one row per
+            // file; a row may hold several files, so the chip keeps its own row
+            // and only falls back to its position when it has none yet.
+            var rowNo = parseInt($chip.attr('data-row'), 10);
+            if (!rowNo || rowNo < 1) {
+                rowNo = i + 1;
+            }
+            etBindChipToRow($chip, rowNo);
         });
         etSyncPreviewNumbers();
     }
@@ -772,15 +856,22 @@ $(document).ready(function(){
             // also destroy the hidden .pending-attachment-item cards that carry
             // the real file inputs and OCR hooks.
             $cell.find('.et-preview-num').remove();
-            nums.forEach(function (n) {
-                // Eye icon so it reads as clickable (Sep 2026: "harusnya
-                // preview nya ada icon mata gitu biar user tau bisa dipencet").
-                $('<button type="button" class="et-preview-num" title="Lihat file ' + n + '">')
-                    .attr('data-file-no', n)
-                    .append($('<i class="fa fa-eye">'))
-                    .append($('<span>').text(n))
-                    .appendTo($cell);
-            });
+            if (!nums.length) {
+                return;
+            }
+            // ONE button per row showing how many files it holds, not one per
+            // file (Oct 2026: "kalau upload 5 gambar masa 5 icon?"). The eye
+            // keeps it reading as clickable; the gallery it opens is where the
+            // individual files live.
+            var count = nums.length;
+            $('<button type="button" class="et-preview-num">')
+                .attr('title', count > 1
+                    ? 'Lihat ' + count + ' file bukti'
+                    : 'Lihat file bukti')
+                .attr('data-file-no', nums[0])
+                .append($('<i class="fa fa-eye">'))
+                .append($('<span>').text(count))
+                .appendTo($cell);
         });
     }
 
@@ -792,6 +883,14 @@ $(document).ready(function(){
         var $item = $('<div class="et-top-evidence-item">');
         if (uid) {
             $item.attr('data-uid', uid);
+        }
+        // Remember which row this file was dropped on, so a later renumber
+        // keeps it there instead of pushing it to its position in the list.
+        if ($row && $row.length) {
+            var rowNo = $('#dynamic_field tbody tr.fieldGroup').index($row) + 1;
+            if (rowNo > 0) {
+                $item.attr('data-row', String(rowNo));
+            }
         }
         if (file.type && file.type.indexOf('image/') === 0) {
             var reader = new FileReader();
@@ -829,8 +928,14 @@ $(document).ready(function(){
         if (!fileList || !fileList.length || !window.DriverUpload) {
             return;
         }
+        // One target row for the WHOLE batch, resolved once outside the loop.
+        // It used to be resolved per file, so uploading two documents for a
+        // single expense created a second, empty row (no guest, amount 0) that
+        // carried nothing but the second file -- see the Oct 2026 report. A row
+        // may legitimately hold several files (the attachments table already
+        // stores them that way, and Travel has always worked like this).
+        var $row = etTopDropzoneTargetRow();
         Array.prototype.forEach.call(fileList, function (file) {
-            var $row = etTopDropzoneTargetRow();
             // The chip goes up right away (so the file is visible while it is
             // still being compressed/OCR'd) and is tied to its attachment once
             // processAndAppendFile resolves with the uid.
@@ -864,28 +969,107 @@ $(document).ready(function(){
     });
 
     /** Opens file number N (the chip at that position) full size. */
+    /**
+     * Files of one row, in the order they appear in Step 1.
+     * @returns {Array<{src: string, kind: string, name: string, no: number}>}
+     */
+    function etRowGalleryFiles(rowNo) {
+        var out = [];
+        $('#etTopEvidenceList .et-top-evidence-item').each(function (i) {
+            var $chip = $(this);
+            if (String($chip.attr('data-row')) !== String(rowNo)) {
+                return;
+            }
+            var src = $chip.attr('data-src');
+            if (!src) {
+                return;
+            }
+            out.push({
+                src: src,
+                kind: $chip.attr('data-kind') || 'image',
+                name: $chip.find('.et-top-evidence-name').text() || ('File ' + (i + 1)),
+                no: i + 1
+            });
+        });
+        return out;
+    }
+
+    var etGallery = { files: [], index: 0 };
+
+    function etRenderGallery() {
+        var f = etGallery.files[etGallery.index];
+        if (!f) {
+            return;
+        }
+        var total = etGallery.files.length;
+        $('#etGalleryTitle').text('EVIDENCE — ' + (etGallery.index + 1) + ' OF ' + total);
+
+        var $stage = $('#etGalleryStage').empty();
+        if (f.kind === 'pdf') {
+            $('<iframe>').attr('src', f.src).appendTo($stage);
+        } else {
+            $('<img>').attr('src', f.src).appendTo($stage);
+        }
+        $('#etGalleryName').text(f.name);
+
+        // Arrows only earn their place when there is somewhere to go.
+        $('#etGalleryPrev, #etGalleryNext').toggle(total > 1);
+
+        var $thumbs = $('#etGalleryThumbs').empty();
+        etGallery.files.forEach(function (file, i) {
+            var $t = $('<div class="et-gallery-thumb">')
+                .toggleClass('is-active', i === etGallery.index)
+                .on('click', function () {
+                    etGallery.index = i;
+                    etRenderGallery();
+                });
+            if (file.kind === 'pdf') {
+                $t.append($('<i class="fa fa-file-pdf">'));
+            } else {
+                $t.append($('<img>').attr('src', file.src));
+            }
+            $t.appendTo($thumbs);
+        });
+        $thumbs.toggle(total > 1);
+    }
+
+    function etOpenGallery(rowNo, startFileNo) {
+        var files = etRowGalleryFiles(rowNo);
+        if (!files.length) {
+            return;
+        }
+        var start = 0;
+        files.forEach(function (f, i) {
+            if (f.no === startFileNo) {
+                start = i;
+            }
+        });
+        etGallery = { files: files, index: start };
+        etRenderGallery();
+        $('#etGalleryModal').modal('show');
+    }
+
+    // One eye per row opens all of that row's evidence as a gallery, starting
+    // at its first file (Oct 2026: match the Travel preview).
     $('body').on('click', '.et-preview-num', function () {
-        var n = parseInt($(this).attr('data-file-no'), 10);
-        var $chip = $('#etTopEvidenceList .et-top-evidence-item').eq(n - 1);
-        var src = $chip.attr('data-src');
-        if (!src) {
-            return;
-        }
-        if ($chip.attr('data-kind') === 'pdf') {
-            window.open(src, '_blank');
-            return;
-        }
-        if (!$('#etImageLightbox').length) {
-            $('body').append(
-                '<div id="etImageLightbox" style="display:none;position:fixed;inset:0;z-index:2000;' +
-                     'background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">' +
-                  '<img style="max-width:100%;max-height:100%;border-radius:6px;">' +
-                '</div>'
-            );
-            $('body').on('click', '#etImageLightbox', function () { $(this).hide(); });
-        }
-        $('#etImageLightbox img').attr('src', src);
-        $('#etImageLightbox').css('display', 'flex');
+        var $cell = $(this).closest('tr.fieldGroup');
+        var rowNo = $('#dynamic_field tbody tr.fieldGroup').index($cell) + 1;
+        etOpenGallery(rowNo, parseInt($(this).attr('data-file-no'), 10));
+    });
+
+    $('body').on('click', '#etGalleryPrev', function () {
+        if (!etGallery.files.length) { return; }
+        etGallery.index = (etGallery.index - 1 + etGallery.files.length) % etGallery.files.length;
+        etRenderGallery();
+    });
+    $('body').on('click', '#etGalleryNext', function () {
+        if (!etGallery.files.length) { return; }
+        etGallery.index = (etGallery.index + 1) % etGallery.files.length;
+        etRenderGallery();
+    });
+    $('body').on('click', '#etGalleryOpenTab', function () {
+        var f = etGallery.files[etGallery.index];
+        if (f) { window.open(f.src, '_blank'); }
     });
 
     $('#etTopDropzone').on('click', function () {
