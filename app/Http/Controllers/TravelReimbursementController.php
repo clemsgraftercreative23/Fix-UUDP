@@ -3205,11 +3205,18 @@ class TravelReimbursementController extends Controller
                 $status = 3;
                 $return = redirect()->back()->with(['success' => "Reimbursement Successfully Updated"]);
             } else if (isset($_POST['edit_owner'])) {
+                // Owner / Finance Manager "Update": finished edit, so land on
+                // the submission's detail page rather than back on the form.
                 $status = $currentStatus;
-                $return = redirect()->to('reimbursement-travel/add-item/' . $id_main . '/' . $this->resolveBulkReturnDayId($request, $id_main))->with('success', 'Reimbursement Successfully Updated');
+                $return = redirect()->route('reimbursement-travel.show', $id_main)->with('success', 'Reimbursement Successfully Updated');
             } else if (isset($_POST['edit_finance'])) {
+                // Finance / HR / HR GA / Finance Supervisor "Update": same --
+                // this is the button those roles actually press (add-item.blade
+                // renders #edit_finance for them, not #action_button), which is
+                // why pointing only the owner's Update at the detail page left
+                // approvers still stuck on the edit screen (Oct 2026 report).
                 $status = ($currentStatus > 1) ? $currentStatus : 1;
-                $return = redirect()->to('reimbursement-travel/add-item/' . $id_main . '/' . $this->resolveBulkReturnDayId($request, $id_main))->with('success', 'Reimbursement Successfully Updated');
+                $return = redirect()->route('reimbursement-travel.show', $id_main)->with('success', 'Reimbursement Successfully Updated');
             } else if (isset($_POST['save_finance'])) {
                 $status = 2;
                 $return = redirect('reimbursement-travel-approval')->with(['success' => "Reimbursement Successfully Submitted"]);
