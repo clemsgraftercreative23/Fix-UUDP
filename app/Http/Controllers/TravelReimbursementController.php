@@ -3182,12 +3182,20 @@ class TravelReimbursementController extends Controller
             $status = $resolved['status'];
             $sendSubmissionNotifications = $resolved['sendSubmissionNotifications'];
 
+            // Draft stays on the form -- the user is still working on it.
+            // Everything else (Submit, Submit Again, and a plain Update) is
+            // finished work, so it returns to THIS submission's detail page:
+            // the user sees the result of what they just saved. Update used to
+            // fall through to the add-item page, leaving them on the edit
+            // screen with no sign anything had happened (Oct 2026 report).
+            $isDraftSave = (bool) ($actions['save_draft'] ?? false);
+
             if ($resolved['notif'] === 'redirect') {
                 $return = redirect('reimbursement-travel/add-days/' . $id_main);
-            } elseif ($status === 0 && $sendSubmissionNotifications) {
-                $return = redirect('reimbursement-travel')->with(['success' => $resolved['notif']]);
-            } else {
+            } elseif ($isDraftSave) {
                 $return = redirect('reimbursement-travel/add-item/' . $id_main . '/' . $this->resolveBulkReturnDayId($request, $id_main))->with(['success' => $resolved['notif']]);
+            } else {
+                $return = redirect()->route('reimbursement-travel.show', $id_main)->with(['success' => $resolved['notif']]);
             }
         } else {
             if (isset($_POST['save_item'])) {
@@ -3208,11 +3216,12 @@ class TravelReimbursementController extends Controller
             } else {
                 // Default update (e.g. Update via edit_finance/edit_owner where the
                 // button name did not reach $_POST): treat as an in-place update and
-                // return to the reimbursement-travel list, NOT the approval tab.
+                // return to THIS submission's detail page, NOT the approval tab,
+                // so the editor lands on what they just changed.
                 // Status is left untouched so an approver's edit does not silently
                 // reset it.
                 $status = $currentStatus;
-                $return = redirect('reimbursement-travel')->with(['success' => 'Reimbursement Successfully Updated']);
+                $return = redirect()->route('reimbursement-travel.show', $id_main)->with(['success' => 'Reimbursement Successfully Updated']);
             }
         }
 
