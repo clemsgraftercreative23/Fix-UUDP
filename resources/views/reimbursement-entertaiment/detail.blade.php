@@ -734,7 +734,19 @@ if (!function_exists('ent_attachment_rows')) {
                                 </td>
                                 <td>
                                     <div id="preview_1" class="et-preview">
-                                        @foreach(ent_attachment_rows($detail[0]->id ?? 0, $detail[0]->evidence ?? '') as $att)
+                                        @php
+                                            // Penanda bahwa baris ini MEMANG mengirim daftar keep_attachment_ids.
+                                            // keep_attachment_ids[0][] hanya ada untuk file yang dipertahankan,
+                                            // jadi kalau user menghapus SEMUA evidence lama field itu hilang
+                                            // total dan controller menyimpulkan "tidak ada perubahan" lalu
+                                            // menyalin ulang lampiran lama -- evidence yang sudah dihapus
+                                            // muncul lagi setelah Save as Draft. Pola ini mengikuti Travel.
+                                            $entRow0Attachments = ent_attachment_rows($detail[0]->id ?? 0, $detail[0]->evidence ?? '');
+                                        @endphp
+                                        @if(count($entRow0Attachments) > 0)
+                                        <input type="hidden" name="keep_attachment_ids_present[0]" value="1" class="keep-attachment-present-marker" data-row="1">
+                                        @endif
+                                        @foreach($entRow0Attachments as $att)
                                         @php
                                             $attId = (int) ($att['id'] ?? 0);
                                             $fileName = $att['file_name'] ?? '';
@@ -817,7 +829,15 @@ if (!function_exists('ent_attachment_rows')) {
                                     </td>
                                     <td>
                                         <div id="preview_{{$numb}}" class="et-preview">
-                                            @foreach(ent_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
+                                            @php
+                                                // Lihat catatan pada baris pertama: penanda ini harus tetap
+                                                // terkirim walau semua evidence lama dihapus.
+                                                $entRowAttachments = ent_attachment_rows($row->id ?? 0, $row->evidence ?? '');
+                                            @endphp
+                                            @if(count($entRowAttachments) > 0)
+                                            <input type="hidden" name="keep_attachment_ids_present[{{$key}}]" value="1" class="keep-attachment-present-marker" data-row="{{$numb}}">
+                                            @endif
+                                            @foreach($entRowAttachments as $att)
                                             @php
                                                 $attId = (int) ($att['id'] ?? 0);
                                                 $fileName = $att['file_name'] ?? '';
@@ -1186,6 +1206,34 @@ if (!function_exists('ent_attachment_rows')) {
     }
 
     /**
+     * Guarantees row `rowNo` submits keep_attachment_ids_present[<rowIndex>].
+     *
+     * The server treats a MISSING keep field as "user changed nothing, keep
+     * every stored attachment". An empty list has to mean "keep none", and the
+     * only way to tell those apart is this marker, which is sent even when the
+     * row has no kept files left.
+     */
+    function etEnsureKeepPresentMarker(rowNo) {
+        var name = 'keep_attachment_ids_present[' + (rowNo - 1) + ']';
+        if ($('input.keep-attachment-present-marker[name="' + name + '"]').length) {
+            return;
+        }
+        var $host = $('#preview_' + rowNo);
+        if (!$host.length) {
+            $host = $('#dynamic_field tbody tr.fieldGroup').eq(rowNo - 1).find('.et-preview').first();
+        }
+        if (!$host.length) {
+            return;
+        }
+        $('<input>', {
+            type: 'hidden',
+            name: name,
+            value: '1',
+            'class': 'keep-attachment-present-marker'
+        }).attr('data-row', String(rowNo)).appendTo($host);
+    }
+
+    /**
      * Moves the chip's real <input type="file"> into row `rowNo` and renames it
      * to that row's index. The server binds a file to its row purely by the
      * index in the input name (attachments[<rowIndex>][]) -- see
@@ -1201,6 +1249,11 @@ if (!function_exists('ent_attachment_rows')) {
         if (existingId) {
             $('.keep-attachment-input[value="' + existingId + '"]')
                 .attr('name', 'keep_attachment_ids[' + (rowNo - 1) + '][]');
+            // A kept file can be moved to a row that had no stored attachments
+            // of its own, so that row never got a server-rendered marker. Without
+            // one, the row it LEFT could end up sending no keep field at all and
+            // the server would restore everything it used to hold.
+            etEnsureKeepPresentMarker(rowNo);
             return;
         }
 

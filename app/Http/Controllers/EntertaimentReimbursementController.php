@@ -291,7 +291,15 @@ class EntertaimentReimbursementController extends Controller
                 ->orderBy('id')
                 ->get();
 
-            $hasKeepField = $request->has('keep_attachment_ids.' . $rowIndex);
+            // keep_attachment_ids[i][] hanya ada untuk file yang dipertahankan, jadi
+            // menghapus SEMUA evidence lama membuat field itu hilang dan $keepIds
+            // jatuh ke null -- yang berarti "pertahankan semuanya", sehingga file
+            // yang sudah dihapus tersalin ulang dan muncul lagi setelah draft.
+            // keep_attachment_ids_present[i] tetap terkirim selama baris itu punya
+            // lampiran tersimpan, sehingga daftar kosong bisa dibedakan dari
+            // "form tidak mengirim apa pun".
+            $hasKeepField = $request->has('keep_attachment_ids_present.' . $rowIndex)
+                || $request->has('keep_attachment_ids.' . $rowIndex);
             $keepIds = $hasKeepField
                 ? collect((array) data_get($request->input('keep_attachment_ids', []), $rowIndex, []))
                     ->map(function ($v) { return (int) $v; })

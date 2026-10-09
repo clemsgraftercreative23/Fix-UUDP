@@ -623,8 +623,14 @@ if (!function_exists('travel_attachment_cache_bust')) {
                             <div class="form-group">
                                 <label for="department">Department</label>
                                 <select name="reimbursement_department_id" id="department" class="form-control">
+                                    @php
+                                        // Department yang tersimpan di pengajuan. Fallback ke
+                                        // departemen user hanya untuk data lama yang kolomnya
+                                        // masih NULL (sebelum store() diperbaiki).
+                                        $selectedDepartmentId = $data->reimbursement_department_id ?: auth()->user()->departmentId;
+                                    @endphp
                                     @foreach (\App\Departemen::get() as $item)
-                                        <option value="{{ $item->id }}">{{ $item->nama_departemen }}</option>
+                                        <option value="{{ $item->id }}" @if ($selectedDepartmentId == $item->id) selected @endif>{{ $item->nama_departemen }}</option>
                                     @endforeach
                                 </select>
                             </div>

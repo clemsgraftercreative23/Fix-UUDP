@@ -1966,6 +1966,13 @@ class TravelReimbursementController extends Controller
                 "reimbursement_type" => 2,
                 "created_by" => auth()->user()->name,
                 "remark" => $request->remark,
+                // Department yang dipilih di form. Tanpa baris ini nilai yang
+                // dikirim user dibuang dan kolomnya tersimpan NULL, sehingga
+                // pengajuan selalu tampil sebagai departemen pertama di daftar
+                // walau user sudah menggantinya sebelum submit. Semua jalur
+                // update lain (saveItem/updateItem/updateAllItems) sudah
+                // menyimpannya; store() satu-satunya yang terlewat.
+                "reimbursement_department_id" => $request->reimbursement_department_id,
                 "travel_type" => $request->travel_type,
                 "idr_rate" => $this->normalizeTravelMoneyValue($request->idr_rate ?? ''),
                 "usd_rate" => $this->normalizeTravelMoneyValue($request->usd_rate ?? ''),

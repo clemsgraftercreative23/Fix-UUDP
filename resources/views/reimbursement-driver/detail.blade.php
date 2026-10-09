@@ -547,7 +547,19 @@ if (!function_exists('driver_attachment_rows')) {
                                 </td>
                                 <td>
                                     <div id="preview_1">
-                                      @foreach(driver_attachment_rows($detail['0']->id ?? 0, $detail['0']->evidence ?? '') as $att)
+                                      @php
+                                        // Penanda bahwa baris ini MEMANG mengirim daftar keep_attachment_ids.
+                                        // Tanpa ini, menghapus SEMUA evidence lama membuat form tidak
+                                        // mengirim keep_attachment_ids[0] sama sekali, dan controller
+                                        // menganggap "user tidak mengubah apa pun" lalu menyalin ulang
+                                        // seluruh lampiran lama -- evidence yang sudah dihapus muncul
+                                        // kembali setelah Save as Draft. Pola ini mengikuti Travel.
+                                        $driverRow0Attachments = driver_attachment_rows($detail['0']->id ?? 0, $detail['0']->evidence ?? '');
+                                      @endphp
+                                      @if(count($driverRow0Attachments) > 0)
+                                      <input type="hidden" name="keep_attachment_ids_present[0]" value="1" class="keep-attachment-present-marker">
+                                      @endif
+                                      @foreach($driverRow0Attachments as $att)
                                       @php
                                         $attId = (int) ($att['id'] ?? 0);
                                         $fileName = $att['file_name'] ?? '';
@@ -632,7 +644,16 @@ if (!function_exists('driver_attachment_rows')) {
                                 </td>
                                 <td>
                                     <div id="preview_{{$numb}}">
-                                      @foreach(driver_attachment_rows($row->id ?? 0, $row->evidence ?? '') as $att)
+                                      @php
+                                        // Lihat catatan pada baris pertama: penanda ini harus tetap
+                                        // terkirim walau semua evidence lama dihapus, supaya controller
+                                        // tahu daftar keep_attachment_ids memang kosong secara sengaja.
+                                        $driverRowAttachments = driver_attachment_rows($row->id ?? 0, $row->evidence ?? '');
+                                      @endphp
+                                      @if(count($driverRowAttachments) > 0)
+                                      <input type="hidden" name="keep_attachment_ids_present[{{$key}}]" value="1" class="keep-attachment-present-marker">
+                                      @endif
+                                      @foreach($driverRowAttachments as $att)
                                       @php
                                         $attId = (int) ($att['id'] ?? 0);
                                         $fileName = $att['file_name'] ?? '';

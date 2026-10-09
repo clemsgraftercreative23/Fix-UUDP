@@ -320,8 +320,14 @@
                                     <div class="form-group">
                                         <label for="exampleFormControlInput1">Department</label>
                                         <select name="reimbursement_department_id" id="" class="form-control">
+                                            @php
+                                                // Tampilkan department yang tersimpan, bukan department
+                                                // user -- kalau tidak, pilihan user selalu ter-reset
+                                                // setiap kali halaman edit dibuka.
+                                                $selectedDepartmentId = $data['0']->reimbursement_department_id ?: auth()->user()->departmentId;
+                                            @endphp
                                             @foreach (\App\Departemen::get() as $item)
-                                            <option value="{{$item->id}}" @if(auth()->user()->departmentId == $item->id) selected @endif>{{$item->nama_departemen}}</option>
+                                            <option value="{{$item->id}}" @if($selectedDepartmentId == $item->id) selected @endif>{{$item->nama_departemen}}</option>
                                             @endforeach
                                         </select>
                                     </div>
