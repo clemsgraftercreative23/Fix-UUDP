@@ -506,8 +506,10 @@ class EntertaimentReimbursementController extends Controller
                 // Show button (always visible)
                 $buttons .= '<a href="' . route('reimbursement-entertaiment.show', $data->id) . '" class="btn btn-info btn-sm" title="Detail" aria-label="Detail"><i class="fa fa-eye"></i></a>';
 
-                // Edit button (always visible)
-                $buttons .= '<a href="' . route('reimbursement-entertaiment.edit', $data->id) . '" class="btn btn-primary btn-sm" title="Edit" aria-label="Edit"><i class="fa fa-edit"></i></a>';
+                // Edit button (only when the user may still edit it, e.g. not while Pending)
+                if ($this->entertainmentInquiryEditAuthorized($data)) {
+                    $buttons .= '<a href="' . route('reimbursement-entertaiment.edit', $data->id) . '" class="btn btn-primary btn-sm" title="Edit" aria-label="Edit"><i class="fa fa-edit"></i></a>';
+                }
 
                 // Delete button (only for status 0 or 10)
                 if (in_array((int) $data->status, [0, 10], true)) {

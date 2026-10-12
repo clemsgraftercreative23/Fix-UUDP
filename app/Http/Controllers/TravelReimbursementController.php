@@ -1707,8 +1707,10 @@ class TravelReimbursementController extends Controller
                 // Show button (always visible)
                 $buttons .= '<a href="' . route('reimbursement-travel.show', $data->id) . '" class="btn btn-info btn-sm" title="Detail" aria-label="Detail"><i class="fa fa-eye"></i></a>';
 
-                // Edit button (always visible)
-                $buttons .= '<a href="' . route('reimbursement-travel.edit', $data->id) . '" class="btn btn-primary btn-sm" title="Edit" aria-label="Edit"><i class="fa fa-edit"></i></a>';
+                // Edit button (only when the user may still edit it, e.g. not while Pending)
+                if ($this->travelEditAuthorized($data)) {
+                    $buttons .= '<a href="' . route('reimbursement-travel.edit', $data->id) . '" class="btn btn-primary btn-sm" title="Edit" aria-label="Edit"><i class="fa fa-edit"></i></a>';
+                }
 
                 // Delete button (only for status 0 or 10)
                 if (in_array((int) $data->status, [0, 10], true)) {
@@ -2801,10 +2803,16 @@ class TravelReimbursementController extends Controller
     public function addItem(Request $request, $id_main, $id_travel)
     {
         $data  = DB::select( DB::raw("SELECT * FROM reimbursement WHERE id='$id_main'"));
+        if (empty($data)) {
+            return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
+        }
+        if (!$this->travelEditAuthorized($data['0'])) {
+            return redirect()->route('reimbursement-travel.show', $id_main);
+        }
         $travel_type = $data['0']->travel_type;
         if ($travel_type == 'Domestic') {
-            $tripTypes = TravelTripType::where('type','LOCAL')->get();  
-            $file = 'add-item';  
+            $tripTypes = TravelTripType::where('type','LOCAL')->get();
+            $file = 'add-item';
         } else {
             $tripTypes = TravelTripType::where('type','INTERNATIONAL')->where('is_show', 1)->get();
             $file = 'add-item-overseas';
@@ -3882,11 +3890,14 @@ class TravelReimbursementController extends Controller
         if (empty($data)) {
             return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
         }
+        if (!$this->travelEditAuthorized($data['0'])) {
+            return redirect()->route('reimbursement-travel.show', $id_main);
+        }
 
         $travel_type = $data['0']->travel_type;
         if ($travel_type == 'Domestic') {
-            $tripTypes = TravelTripType::where('type','LOCAL')->get();   
-            $file = "add-new-item"; 
+            $tripTypes = TravelTripType::where('type','LOCAL')->get();
+            $file = "add-new-item";
         } else {
             $tripTypes = TravelTripType::where('type','INTERNATIONAL')->where('is_show', 1)->get();
             $file = "add-new-item-overseas";
@@ -4071,12 +4082,57 @@ class TravelReimbursementController extends Controller
         }
     }
 
+    /**
+     * Same rules as the "Edit" buttons in resources/views/reimbursement-travel/detail.blade.php:
+     * the submitter edits only Draft/Rejected; a Pending (or in-approval) claim is
+     * editable only by the approver whose turn it is. Everyone else gets the detail page.
+     */
+    private function travelEditAuthorized($data): bool
+    {
+        if (!$data || (int) $data->reimbursement_type !== 2) {
+            return false;
+        }
+
+        $user = auth()->user();
+        $jabatan = (string) $user->jabatan;
+        $status = (int) $data->status;
+        $isSubmitter = (int) $user->id === (int) $data->id_user;
+        $isSuperadmin = in_array($jabatan, ['superadmin', 'admin'], true);
+
+        if (in_array($status, [9, 10], true)) {
+            return $isSubmitter || ($status === 9 && $isSuperadmin);
+        }
+        if ($isSubmitter && !$isSuperadmin) {
+            return false;
+        }
+        if ($isSuperadmin && in_array($status, [0, 1, 2, 11], true)) {
+            return true;
+        }
+        if ($status === 0) {
+            return $jabatan === 'Direktur Operasional' && $user->isHeadDeptApproverForSubmitter((int) $data->id_user);
+        }
+        if ($status === 1) {
+            return in_array($jabatan, ['Finance', 'HR', 'HR GA', 'Finance Supervisor'], true);
+        }
+        if ($status === 2) {
+            return in_array($jabatan, ['Finance Supervisor', 'Owner'], true);
+        }
+        if ($status === 11) {
+            return in_array($jabatan, ['Finance Manager', 'Owner'], true);
+        }
+
+        return false;
+    }
+
     public function edit($id)
     {
         // Route edit lama sekarang diseragamkan ke UI tab add-item (new flow).
         $reimbursement = Reimbursement::find($id);
         if (!$reimbursement) {
             return redirect()->route('reimbursement-travel.index')->withErrors(['Data reimbursement tidak ditemukan.']);
+        }
+        if (!$this->travelEditAuthorized($reimbursement)) {
+            return redirect()->route('reimbursement-travel.show', $id);
         }
 
         return redirect('reimbursement-travel/add-item/' . $id);
