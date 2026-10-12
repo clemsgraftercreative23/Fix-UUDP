@@ -1078,11 +1078,7 @@ class DriverReimbursementController extends Controller
             return true;
         }
 
-        // Pengaju biasa (bukan peran verifikator) boleh revisi inquiry saat masih di pipeline.
-        if ($isSubmitter && in_array($status, [0, 1, 2, 11], true) && ! in_array($jabatan, $approverJabatans, true)) {
-            return true;
-        }
-
+        // Pengaju hanya boleh edit saat Draft/Rejected; Pending dst. cukup lihat detail.
         return false;
     }
 
@@ -1134,10 +1130,17 @@ class DriverReimbursementController extends Controller
 
     public function update(Request $request, $id)
     {
+        $existing = $this->findDriverReimbursement((string) $id);
+        if (!$existing || !$this->driverInquiryEditAuthorized($existing)) {
+            return redirect()->route('reimbursement-driver.show', $id)
+                ->withErrors(['Pengajuan ini tidak dapat diedit pada status saat ini.']);
+        }
+
         DB::beginTransaction();
         try {
+            // id_user/created_by stay as the original submitter; an approver
+            // editing the claim must not take ownership of it.
             $payload = [
-                    "id_user" => auth()->user()->id,
                     // "no_reimbursement" => "UUDP-REIMBURSE-D-00".(Reimbursement::count()+1),
                     "date" => $request->date,
                     "reimbursement_department_id" => $request->reimbursement_department_id,
@@ -1147,7 +1150,6 @@ class DriverReimbursementController extends Controller
                     "nominal_pengajuan" => str_replace(".", "", $request->total_pengajuan),
                     "status" => 0,
                     "reimbursement_type" => 1,
-                    "created_by" => auth()->user()->name,
                     "remark" => $request->remark_parent,
                 ];
 
@@ -1238,6 +1240,12 @@ class DriverReimbursementController extends Controller
 
     public function updateApproval(Request $request, $id)
     {
+        $existing = $this->findDriverReimbursement((string) $id);
+        if (!$existing || !$this->driverInquiryEditAuthorized($existing)) {
+            return redirect()->route('reimbursement-driver.show', $id)
+                ->withErrors(['Pengajuan ini tidak dapat diedit pada status saat ini.']);
+        }
+
         DB::beginTransaction();
       
 		$cek_iduser = DB::select(DB::raw("SELECT id_user FROM reimbursement WHERE id='$id'"))['0']->id_user;
