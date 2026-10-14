@@ -1259,6 +1259,9 @@ $(document).ready(function(){
     formData.append('date', entry.date || '');
     formData.append('range_from', vm.rangeStart || entry.date || '');
     formData.append('range_to', vm.rangeEnd || vm.rangeStart || entry.date || '');
+    // The submission being edited must not count as "another submission":
+    // its own saved invoice would otherwise be flagged duplicate on re-upload.
+    formData.append('exclude_id', '{{ (int) $data['0']->id }}');
 
     $.ajax({
       url: '/reimbursement/verify-day-evidence-ocr',
@@ -1335,6 +1338,9 @@ $(document).ready(function(){
         // Edit mode: day cards are prefilled from stored days (see
         // buildTravelEditDaysPayload); the active day from the URL starts expanded.
         reimburses: @json($editDays ?? []),
+        // Day cards parked when a range change pushed their date out of the
+        // trip, keyed by date; restored if that date comes back (in-memory only).
+        stashedDays: {},
         rates: @json($editRates ?? [['code' => 'IDR', 'rate' => '1,00']]),
         types : @json($types),
           trip_types : @json($trip_types),
@@ -2180,10 +2186,123 @@ $(document).ready(function(){
             }
 
             var vm = this;
+            // Days whose date survives into the new range keep everything the
+            // user already filled in (Sep 2026 feedback: "bisa nggk nggk usah
+            // hilang?") -- only dates that drop out of the range are lost, and
+            // dates newly brought into it start blank. Matching is by the day's
+            // own date, so extending 10-12 to 10-14 keeps 10, 11 and 12 intact.
+            // Days currently on screen, plus days parked earlier by a previous
+            // range change (see vm.stashedDays) -- so narrowing 10-12 to 11-14
+            // and then changing your mind back to 10-12 brings day 10's data
+            // back instead of handing you an empty card (Sep 2026 feedback:
+            // "klo bisa balik juga boleh"). Nothing is parked across a page
+            // reload; this only covers changing the range within one sitting.
+            var keptByDate = {};
+            var oldIndexByDate = {};
+            Object.keys(vm.stashedDays).forEach(function (d) {
+                keptByDate[d] = vm.stashedDays[d];
+            });
+            vm.reimburses.forEach(function (entry, idx) {
+                if (entry && entry.date) {
+                    keptByDate[entry.date] = entry;
+                    oldIndexByDate[entry.date] = idx;
+                }
+            });
             var generate = function () {
+                // A kept day can land on a different index (e.g. extending the
+                // range backwards shifts everything down), and the real
+                // <input type="file"> elements are named by day index
+                // (rt-day-hidden-<i> / reimburse[i][files][]). Re-key them to
+                // the new positions, or a kept day's evidence would be
+                // submitted under the wrong day -- same bookkeeping removeDay()
+                // does when it renumbers.
+                // Stamp each on-screen container with its day's date first, so
+                // a container can still be found after it has been parked (its
+                // id is dropped then, but the date sticks).
+                vm.reimburses.forEach(function (entry, idx) {
+                    if (entry && entry.date) {
+                        $('#rt-day-hidden-' + idx).attr('data-day-date', entry.date);
+                    }
+                });
+
+                var $moved = $();
+                days.forEach(function (d, newIdx) {
+                    // On-screen day, or one parked by an earlier range change.
+                    var $c = (d in oldIndexByDate)
+                        ? $('#rt-day-hidden-' + oldIndexByDate[d])
+                        : $('.rt-day-hidden-parked[data-day-date="' + d + '"]').first();
+                    if (!$c.length) {
+                        return;
+                    }
+                    $c.attr('data-new-index', newIdx);
+                    $moved = $moved.add($c);
+                });
+                // Containers of days leaving the range are NOT destroyed --
+                // they are parked (name blanked so the browser won't submit
+                // them) so the day can be restored intact if its date comes
+                // back. Only their names are cleared; the File objects and
+                // their object URLs stay alive on the stashed entry.
+                $('.rt-day-hidden-inputs').not($moved).each(function () {
+                    var $c = $(this);
+                    $c.removeAttr('id').addClass('rt-day-hidden-parked');
+                    $c.find('input').removeAttr('name');
+                });
+                $moved.each(function () {
+                    var $c = $(this);
+                    var n = $c.attr('data-new-index');
+                    // removeClass: a container coming back from the parked
+                    // pool becomes a live one again; the name attributes set
+                    // just below are what actually re-arm it for submission.
+                    $c.removeAttr('data-new-index')
+                      .removeClass('rt-day-hidden-parked')
+                      .attr('id', 'rt-day-hidden-' + n);
+                    $c.find('.rt-day-hidden-file').attr('name', 'reimburse[' + n + '][files][]');
+                    $c.find('.rt-day-hidden-tag').attr('name', 'reimburse[' + n + '][file_row_tags][]');
+                    $c.find('.rt-day-hidden-type').attr('name', 'reimburse[' + n + '][file_types][]');
+                });
+
                 vm.activeDay = 0;
                 vm.reimburses = days.map(function (d, idx) {
+                    var existing = keptByDate[d];
+                    if (existing) {
+                        existing.collapsed = idx !== 0;
+                        return existing;
+                    }
                     return vm.buildBlankDayEntry(d, idx === 0);
+                });
+
+                // Park every day that just left the range (keeping whatever
+                // was filled in), and un-park the ones now back on screen.
+                var onScreen = {};
+                days.forEach(function (d) { onScreen[d] = true; });
+                Object.keys(keptByDate).forEach(function (d) {
+                    if (onScreen[d]) {
+                        vm.$delete(vm.stashedDays, d);
+                    } else {
+                        vm.$set(vm.stashedDays, d, keptByDate[d]);
+                    }
+                });
+
+                // referDay points at a day by INDEX, so remap it onto the new
+                // positions; a refer whose source day dropped out of the range
+                // is cleared rather than left pointing at the wrong day.
+                var newIndexByDate = {};
+                days.forEach(function (d, idx) { newIndexByDate[d] = idx; });
+                vm.reimburses.forEach(function (entry) {
+                    if (!entry || entry.referDay === null || entry.referDay === undefined) {
+                        return;
+                    }
+                    var srcDate = null;
+                    for (var dt in oldIndexByDate) {
+                        if (oldIndexByDate[dt] === entry.referDay) {
+                            srcDate = dt;
+                            break;
+                        }
+                    }
+                    var remapped = (srcDate !== null && srcDate in newIndexByDate)
+                        ? newIndexByDate[srcDate]
+                        : null;
+                    vm.$set(entry, 'referDay', remapped);
                 });
 
                 // amount-input already has @change="calculateTotal(i,a)" bound in the
@@ -2192,15 +2311,28 @@ $(document).ready(function(){
                     vm.initSelectForm();
                 });
             };
-            if (this.reimburses.some(this.dayHasData)) {
-                rtModal({
-                    title: 'Replace Day Forms?',
-                    message: 'Day forms that are already filled in (proof/expense details) will be LOST and replaced with empty cards for the new date range. Continue?',
-                    confirmText: 'Yes, Continue', cancelText: 'Cancel', onYes: generate
+            var proceed = function () {
+                // Only days that actually fall OUTSIDE the new range are lost,
+                // so ask only about those -- and name them, instead of warning
+                // that everything will be wiped when most of it is kept.
+                var dropped = vm.reimburses.filter(function (entry) {
+                    return vm.dayHasData(entry) && days.indexOf(entry.date) === -1;
                 });
-                return;
-            }
-            generate();
+                if (dropped.length) {
+                    var labels = dropped.map(function (e) { return e.date || '(tanpa tanggal)'; });
+                    rtModal({
+                        title: 'Keluarkan Hari Ini dari Trip?',
+                        message: 'Form hari berikut sudah terisi tapi tanggalnya di luar range baru, jadi akan dikeluarkan dari pengajuan:\n\n'
+                            + labels.join(', ')
+                            + '\n\nIsinya disimpan sementara -- kalau tanggal itu dimasukkan lagi ke range sebelum halaman ditutup, isinya kembali seperti semula. Hari lain yang masih di dalam range tetap aman. Lanjutkan?',
+                        confirmText: 'Ya, Lanjutkan', cancelText: 'Batal', onYes: generate
+                    });
+                    return;
+                }
+                generate();
+            };
+
+            proceed();
         },
         /**
          * Deletes one "Form Hari" (e.g. a wrongly-dated card). The hidden file

@@ -19,12 +19,40 @@ use App\ReimbursementTravelDetail;
 class ReimbursementDuplicateGuard
 {
     /**
-     * reimbursement.status value for a rejected submission (see e.g.
-     * DriverReimbursementController's status badge mapping). A rejected
-     * submission doesn't count as "already used" -- resubmitting the same
-     * date/invoice number after a rejection is the normal, expected flow.
+     * reimbursement.status for a REJECTED submission.
+     *
+     * This was 4 -- a value that does not exist in the data at all. Every
+     * module stores a rejection as 9 (see the status badge mapping in each
+     * controller, and `$data->status == 9` throughout
+     * TravelReimbursementController), so the "a rejection may be resubmitted"
+     * exemption documented below silently never applied: a user whose claim
+     * was rejected still got "No. Invoice/Receipt ... has already been
+     * claimed" when re-submitting the very same receipt.
      */
-    private const STATUS_REJECTED = 4;
+    private const STATUS_REJECTED = 9;
+
+    /**
+     * reimbursement.status for a DRAFT -- saved by the applicant but never
+     * submitted to anyone.
+     *
+     * A draft must not reserve an invoice number either. The reported case:
+     * an applicant generates days 21-25 Sept, uploads a receipt, realises the
+     * range is wrong and regenerates 21-23. The abandoned draft keeps holding
+     * that invoice, so re-uploading the same receipt is rejected as a
+     * duplicate of the user's own unsubmitted draft.
+     */
+    private const STATUS_DRAFT = 10;
+
+    /**
+     * Statuses that do NOT reserve a date / invoice number, i.e. that are
+     * excluded when looking for an existing claim.
+     *
+     * @return int[]
+     */
+    private static function nonBlockingStatuses(): array
+    {
+        return [self::STATUS_REJECTED, self::STATUS_DRAFT];
+    }
 
     /**
      * @param ?int $excludeReimbursementId when editing an existing
@@ -40,7 +68,7 @@ class ReimbursementDuplicateGuard
 
         return Reimbursement::where('id_user', $userId)
             ->where('reimbursement_type', $type)
-            ->where('status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('id', '!=', $excludeReimbursementId);
             })
@@ -84,7 +112,7 @@ class ReimbursementDuplicateGuard
         return \App\ReimbursementTravel::query()
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
             ->where('reimbursement.id_user', $userId)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -118,7 +146,7 @@ class ReimbursementDuplicateGuard
         }
 
         $usedInHeader = Reimbursement::whereIn('no_invoice', $numbers)
-            ->where('status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('id', '!=', $excludeReimbursementId);
             })
@@ -127,7 +155,7 @@ class ReimbursementDuplicateGuard
 
         $usedInTravelItems = ReimbursementTravel::whereIn('reimbursement_travel.no_invoice', $numbers)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -137,7 +165,7 @@ class ReimbursementDuplicateGuard
         $usedInTravelDetails = ReimbursementTravelDetail::whereIn('reimbursement_travel_details.no_invoice', $numbers)
             ->where('reimbursement_travel_details.status', 1)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -147,7 +175,7 @@ class ReimbursementDuplicateGuard
         $usedInEntertainmentItems = ReimbursementEntertaiment::whereIn('reimbursement_entertaiments.no_invoice', $numbers)
             ->where('reimbursement_entertaiments.status', 1)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_entertaiments.reimbursement_id')
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -163,7 +191,7 @@ class ReimbursementDuplicateGuard
             $usedInDriverItems = ReimbursementDriver::whereIn('reimbursement_driver.no_invoice', $numbers)
                 ->where('reimbursement_driver.status', 1)
                 ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
-                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
                 ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                     $query->where('reimbursement.id', '!=', $excludeReimbursementId);
                 })
@@ -206,7 +234,7 @@ class ReimbursementDuplicateGuard
         };
 
         $match = Reimbursement::where('reimbursement.no_invoice', $number)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, $applyExclude)
             ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
             ->first();
@@ -215,7 +243,7 @@ class ReimbursementDuplicateGuard
             $match = ReimbursementTravel::where('reimbursement_travel.no_invoice', $number)
                 ->whereNull('reimbursement_travel.reference_reimbursement_id')
                 ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
-                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
                 ->when($excludeReimbursementId, $applyExclude)
                 ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
                 ->first();
@@ -226,7 +254,7 @@ class ReimbursementDuplicateGuard
                 ->where('reimbursement_travel_details.status', 1)
                 ->whereNull('reimbursement_travel_details.reference_reimbursement_id')
                 ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
-                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
                 ->when($excludeReimbursementId, $applyExclude)
                 ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
                 ->first();
@@ -236,7 +264,7 @@ class ReimbursementDuplicateGuard
             $match = ReimbursementEntertaiment::where('reimbursement_entertaiments.no_invoice', $number)
                 ->where('reimbursement_entertaiments.status', 1)
                 ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_entertaiments.reimbursement_id')
-                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
                 ->when($excludeReimbursementId, $applyExclude)
                 ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
                 ->first();
@@ -246,7 +274,7 @@ class ReimbursementDuplicateGuard
             $match = ReimbursementDriver::where('reimbursement_driver.no_invoice', $number)
                 ->where('reimbursement_driver.status', 1)
                 ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
-                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
                 ->when($excludeReimbursementId, $applyExclude)
                 ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
                 ->first();
@@ -284,7 +312,14 @@ class ReimbursementDuplicateGuard
      */
     public static function sameTripBlockReason(array $owner, ?string $from, ?string $to): ?string
     {
-        if (in_array((int) ($owner['status'] ?? 0), [0, self::STATUS_REJECTED, 9], true)) {
+        // Inverted sense compared with the queries above: here a claim that is
+        // NOT yet approved is what blocks the same-trip allowance, so pending
+        // (0), draft (10) and rejected (9) all count as "not approved". The
+        // list used to read [0, STATUS_REJECTED, 9] -- i.e. [0, 4, 9] -- which
+        // happened to catch 9 only because it was hardcoded alongside the
+        // wrong constant, and missed drafts entirely.
+        $notApproved = [0, self::STATUS_REJECTED, self::STATUS_DRAFT];
+        if (in_array((int) ($owner['status'] ?? 0), $notApproved, true)) {
             return 'not_approved';
         }
 
@@ -333,7 +368,7 @@ class ReimbursementDuplicateGuard
         $match = ReimbursementTravel::where('reimbursement_travel.no_invoice', $number)
             ->where('reimbursement_travel.date', $date)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->where('reimbursement.id_user', '!=', $currentUserId)
             ->when($excludeReimbursementId, $applyExclude)
             ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
@@ -346,7 +381,7 @@ class ReimbursementDuplicateGuard
                 ->join('reimbursement_travel', 'reimbursement_travel.id', '=', 'reimbursement_travel_details.reimbursement_travel_id')
                 ->where('reimbursement_travel.date', $date)
                 ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
-                ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+                ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
                 ->where('reimbursement.id_user', '!=', $currentUserId)
                 ->when($excludeReimbursementId, $applyExclude)
                 ->select('reimbursement.id as reimbursement_id', 'reimbursement.id_user')
@@ -390,7 +425,7 @@ class ReimbursementDuplicateGuard
 
         $match = ReimbursementTravel::join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel.reimbursement_id')
             ->where('reimbursement.id_user', $userId)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->whereBetween('reimbursement_travel.date', [$windowStart, $windowEnd])
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
@@ -455,7 +490,7 @@ class ReimbursementDuplicateGuard
             ->where('reimbursement.id_user', $userId)
             ->where('reimbursement.reimbursement_type', 1)
             ->whereDate('reimbursement.date', $date)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -558,7 +593,7 @@ class ReimbursementDuplicateGuard
 
         $inHeader = Reimbursement::where('reimbursement.no_invoice', $number)
             ->whereDate('reimbursement.date', $date)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -574,7 +609,7 @@ class ReimbursementDuplicateGuard
             ->join('reimbursement_travel', 'reimbursement_travel.id', '=', 'reimbursement_travel_details.reimbursement_travel_id')
             ->whereDate('reimbursement_travel.date', $date)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_travel_details.reimbursement_id')
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -589,7 +624,7 @@ class ReimbursementDuplicateGuard
             ->where('reimbursement_entertaiments.status', 1)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_entertaiments.reimbursement_id')
             ->whereDate('reimbursement.date', $date)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
@@ -608,7 +643,7 @@ class ReimbursementDuplicateGuard
             ->where('reimbursement_driver.status', 1)
             ->join('reimbursement', 'reimbursement.id', '=', 'reimbursement_driver.reimbursement_id')
             ->whereDate('reimbursement.date', $date)
-            ->where('reimbursement.status', '!=', self::STATUS_REJECTED)
+            ->whereNotIn('reimbursement.status', self::nonBlockingStatuses())
             ->when($excludeReimbursementId, function ($query) use ($excludeReimbursementId) {
                 $query->where('reimbursement.id', '!=', $excludeReimbursementId);
             })
