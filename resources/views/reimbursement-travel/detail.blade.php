@@ -331,11 +331,6 @@ if (!function_exists('travel_attachment_cache_bust')) {
                     <td>
                         @php
                             $attachmentRows = travel_attachment_rows($data->id, $dt->id ?? 0, $dt->evidence ?? '', $dt->destination ?? '', $dt->cost_type_id ?? 0);
-                            // Day-level evidence (uploaded against the whole day, not a
-                            // specific row) is shown once, on the first detail row.
-                            if ($loop->first) {
-                                $attachmentRows = array_merge(travel_day_attachment_rows($item->id ?? 0), $attachmentRows);
-                            }
                         @endphp
                         @foreach($attachmentRows as $att)
                             @php
@@ -370,6 +365,37 @@ if (!function_exists('travel_attachment_cache_bust')) {
                     </tr>
                 </tfoot>
                 </table>
+                @php
+                    // Day-level evidence belongs to the whole day, not to any one
+                    // expense row. It used to be merged into the first row's
+                    // Evidence cell, which made a hotel folio or a change-fee
+                    // receipt look like it belonged to the first (Flight) row
+                    // (Oct 2026 report, #1865). Show it on its own instead.
+                    $dayAttachmentRows = travel_day_attachment_rows($item->id ?? 0);
+                @endphp
+                @if(!empty($dayAttachmentRows))
+                <div class="mb-2">
+                    <strong>Day evidence</strong>
+                    <small class="text-muted">(uploaded for the whole day, not tied to a specific row)</small>
+                    @foreach($dayAttachmentRows as $att)
+                        @php
+                            $dayFileName = $att['file_name'] ?? '';
+                            $dayDisplay = $att['original_name'] ?? $dayFileName;
+                            $dayIsProof = ($att['doc_type'] ?? 'invoice') === 'proof';
+                        @endphp
+                        @if($dayFileName !== '')
+                            <div>
+                                <a href="{{ URL::to('/') }}/images/file_bukti/{{$dayFileName}}{{ travel_attachment_cache_bust($dayFileName) }}" target="_blank" title="{{ $dayDisplay }}">
+                                    <i class="fa {{ $dayIsProof ? 'fa-paperclip' : 'fa-file-invoice' }}"></i> {{ $dayDisplay }}
+                                </a>
+                                <span class="badge {{ $dayIsProof ? 'badge-secondary' : 'badge-info' }}" style="font-weight:400;">
+                                    {{ $dayIsProof ? 'Supporting Proof' : 'Invoice / Receipt' }}
+                                </span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+                @endif
                 <hr>
                 @endforeach
 
