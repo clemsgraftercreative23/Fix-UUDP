@@ -1376,6 +1376,7 @@ $(document).ready(function(){
         ocrDetailModalChip: null
       },
       mounted() {
+        this.ensureDetailRows()
         this.initSelectForm()
         self = this
         $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true});
@@ -1962,6 +1963,43 @@ $(document).ready(function(){
         removeTravel(i) {
             this.reimburses.splice(i, 1)
             this.calculateTotal(i,0)
+        },
+        /**
+         * A day can reach the edit form with NO expense rows: a refer day is locked,
+         * so its blank row is skipped on save (no cost type) and nothing is stored.
+         * The "+" button lives inside the first row, so cancelling the refer then
+         * left an empty Expense Details table that could not be filled (Oct 2026
+         * report). Give every day at least one blank row; the server ignores a row
+         * with no cost type, so this adds nothing to the data by itself.
+         */
+        ensureDetailRow(i) {
+            var entry = this.reimburses[i];
+            if (!entry) {
+                return;
+            }
+            if (!Array.isArray(entry.details)) {
+                this.$set(entry, 'details', []);
+            }
+            if (entry.details.length) {
+                return;
+            }
+            entry.details.push({
+                id_detail: '',
+                cost_type: null,
+                destination: null,
+                currency: 'IDR',
+                amount: null,
+                tax: null,
+                idr_rate: null,
+                payment_type: null,
+                code: null,
+            });
+            this.$nextTick(() => { this.initSelectForm(); });
+        },
+        ensureDetailRows() {
+            for (var i = 0; i < this.reimburses.length; i++) {
+                this.ensureDetailRow(i);
+            }
         },
         addDetail(i) {
             // Only block submitting while this day still has NO evidence at all.
@@ -3084,6 +3122,7 @@ $(document).ready(function(){
         clearReferDay(i) {
             this.$set(this.reimburses[i], 'referDay', null);
             this.$set(this.reimburses[i], 'referCancelled', true);
+            this.ensureDetailRow(i);
         },
         checkDayReferenceInvoice(i) {
             var vm = this;
