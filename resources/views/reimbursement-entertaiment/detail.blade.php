@@ -649,7 +649,7 @@ if (!function_exists('ent_attachment_rows')) {
                       <label for="exampleFormControlInput1">Department</label>
                       <select name="reimbursement_department_id" id="" class="form-control">
                         @foreach (\App\Departemen::get() as $item)
-                            <option value="{{$item->id}}">{{$item->nama_departemen}}</option>
+                            <option value="{{$item->id}}" @if((int) ($data->reimbursement_department_id ?? 0) === (int) $item->id) selected @endif>{{$item->nama_departemen}}</option>
                         @endforeach
                       </select>
                     </div>
