@@ -776,10 +776,10 @@
                                                              (Sep 2026 feedback). -->
                                                         <button type="button" class="btn btn-outline-secondary btn-sm rt-preview-file-btn" :disabled="!(data.dayFiles.length + data.existingFiles.length)" @click="previewRowFile(i, a)" :title="previewRowTitle(i, a)">
                                                             <i class="fa fa-eye"></i>
-                                                            <span v-if="matchedFileNumberForRow(i, a)" class="rt-preview-file-number">@{{ matchedFileNumberForRow(i, a) }}</span>
+                                                            <span v-if="!isReferDay(data) && matchedFileNumberForRow(i, a)" class="rt-preview-file-number">@{{ matchedFileNumberForRow(i, a) }}</span>
                                                             <!-- A row can hold several evidence files now; this says how many
                                                                  more the Preview opens besides the numbered one. -->
-                                                            <span v-if="matchedFileCountForRow(i, a) > 1" class="rt-preview-file-more">+@{{ matchedFileCountForRow(i, a) - 1 }}</span>
+                                                            <span v-if="!isReferDay(data) && matchedFileCountForRow(i, a) > 1" class="rt-preview-file-more">+@{{ matchedFileCountForRow(i, a) - 1 }}</span>
                                                         </button>
                                                     </td>
 
@@ -3033,6 +3033,10 @@ $(document).ready(function(){
         clearSameTripRef(i) {
             this.$set(this.reimburses[i], 'sameTripRef', null);
             this.$set(this.reimburses[i], 'referenceInvoice', '');
+        },
+        /** A day that refers to another day's document has no evidence of its own, so its Preview button shows no file number (Oct 2026 report). */
+        isReferDay(entry) {
+            return entry.referDay !== null && entry.referDay !== undefined;
         },
         isExpenseLocked(entry) {
             return !!entry.allowanceOnly || !!entry.sameTripRef || (entry.referDay !== null && entry.referDay !== undefined);
