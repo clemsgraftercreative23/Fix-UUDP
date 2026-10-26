@@ -3018,6 +3018,7 @@ class TravelReimbursementController extends Controller
         $typeMap = TravelType::get()->keyBy('id');
         $days = [];
         $invoiceByIndex = [];
+        $evidenceByIndex = [];   // [day index => bool] the day has stored files of its own
 
         foreach ($allDays as $index => $d) {
             $dayId = (int) ($d->id ?? 0);
@@ -3073,11 +3074,18 @@ class TravelReimbursementController extends Controller
             $referDay = null;
             $referenceId = $d->reference_reimbursement_id ?? null;
             $dayInvoice = trim((string) ($d->no_invoice ?? ''));
-            if ($referenceId !== null && (int) $referenceId === $idMain && $dayInvoice !== '') {
-                foreach ($invoiceByIndex as $srcIdx => $srcInvoice) {
-                    if ($srcInvoice !== '' && $srcInvoice === $dayInvoice) {
-                        $referDay = $srcIdx;
-                        break;
+            // A refer is recognised by the self-reference alone: the day's
+            // invoice number may legitimately be blank (OCR unavailable, or a
+            // receipt without a number), and requiring it made a saved refer
+            // vanish from the form after every Draft, forcing "refer ulang"
+            // (Oct 2026 report, draft #1910).
+            if ($referenceId !== null && (int) $referenceId === $idMain) {
+                if ($dayInvoice !== '') {
+                    foreach ($invoiceByIndex as $srcIdx => $srcInvoice) {
+                        if ($srcInvoice !== '' && $srcInvoice === $dayInvoice) {
+                            $referDay = $srcIdx;
+                            break;
+                        }
                     }
                 }
                 if ($referDay === null) {
@@ -3096,8 +3104,19 @@ class TravelReimbursementController extends Controller
                         }
                     }
                 }
+                if ($referDay === null) {
+                    // No earlier day carries an invoice number at all: point at
+                    // the earliest earlier day that has stored evidence.
+                    foreach ($evidenceByIndex as $srcIdx => $hasEvidence) {
+                        if ($hasEvidence) {
+                            $referDay = $srcIdx;
+                            break;
+                        }
+                    }
+                }
             }
             $invoiceByIndex[$index] = $dayInvoice;
+            $evidenceByIndex[$index] = !empty($existingFiles);
 
             // Same-trip co-traveler reference (another submission's invoice).
             $sameTripRef = null;
