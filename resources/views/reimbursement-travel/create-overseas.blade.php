@@ -1173,6 +1173,30 @@ $(document).ready(function(){
     return $container;
   }
 
+  /**
+   * PHP silently discards every file part beyond max_file_uploads (default 20)
+   * -- no error, the surplus files simply never reach Laravel, and the draft or
+   * submission saves with the later files missing. Capped here, in a modal, so
+   * the user knows exactly which files were not attached. The number comes from
+   * the server's own php.ini; only NEW uploads count (already-stored files are
+   * not re-sent, so they are not in .rt-day-hidden-file).
+   */
+  var RT_MAX_FILE_UPLOADS = {{ (int) ini_get('max_file_uploads') ?: 20 }};
+  function rtClampToUploadLimit(files) {
+    var room = Math.max(0, RT_MAX_FILE_UPLOADS - $('.rt-day-hidden-file').length);
+    if (files.length <= room) {
+      return files;
+    }
+    rtAlertModal(
+      'A single submission can carry at most ' + RT_MAX_FILE_UPLOADS + ' newly uploaded files. '
+      + 'Only ' + room + ' more can be attached, so these were NOT attached: '
+      + files.slice(room).map(function (f) { return f.name; }).join(', ')
+      + '. Save as DRAFT first, then add the remaining files from the draft.',
+      'Too Many Files'
+    );
+    return files.slice(0, room);
+  }
+
   function rtAddDayHiddenFile(i, uid, file, docType) {
     var $container = rtDayHiddenContainer(i);
     var dt = new DataTransfer();
@@ -2488,6 +2512,10 @@ $(document).ready(function(){
                     title: 'Use Your Own Proof?',
                     message: message,
                     confirmText: 'Yes, Continue', cancelText: 'Cancel',
+            files = rtClampToUploadLimit(files);
+            if (!files.length) {
+                return;
+            }
                     onYes: function () { clear(); addAll(); }
                 });
                 return;

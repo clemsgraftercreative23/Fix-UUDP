@@ -1127,6 +1127,43 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Rejects a request whose uploaded files did not all arrive. PHP drops every
+     * file part past max_file_uploads (default 20) without any error, so a
+     * submission with more files than that used to save quietly with the last
+     * ones missing (Oct 2026: 26 files in, 20 stored). The form posts exactly one
+     * reimburse[i][file_types][] entry per new file, so more entries than files
+     * received means files were lost in transit. Runs before anything is written,
+     * for drafts as well as final submits -- a draft is where the loss happened.
+     */
+    private function guardAgainstTruncatedUploads(Request $request): void
+    {
+        $expected = 0;
+        $received = 0;
+        foreach ((array) $request->input('reimburse', []) as $key => $value) {
+            $expected += count((array) data_get($value, 'file_types', []));
+            $received += count(array_filter(
+                (array) $request->file('reimburse.' . $key . '.files', []),
+                function ($file) {
+                    return $file instanceof UploadedFile;
+                }
+            ));
+        }
+
+        if ($received >= $expected) {
+            return;
+        }
+
+        $limit = (int) ini_get('max_file_uploads');
+        throw ValidationException::withMessages([
+            'evidence' => [
+                'Only ' . $received . ' of ' . $expected . ' uploaded files reached the server'
+                . ($limit > 0 ? ' (the server accepts at most ' . $limit . ' files per submission)' : '')
+                . ', so nothing was saved. Remove some files, save as DRAFT, then add the rest from the draft.',
+            ],
+        ]);
+    }
+
+    /**
      * Hard block when this applicant already has a (non-rejected) travel
      * submission covering one of these trip days. Agreed with the approvers
      * (Sep 2026): a day may only be claimed once, so a left-out day has to be
@@ -1934,6 +1971,7 @@ class TravelReimbursementController extends Controller
         // already saved in the database, which a brand-new submission has
         // none of yet. Runs before the transaction starts (nothing to roll
         // back) and before any files are moved to permanent storage.
+        $this->guardAgainstTruncatedUploads($request);
         $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
 
         if (isset($_POST['save'])) {
@@ -2305,6 +2343,7 @@ class TravelReimbursementController extends Controller
                         'destination' => $v['destination'],
                         'remarks' => $v['remarks'] ?? null,
                         'payment_type' => $v['payment_type'],
+        $this->guardAgainstTruncatedUploads($request);
                         'cost_type_id' => $v['cost_type_id'],
                         'currency' => $currencyCode,
                         'amount' => $amountValue,
@@ -3066,6 +3105,7 @@ class TravelReimbursementController extends Controller
             if ($referenceId !== null && (int) $referenceId !== $idMain) {
                 $referenceInvoice = $dayInvoice;
                 $ownerName = '-';
+        $this->guardAgainstTruncatedUploads($request);
                 $ticketNumber = '-';
                 try {
                     $ownerReimb = Reimbursement::find((int) $referenceId);
