@@ -2542,6 +2542,10 @@ $(document).ready(function(){
                     return;
                 }
             }
+            files = rtClampToUploadLimit(files);
+            if (!files.length) {
+                return;
+            }
             var addAll = function () {
                 files.forEach(function (file) {
                     vm.addSingleDayFile(i, file);
@@ -2585,10 +2589,6 @@ $(document).ready(function(){
             // The file takes the type chosen above the dropzone before browsing
             // (data.nextDocType); the chip's own dropdown still corrects it
             // afterwards, so a mistake costs one click rather than a re-upload.
-            files = rtClampToUploadLimit(files);
-            if (!files.length) {
-                return;
-            }
             var isProof = entry.nextDocType === 'proof';
             rtAddDayHiddenFile(i, uid, file, isProof ? 'proof' : 'invoice');
 

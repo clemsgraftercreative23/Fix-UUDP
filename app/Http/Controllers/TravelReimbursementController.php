@@ -2343,7 +2343,6 @@ class TravelReimbursementController extends Controller
                         'destination' => $v['destination'],
                         'remarks' => $v['remarks'] ?? null,
                         'payment_type' => $v['payment_type'],
-        $this->guardAgainstTruncatedUploads($request);
                         'cost_type_id' => $v['cost_type_id'],
                         'currency' => $currencyCode,
                         'amount' => $amountValue,
@@ -2407,6 +2406,7 @@ class TravelReimbursementController extends Controller
             return redirect()->route('reimbursement-travel.index')->withErrors(['You do not have access to add days to this submission at its current status.']);
         }
 
+        $this->guardAgainstTruncatedUploads($request);
         $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
 
         DB::beginTransaction();
@@ -3105,7 +3105,6 @@ class TravelReimbursementController extends Controller
             if ($referenceId !== null && (int) $referenceId !== $idMain) {
                 $referenceInvoice = $dayInvoice;
                 $ownerName = '-';
-        $this->guardAgainstTruncatedUploads($request);
                 $ticketNumber = '-';
                 try {
                     $ownerReimb = Reimbursement::find((int) $referenceId);
@@ -3229,6 +3228,7 @@ class TravelReimbursementController extends Controller
         // $id_main excluded: re-saving this submission must not collide with
         // the trip days it already owns.
         $this->validateTravelSubmissionRequest($request, $isFinalSubmit, $id_main);
+        $this->guardAgainstTruncatedUploads($request);
         $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
 
         if ((int) $request->input('id_user') == (int) $request->input('id_editor')) {

@@ -2489,6 +2489,10 @@ $(document).ready(function(){
             var entry = vm.reimburses[i];
             // FileList is live -- the input gets reset after `change`, so copy it first.
             var files = Array.prototype.slice.call(fileList);
+            files = rtClampToUploadLimit(files);
+            if (!files.length) {
+                return;
+            }
             var addAll = function () {
                 files.forEach(function (file) {
                     vm.addSingleDayFile(i, file);
@@ -2512,10 +2516,6 @@ $(document).ready(function(){
                     title: 'Use Your Own Proof?',
                     message: message,
                     confirmText: 'Yes, Continue', cancelText: 'Cancel',
-            files = rtClampToUploadLimit(files);
-            if (!files.length) {
-                return;
-            }
                     onYes: function () { clear(); addAll(); }
                 });
                 return;
