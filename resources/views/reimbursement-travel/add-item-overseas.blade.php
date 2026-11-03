@@ -2242,8 +2242,8 @@ $(document).ready(function(){
                 days.push(cursor.getFullYear() + '-' + mm + '-' + dd);
                 cursor.setDate(cursor.getDate() + 1);
             }
-            if (days.length > 15) {
-                rtAlertModal('A maximum of 15 days can be generated at once in one submission.');
+            if (days.length > 31) {
+                rtAlertModal('A maximum of 31 days can be generated at once in one submission.');
                 return;
             }
 
@@ -2471,8 +2471,8 @@ $(document).ready(function(){
         },
         /** "Add New Item": a blank day (date picked in Step 2), opened as the active tab. */
         addNewDay() {
-            if (this.reimburses.length >= 15) {
-                alert('A maximum of 15 days is allowed in one submission.');
+            if (this.reimburses.length >= 31) {
+                alert('A maximum of 31 days is allowed in one submission.');
                 return;
             }
             var vm = this;
