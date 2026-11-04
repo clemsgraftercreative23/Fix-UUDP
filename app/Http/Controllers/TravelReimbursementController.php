@@ -28,6 +28,7 @@ use App\Support\ExchangeRateParser;
 use App\Support\FonnteMessenger;
 use App\Support\ReimbursementInquiryNoFilter;
 use App\Support\TravelDayTotal;
+use App\Support\TruncatedFormInput;
 
 class TravelReimbursementController extends Controller
 {
@@ -1127,6 +1128,24 @@ class TravelReimbursementController extends Controller
     }
 
     /**
+     * Rejects a request PHP cut short at max_input_vars. Everything past the
+     * limit is dropped without any error -- the SUBMIT / DRAFT button (last in
+     * the form) first -- so the save would otherwise be misread as "no action"
+     * or, worse, validated and stored with the last days missing. Must run
+     * before anything that reads the action buttons or the reimburse[] rows.
+     */
+    private function guardAgainstTruncatedFormFields(): void
+    {
+        $limit = (int) ini_get('max_input_vars');
+
+        if (TruncatedFormInput::wasTruncated($_POST, $limit)) {
+            throw ValidationException::withMessages([
+                'form' => [TruncatedFormInput::message($limit)],
+            ]);
+        }
+    }
+
+    /**
      * Rejects a request whose uploaded files did not all arrive. PHP drops every
      * file part past max_file_uploads (default 20) without any error, so a
      * submission with more files than that used to save quietly with the last
@@ -1959,6 +1978,7 @@ class TravelReimbursementController extends Controller
     
     public function store(Request $request)
     {
+        $this->guardAgainstTruncatedFormFields();
         $this->validateTravelSubmissionRequest($request, isset($_POST['save']) && !isset($_POST['save_draft']));
         // No standalone date-only block here -- a duplicate is only flagged
         // when tanggal + No Invoice + Nominal ALL match an existing claim
@@ -1984,7 +2004,9 @@ class TravelReimbursementController extends Controller
             $status = 10;
             $notif = 'redirect';
         } else {
-            return redirect()->back()->withInput()->withErrors(['Unrecognized action. Use the SUBMIT or DRAFT button.']);
+            // A redirect would be followed by the AJAX save and misread as a
+            // broken JSON reply, so AJAX gets a plain 422 message instead.
+            return $this->respondErrorForTravelSave($request, 'Unrecognized action. Use the SUBMIT or DRAFT button.', redirect()->back()->withInput()->withErrors(['Unrecognized action. Use the SUBMIT or DRAFT button.']));
         }
 
         DB::beginTransaction();
@@ -2406,6 +2428,7 @@ class TravelReimbursementController extends Controller
             return redirect()->route('reimbursement-travel.index')->withErrors(['You do not have access to add days to this submission at its current status.']);
         }
 
+        $this->guardAgainstTruncatedFormFields();
         $this->guardAgainstTruncatedUploads($request);
         $this->guardAgainstDuplicateInvoiceWithinSubmission($this->collectAllSubmissionFiles($request));
 
@@ -3243,6 +3266,7 @@ class TravelReimbursementController extends Controller
         // session even when validation then threw -- the form came back with
         // the red error AND a green "Successfully Submitted" popup, for a
         // submission that was never saved (Oct 2026 bug report).
+        $this->guardAgainstTruncatedFormFields();
         $isFinalSubmit = !isset($_POST['save_draft']) && !isset($_POST['save_item']);
         // $id_main excluded: re-saving this submission must not collide with
         // the trip days it already owns.

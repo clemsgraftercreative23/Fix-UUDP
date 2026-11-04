@@ -476,7 +476,7 @@
                                              rtAddDayHiddenFile()) so more than one file can be attached without
                                              each new pick replacing the last -- this input is just the click/browse
                                              target and picks up multiple files at once via `multiple`. -->
-                                        <input type="file" :ref="'dayFileInput'+i" accept="image/*,.pdf" multiple style="display:none" @change="onDayFileInputChange(i, $event)">
+                                        <input type="file" :ref="'dayFileInput'+i" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" multiple style="display:none" @change="onDayFileInputChange(i, $event)">
                                         <!-- Take a photo instead of browsing for one. The capture lands in
                                              the very same chip list as an uploaded file, so OCR, the row tag
                                              and the Invoice/Supporting-Proof choice all behave identically. -->
@@ -814,7 +814,7 @@
                 @else
                 <a class="btn btn-danger text-right" href="{{route('reimbursement-travel.index')}}">CANCEL</a>&nbsp;
                 <button class="btn btn-primary" type="submit" id="action_button" name="save">SUBMIT</button>&nbsp;
-                <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft">DRAFT</button>
+                <button class="btn btn-warning" type="submit" id="action_button_draft" name="save_draft" formnovalidate>DRAFT</button>
                 @endif
             </div>
             <br />
@@ -1423,6 +1423,29 @@ $(document).ready(function(){
         ocrDetailModalChip: null
       },
       mounted() {
+        // A required field inside a collapsed day card is display:none, so the
+        // browser can't focus it and silently blocks Submit ("not focusable").
+        // Open that card and re-run the native bubble on the offending field.
+        var formEl = document.getElementById('travel_reimbursement_form');
+        if (formEl) {
+            var revealing = false;
+            formEl.addEventListener('invalid', (ev) => {
+                var field = ev.target;
+                var m = /^reimburse\[(\d+)\]/.exec(field.name || '');
+                if (revealing || !m || field.offsetParent !== null) { return; }
+                var day = parseInt(m[1], 10);
+                if (!this.reimburses[day]) { return; }
+                revealing = true;
+                this.reimburses[day].collapsed = false;
+                this.activeDay = day;
+                this.$nextTick(() => {
+                    field.scrollIntoView({ block: 'center' });
+                    field.focus();
+                    if (field.reportValidity) { field.reportValidity(); }
+                    revealing = false;
+                });
+            }, true);
+        }
         this.initSelectForm()
         self = this
         $(".idr-rate-input").maskMoney({ thousands:'.', decimal:',', precision:0, allowZero: true});
@@ -2519,6 +2542,26 @@ $(document).ready(function(){
             // FileList is live -- the input gets reset after `change`, so copy it first.
             var files = Array.prototype.slice.call(fileList);
 
+            // Mirror of TravelReimbursementController::ALLOWED_EVIDENCE_MIMES.
+            // Rejected here in a modal so the page is never reloaded -- a server
+            // round trip would wipe every generated day card and picked file.
+            var badType = files.filter(function (f) {
+                return f && !/^(image\/(jpeg|pjpeg|png)|application\/pdf)$/i.test(f.type || '');
+            });
+            if (badType.length) {
+                rtAlertModal(
+                    'Evidence file type must be JPG, PNG, or PDF. '
+                    + 'These files were not attached: '
+                    + badType.map(function (f) { return f.name + ' (' + (f.type || 'unknown') + ')'; }).join(', ') + '.',
+                    'Unsupported File Type'
+                );
+                files = files.filter(function (f) {
+                    return !f || !badType.includes(f);
+                });
+                if (!files.length) {
+                    return;
+                }
+            }
             // Enforce the "Max 10MB" the dropzone advertises. Checked here so
             // it covers both Browse File and drag & drop, and before any
             // refer/allowance state is cleared -- an oversized file must not
@@ -3200,6 +3243,81 @@ $(document).ready(function(){
       watch: {
 
       },
+  });
+
+  /**
+   * Saves the form over AJAX so a server-side rejection (bad file type,
+   * duplicate invoice, validation error ...) is shown in a modal instead of
+   * a redirect-back page reload -- a reload wipes every generated day card
+   * and picked file. The server already answers AJAX saves with JSON
+   * (respondAfterTravelSave() / 422 validation errors).
+   *
+   * Registered AFTER reimbursement-duplicate-check.js has bound its own
+   * submit handler: that handler cancels the real submit event, runs its
+   * checks, then re-fires the submit via $form.trigger('submit'). This one
+   * takes over only when nothing earlier has cancelled the event, so the
+   * request is sent exactly once.
+   */
+  $(function () {
+    var $form = $('#travel_reimbursement_form');
+    if (!$form.length || !window.FormData) {
+      return;
+    }
+    var saving = false;
+
+    function messageFromFailure(xhr) {
+      var payload = xhr && xhr.responseJSON;
+      if (payload && payload.errors) {
+        var parts = [];
+        $.each(payload.errors, function (_k, val) {
+          if ($.isArray(val)) { parts.push.apply(parts, val); } else if (val) { parts.push(String(val)); }
+        });
+        if (parts.length) { return parts.join('\n'); }
+      }
+      if (payload && payload.message) { return String(payload.message); }
+      if (xhr && xhr.status === 419) { return 'Your login session has expired. Your data is still on this page: open the app in another tab, log in again, then press SUBMIT / DRAFT here again.'; }
+      if (xhr && xhr.status === 413) { return 'The upload is too large for the server. Remove some files and try again.'; }
+      return 'Something went wrong while saving (' + ((xhr && xhr.status) || 'no response') + '). Your data is still on this page; please try again.';
+    }
+
+    $form.on('submit.rtAjaxSave', function (e) {
+      if (e.isDefaultPrevented() || saving) {
+        return;
+      }
+      e.preventDefault();
+
+      var formData = new FormData($form.get(0));
+      var submitter = e.originalEvent && e.originalEvent.submitter;
+      if (submitter && submitter.name) {
+        formData.append(submitter.name, submitter.value || '');
+      }
+
+      var $buttons = $form.find('button[type="submit"], input[type="submit"]');
+      saving = true;
+      $buttons.prop('disabled', true);
+
+      $.ajax({
+        url: $form.attr('action'),
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json'
+      }).done(function (resp) {
+        if (resp && resp.success) {
+          // Leave the buttons disabled: the page is about to navigate away.
+          window.location.href = resp.redirect_url || '{{ route('reimbursement-travel.index') }}';
+          return;
+        }
+        saving = false;
+        $buttons.prop('disabled', false);
+        rtAlertModal((resp && resp.message) || 'Failed to save.', 'Failed to Save');
+      }).fail(function (xhr) {
+        saving = false;
+        $buttons.prop('disabled', false);
+        rtAlertModal(messageFromFailure(xhr), 'Failed to Save');
+      });
+    });
   });
 
   // No standalone date-only duplicate popup here -- a duplicate is only
