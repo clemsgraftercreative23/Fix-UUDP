@@ -597,6 +597,34 @@ class TravelReimbursementController extends Controller
         $this->ensureDefaultTripRates($reimbursementId, (string) ($travelType ?? 'Domestic'));
     }
 
+    /**
+     * Throws a readable validation error when PHP itself refused the upload
+     * (file bigger than upload_max_filesize, or cut off mid-transfer).
+     * Such a file still arrives as an UploadedFile, just with isValid() false.
+     */
+    private function failOnRejectedUpload($file): void
+    {
+        if (!$file instanceof UploadedFile) {
+            return;
+        }
+
+        $error = $file->getError();
+        if ($error === UPLOAD_ERR_OK || $error === UPLOAD_ERR_NO_FILE) {
+            return;
+        }
+
+        $name = $file->getClientOriginalName();
+        if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+            $message = 'File bukti "' . $name . '" ditolak server karena melebihi batas ukuran upload ('
+                . ini_get('upload_max_filesize') . ') dan tidak disimpan. Perkecil file lalu unggah ulang.';
+        } else {
+            $message = 'File bukti "' . $name . '" gagal diunggah (kode error ' . $error
+                . ') dan tidak disimpan. Silakan unggah ulang.';
+        }
+
+        throw \Illuminate\Validation\ValidationException::withMessages(['file' => [$message]]);
+    }
+
     /** Simpan file bukti ke public/images/file_bukti dan kembalikan nama file. */
     private function storeTravelEvidenceFile($file): string
     {
@@ -606,6 +634,11 @@ class TravelReimbursementController extends Controller
 
         // Menghindari exception "not uploaded due to an unknown error"
         // saat object upload sudah invalid/terproses ulang.
+        // Upload yang ditolak PHP sendiri (upload_max_filesize / post_max_size)
+        // dulu dibuang diam-diam di sini: simpan "berhasil" tapi lampirannya
+        // tidak ada. Beri tahu user supaya bisa upload ulang.
+        $this->failOnRejectedUpload($file);
+
         if (!$file->isValid()) {
             return '';
         }
@@ -1159,6 +1192,11 @@ class TravelReimbursementController extends Controller
         $expected = 0;
         $received = 0;
         foreach ((array) $request->input('reimburse', []) as $key => $value) {
+            // A file PHP rejected (e.g. over upload_max_filesize) still counts
+            // as "received" below; fail loudly before anything is written.
+            foreach ((array) $request->file('reimburse.' . $key . '.files', []) as $upload) {
+                $this->failOnRejectedUpload($upload);
+            }
             $expected += count((array) data_get($value, 'file_types', []));
             $received += count(array_filter(
                 (array) $request->file('reimburse.' . $key . '.files', []),
