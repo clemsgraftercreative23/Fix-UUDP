@@ -359,6 +359,33 @@ if (!function_exists('travel_attachment_cache_bust')) {
                 @endforeach
 
                 <tfoot>
+                    @php
+                        $canEditApprovalNote = $isApproverRole
+                            && in_array((int) $data->status, [0, 1, 2, 11], true)
+                            && (in_array(auth()->user()->jabatan, ['superadmin', 'admin'], true) || !$isOwnSubmission);
+                    @endphp
+                    @if($canEditApprovalNote || !empty($item->approval_notes))
+                    <tr>
+                        <th>Additional Notes</th>
+                        <td colspan="8">
+                            @if($canEditApprovalNote)
+                                <form method="POST" action="{{ url('reimbursement-travel/day-note/'.$item->id) }}">
+                                    @csrf
+                                    <textarea name="approval_notes" class="form-control mb-2" rows="3" maxlength="2000" placeholder="Catatan tambahan dari approver untuk hari ini (opsional)">{{ $item->approval_notes }}</textarea>
+                                    <button type="submit" class="btn btn-sm btn-primary">Save Notes</button>
+                                    @if(!empty($item->approval_notes_by))
+                                        <small class="text-muted ml-2">Last edited by {{ $item->approval_notes_by }}{{ $item->approval_notes_at ? ', '.$item->approval_notes_at : '' }}</small>
+                                    @endif
+                                </form>
+                            @else
+                                <div style="white-space: pre-line;">{{ $item->approval_notes }}</div>
+                                @if(!empty($item->approval_notes_by))
+                                    <small class="text-muted">— {{ $item->approval_notes_by }}{{ $item->approval_notes_at ? ', '.$item->approval_notes_at : '' }}</small>
+                                @endif
+                            @endif
+                        </td>
+                    </tr>
+                    @endif
                     <tr>
                         <td>Total</td>
                         <td class="bg-secondary text-right" colspan="7">{{ travel_detail_idr(\App\Support\TravelDayTotal::compute($item, $item->details ?? collect())) }}</td>
