@@ -39,6 +39,7 @@
   // pengaturan fitur (admin-only, see sidebar's "Setting" menu)
   Route::get('pengaturan-fitur', 'SystemSettingController@index');
   Route::post('pengaturan-fitur', 'SystemSettingController@update');
+  Route::get('pengaturan-rollback-approval', 'RollbackApprovalSettingController@index');
 
   // karyawan
   Route::resource('/karyawan', 'KaryawanController');
@@ -154,6 +155,7 @@ Route::post('pencairan-reimbursement/{id}/reverse-accurate', 'PencairanReimburse
   Route::get('debug/accurate/signature', 'AccurateDebugController@signatureTest');
   Route::post('reimbursement/approve/{id}', 'ReimbursementController@approve');
   Route::post('reimbursement/reject/{id}', 'ReimbursementController@reject');
+  Route::post('reimbursement/rollback/{id}', 'ReimbursementController@rollback')->name('reimbursement.rollback');
   Route::post('reimbursement/check-duplicate-date', 'ReimbursementController@checkDuplicateDate');
   Route::post('reimbursement/check-duplicate-invoice', 'ReimbursementController@checkDuplicateInvoice');
   Route::post('reimbursement/check-duplicate-invoice-line', 'ReimbursementController@checkDuplicateInvoiceLine');

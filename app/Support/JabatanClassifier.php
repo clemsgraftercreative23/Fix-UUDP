@@ -34,6 +34,15 @@ class JabatanClassifier
         return in_array($jabatan, ['Owner', 'superadmin', 'admin'], true);
     }
 
+    /**
+     * Moving an already-approved claim back to an earlier approval step is a
+     * superadmin-only correction tool (Owner/Finance are intentionally excluded).
+     */
+    public static function canRollbackApproval(?string $jabatan): bool
+    {
+        return self::isAdmin($jabatan);
+    }
+
     /** The two jabatans treated as full admin throughout this app (sidebar's whole "Setting" menu is gated on this same check). */
     public static function isAdmin(?string $jabatan): bool
     {

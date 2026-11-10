@@ -179,6 +179,13 @@
                                @endif
                                    <a href="{{url('pengaturan-fitur')}}">Feature Settings</a>
                                </li>
+                               @if($segment1 == 'pengaturan-rollback-approval')
+                                  <li class="active-page">
+                               @else
+                                  <li>
+                               @endif
+                                   <a href="{{url('pengaturan-rollback-approval')}}">Rollback Approval</a>
+                               </li>
                            </ul>
                        </li>
                         <li>

@@ -596,6 +596,7 @@ if (!function_exists('travel_attachment_cache_bust')) {
                                     <a href="{{ $editTravelItemUrl }}"  class="btn btn-primary">Edit</a>
                                 @endif
                             @endif
+                        @include('partials.rollback-approval')
                         </center>
                     <br><br><br>
             </div>
