@@ -84,6 +84,27 @@ class ApprovalReminderRepository
         return $reminder;
     }
 
+    /**
+     * A superadmin moved the claim back to an earlier approval step. Its old
+     * reminder was stopped (or is on a stale stage), and a plain upsert would
+     * date the new cycle from created_at -- possibly already past expiry -- so
+     * force a stage change to start a fresh cycle from now.
+     */
+    public function restartAfterRollback(Reimbursement $reimbursement, ?string $baseUrl = null): ApprovalReminder
+    {
+        $reminder = ApprovalReminder::where('subject_type', Reimbursement::class)
+            ->where('subject_id', $reimbursement->id)
+            ->where('workflow_code', self::WORKFLOW_CODE_REIMBURSEMENT)
+            ->first();
+
+        if ($reminder) {
+            $reminder->stage_code = 'rollback';
+            $reminder->save();
+        }
+
+        return $this->upsertFromReimbursement($reimbursement, $baseUrl);
+    }
+
     public function stop(ApprovalReminder $reminder, string $reason, ?int $sourceStatus = null): ApprovalReminder
     {
         $now = Carbon::now();

@@ -9,8 +9,11 @@ use App\ReimbursementDetail;
 use App\Master_project;
 use App\Master_kelompok_kegiatan;
 use App\Master_daftar_rencana;
+use App\Repositories\ApprovalReminderRepository;
 use App\Support\ActivityLogger;
+use App\Support\ApprovalRollback;
 use App\Support\FonnteMessenger;
+use App\Support\JabatanClassifier;
 use App\Support\ReimbursementWaMessage;
 use DB;
 use App\User;
@@ -1174,6 +1177,163 @@ class ReimbursementController extends Controller
         return redirect()
             ->back()
             ->with(['success' => "Reimbursement Rejected"]);
+    }
+
+    /**
+     * Superadmin-only: move an already-approved claim back to an earlier
+     * approval step (see App\Support\ApprovalRollback for the allowed steps and
+     * which approver columns get blanked). A paid claim (status 5) is not
+     * handled here -- use PencairanReimbursementController::resetSettlement first.
+     */
+    public function rollback(Request $request, $id)
+    {
+        $user = auth()->user();
+        if (!JabatanClassifier::canRollbackApproval($user->jabatan)) {
+            return redirect()
+                ->back()
+                ->withErrors(['Hanya superadmin yang dapat melakukan rollback approval.']);
+        }
+
+        $request->validate([
+            'target_status' => 'required|integer',
+            'reason' => 'required|string|max:255',
+        ], [
+            'target_status.required' => 'Pilih step tujuan rollback.',
+            'reason.required' => 'Alasan rollback wajib diisi.',
+            'reason.max' => 'Alasan rollback maksimal 255 karakter.',
+        ]);
+
+        $data = Reimbursement::find($id);
+        if (!$data) {
+            return redirect()
+                ->back()
+                ->withErrors(['Reimbursement tidak ditemukan']);
+        }
+
+        $fromStatus = (int) $data->status;
+        $target = (int) $request->input('target_status');
+        $reason = trim((string) $request->input('reason'));
+
+        if (!ApprovalRollback::canRollbackTo($fromStatus, $data->reimbursement_type, $data->menyetujui_finance_supervisor, $target)) {
+            return redirect()
+                ->back()
+                ->withErrors(['Rollback ke step tersebut tidak diizinkan untuk status klaim saat ini.']);
+        }
+
+        // A claim at status 3 should never carry payout data; refuse rather than
+        // leave half-paid state behind if it somehow does.
+        if (!empty($data->tgl_pencairan) || in_array((string) $data->accurate_sync_status, ['pending', 'synced', 'failed'], true)) {
+            return redirect()
+                ->back()
+                ->withErrors(['Klaim ini sudah memiliki data pencairan/sinkronisasi Accurate. Lakukan Reset Settlement terlebih dahulu.']);
+        }
+
+        DB::transaction(function () use ($data, $target) {
+            $data->update(['status' => $target] + ApprovalRollback::columnsToReset($target));
+        });
+
+        ActivityLogger::log(
+            $this->resolveReimbursementModule($data->reimbursement_type),
+            'rollback',
+            'Rollback approval dari ' . ApprovalRollback::label($fromStatus) . ' ke ' . ApprovalRollback::label($target),
+            $data->no_reimbursement,
+            'reimbursement',
+            $data->id,
+            ['from' => $fromStatus, 'to' => $target, 'reason' => $reason]
+        );
+
+        $data = $data->fresh();
+
+        try {
+            app(ApprovalReminderRepository::class)->restartAfterRollback($data);
+        } catch (\Throwable $e) {
+            \Log::warning('Approval reminder restart after rollback failed', [
+                'reimbursement_id' => $data->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        $this->notifyRollback($data, $fromStatus, $target, $reason, $user);
+
+        return redirect()
+            ->back()
+            ->with(['success' => 'Approval dikembalikan ke step ' . ApprovalRollback::label($target)]);
+    }
+
+    /** Best-effort WhatsApp to the submitter and the approver(s) of the step the claim returned to. */
+    private function notifyRollback($data, $fromStatus, $target, $reason, $actor)
+    {
+        try {
+            $detailUrl = url($this->resolveDetailPath($data->reimbursement_type) . $data->id);
+            $amount = number_format($data->nominal_pengajuan, 0, ',', '.');
+            $targetLabel = ApprovalRollback::label($target);
+            $context = ['reimbursement_id' => $data->id, 'action' => 'rollback'];
+
+            $submitter = User::find($data->id_user);
+            if ($submitter && $submitter->phoneNumber) {
+                FonnteMessenger::send(
+                    $submitter->phoneNumber,
+                    "Hai *" . $submitter->name . "*,\n\nPengajuan reimbursement Anda dengan nomor *" . $data->no_reimbursement .
+                    "* sebesar *Rp " . $amount . "* dikembalikan oleh *" . ucfirst($actor->name) .
+                    " (Admin)* ke tahap verifikasi *" . $targetLabel . "*.\n\nAlasan: " . $reason .
+                    "\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl,
+                    $context
+                );
+            }
+
+            $applicantName = $data->applicantDisplayName();
+            foreach ($this->rollbackTargetRecipients($data, $target) as $row) {
+                if (empty($row->phoneNumber) || ($submitter && (int) $row->id === (int) $submitter->id)) {
+                    continue;
+                }
+                FonnteMessenger::send(
+                    $row->phoneNumber,
+                    "Hai *" . $row->name . "*,\n\nPengajuan reimbursement nama *" . $applicantName . "* dengan nomor *" . $data->no_reimbursement .
+                    "* sebesar *Rp " . $amount . "* dikembalikan ke tahap *" . $targetLabel .
+                    "* oleh Admin.\n\nAlasan: " . $reason . "\n\nMohon verifikasi ulang.\n\nTerima kasih.\n\nKlik untuk melihat detail pengajuan : " . $detailUrl,
+                    $context
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Rollback WhatsApp notification failed', [
+                'reimbursement_id' => $data->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Who must approve again at $target (mirrors who is notified when a claim first reaches that step). */
+    private function rollbackTargetRecipients($data, $target)
+    {
+        switch ((int) $target) {
+            case ApprovalRollback::STATUS_PENDING_HEAD_DEPT:
+                $submitter = User::find($data->id_user);
+                $headDept = $submitter && $submitter->id_approval ? User::find($submitter->id_approval) : null;
+                return $headDept ? collect([$headDept]) : collect();
+
+            case ApprovalRollback::STATUS_PENDING_HR_GA:
+                return User::where('jabatan', 'Finance')->get();
+
+            case ApprovalRollback::STATUS_PENDING_FINANCE_SUPERVISOR:
+                return User::where('jabatan', in_array((int) $data->reimbursement_type, [2, 3], true) ? 'Finance Supervisor' : 'Owner')->get();
+
+            case ApprovalRollback::STATUS_PENDING_FINANCE_MANAGER:
+                return User::financeManagerNotificationRecipients();
+        }
+
+        return collect();
+    }
+
+    private function resolveDetailPath($type)
+    {
+        if ((int) $type === 1) {
+            return '/reimbursement-driver/';
+        }
+        if ((int) $type === 2) {
+            return '/reimbursement-travel/';
+        }
+
+        return '/reimbursement-entertaiment/';
     }
 
     function listUser(Request $request)

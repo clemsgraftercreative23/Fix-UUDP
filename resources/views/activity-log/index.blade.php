@@ -36,6 +36,7 @@
                                 <option value="update">Update</option>
                                 <option value="approve">Approve</option>
                                 <option value="reject">Reject</option>
+                                <option value="rollback">Rollback</option>
                                 <option value="delete">Delete</option>
                                 <option value="draft">Draft</option>
                                 <option value="approve_multiple">Approve Multiple</option>

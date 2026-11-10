@@ -493,6 +493,7 @@
                                 @endif
                             @endif
                         @endif
+                        @include('partials.rollback-approval')
                     </center>
                     <br><br><br>
             </div>

@@ -570,6 +570,7 @@ if (!function_exists('ent_attachment_rows')) {
                                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalReject" name="reject_button" id="reject_button">Reject</button>
                             </form>
                         @endif
+                        @include('partials.rollback-approval')
                     </center>
                     <br><br><br>
             </div>
