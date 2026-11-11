@@ -1154,6 +1154,21 @@ $(document).ready(function(){
   }
 
   /**
+   * Evidence upload size cap. Kept in sync with the "Max 10MB" the dropzone
+   * advertises and with the server-side check in
+   * TravelReimbursementController::storeTravelEvidenceFile().
+   */
+  var RT_MAX_EVIDENCE_MB = 10;
+  var RT_MAX_EVIDENCE_BYTES = RT_MAX_EVIDENCE_MB * 1024 * 1024;
+
+  function rtFormatFileSize(bytes) {
+    if (!bytes && bytes !== 0) { return '?'; }
+    if (bytes >= 1024 * 1024) { return (bytes / (1024 * 1024)).toFixed(1) + 'MB'; }
+    if (bytes >= 1024) { return Math.round(bytes / 1024) + 'KB'; }
+    return bytes + 'B';
+  }
+
+  /**
    * The actual <input type="file"> elements submitted for a day's evidence
    * are created here, one pair (file + its row-tag) per uploaded file,
    * instead of relying on the single visible dropzone input -- that one only
@@ -2489,6 +2504,50 @@ $(document).ready(function(){
             var entry = vm.reimburses[i];
             // FileList is live -- the input gets reset after `change`, so copy it first.
             var files = Array.prototype.slice.call(fileList);
+
+            // Mirror of TravelReimbursementController::ALLOWED_EVIDENCE_MIMES.
+            // Rejected here in a modal so the page is never reloaded -- a server
+            // round trip would wipe every generated day card and picked file.
+            var badType = files.filter(function (f) {
+                return f && !/^(image\/(jpeg|pjpeg|png)|application\/pdf)$/i.test(f.type || '');
+            });
+            if (badType.length) {
+                rtAlertModal(
+                    'Evidence file type must be JPG, PNG, or PDF. '
+                    + 'These files were not attached: '
+                    + badType.map(function (f) { return f.name + ' (' + (f.type || 'unknown') + ')'; }).join(', ') + '.',
+                    'Unsupported File Type'
+                );
+                files = files.filter(function (f) {
+                    return !f || !badType.includes(f);
+                });
+                if (!files.length) {
+                    return;
+                }
+            }
+            // Enforce the "Max 10MB" the dropzone advertises. Checked here so
+            // it covers both Browse File and drag & drop, and before any
+            // refer/allowance state is cleared -- an oversized file must not
+            // silently discard the day's existing setup.
+            var oversized = files.filter(function (f) {
+                return f && f.size > RT_MAX_EVIDENCE_BYTES;
+            });
+            if (oversized.length) {
+                var names = oversized.map(function (f) {
+                    return f.name + ' (' + rtFormatFileSize(f.size) + ')';
+                }).join(', ');
+                rtAlertModal(
+                    'Maximum file size is ' + RT_MAX_EVIDENCE_MB + 'MB. '
+                    + 'These files were not attached: ' + names + '.',
+                    'File Too Large'
+                );
+                files = files.filter(function (f) {
+                    return !f || f.size <= RT_MAX_EVIDENCE_BYTES;
+                });
+                if (!files.length) {
+                    return;
+                }
+            }
             files = rtClampToUploadLimit(files);
             if (!files.length) {
                 return;
@@ -3134,6 +3193,81 @@ $(document).ready(function(){
       watch: {
 
       },
+  });
+
+  /**
+   * Saves the form over AJAX so a server-side rejection (bad file type,
+   * duplicate invoice, validation error ...) is shown in a modal instead of
+   * a redirect-back page reload -- a reload wipes every generated day card
+   * and picked file. The server already answers AJAX saves with JSON
+   * (respondAfterTravelSave() / 422 validation errors).
+   *
+   * Registered AFTER reimbursement-duplicate-check.js has bound its own
+   * submit handler: that handler cancels the real submit event, runs its
+   * checks, then re-fires the submit via $form.trigger('submit'). This one
+   * takes over only when nothing earlier has cancelled the event, so the
+   * request is sent exactly once.
+   */
+  $(function () {
+    var $form = $('#travel_overseas_reimbursement_form');
+    if (!$form.length || !window.FormData) {
+      return;
+    }
+    var saving = false;
+
+    function messageFromFailure(xhr) {
+      var payload = xhr && xhr.responseJSON;
+      if (payload && payload.errors) {
+        var parts = [];
+        $.each(payload.errors, function (_k, val) {
+          if ($.isArray(val)) { parts.push.apply(parts, val); } else if (val) { parts.push(String(val)); }
+        });
+        if (parts.length) { return parts.join('\n'); }
+      }
+      if (payload && payload.message) { return String(payload.message); }
+      if (xhr && xhr.status === 419) { return 'Your login session has expired. Your data is still on this page: open the app in another tab, log in again, then press SUBMIT / DRAFT here again.'; }
+      if (xhr && xhr.status === 413) { return 'The upload is too large for the server. Remove some files and try again.'; }
+      return 'Something went wrong while saving (' + ((xhr && xhr.status) || 'no response') + '). Your data is still on this page; please try again.';
+    }
+
+    $form.on('submit.rtAjaxSave', function (e) {
+      if (e.isDefaultPrevented() || saving) {
+        return;
+      }
+      e.preventDefault();
+
+      var formData = new FormData($form.get(0));
+      var submitter = e.originalEvent && e.originalEvent.submitter;
+      if (submitter && submitter.name) {
+        formData.append(submitter.name, submitter.value || '');
+      }
+
+      var $buttons = $form.find('button[type="submit"], input[type="submit"]');
+      saving = true;
+      $buttons.prop('disabled', true);
+
+      $.ajax({
+        url: $form.attr('action'),
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json'
+      }).done(function (resp) {
+        if (resp && resp.success) {
+          // Leave the buttons disabled: the page is about to navigate away.
+          window.location.href = resp.redirect_url || '{{ route('reimbursement-travel.index') }}';
+          return;
+        }
+        saving = false;
+        $buttons.prop('disabled', false);
+        rtAlertModal((resp && resp.message) || 'Failed to save.', 'Failed to Save');
+      }).fail(function (xhr) {
+        saving = false;
+        $buttons.prop('disabled', false);
+        rtAlertModal(messageFromFailure(xhr), 'Failed to Save');
+      });
+    });
   });
 
   // No standalone date-only duplicate popup here -- a duplicate is only
