@@ -85,6 +85,10 @@ class KaryawanController extends Controller
 
                 if ($existingUser) {
                     unset($fields['password'], $fields['jabatan'], $fields['username'], $fields['idKaryawan'], $fields['optLock']);
+                    // Accurate kosong / departemen belum ada di lokal: jangan timpa departemen yang sudah diisi manual.
+                    if ($fields['departmentId'] === null) {
+                        unset($fields['departmentId']);
+                    }
                     $existingUser->update($fields);
                 } else {
                     User::create($fields);
@@ -116,6 +120,21 @@ class KaryawanController extends Controller
         }
 
         return $key[$field];
+    }
+
+    /**
+     * Accurate mengirim ID departemen miliknya (departemen.id_dep), sedangkan seluruh aplikasi
+     * membaca users.departmentId sebagai PK lokal (departemen.id). Terjemahkan di sini.
+     */
+    private function resolveLocalDepartmentId($accurateDepartmentId)
+    {
+        if ($accurateDepartmentId === null || $accurateDepartmentId === '') {
+            return null;
+        }
+
+        $localId = DB::table('departemen')->where('id_dep', $accurateDepartmentId)->value('id');
+
+        return $localId !== null ? $localId : null;
     }
 
     private function resolveSyncEmail($email, $idKaryawan)
@@ -156,7 +175,7 @@ class KaryawanController extends Controller
             'email' => $email,
             'phoneNumber' => $this->accurateField($key, 'mobilePhone'),
             'resignMonth' => $this->accurateField($key, 'resignMonth'),
-            'departmentId' => $this->accurateField($key, 'departmentId'),
+            'departmentId' => $this->resolveLocalDepartmentId($this->accurateField($key, 'departmentId')),
             'joinDateView' => $this->accurateField($key, 'joinDateView', '-'),
             'resignYear' => $this->accurateField($key, 'resignYear'),
             'bankName' => $this->accurateField($key, 'bankName', '-'),
